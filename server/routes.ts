@@ -369,7 +369,7 @@ export async function registerRoutes(
     id: "ws_001",
     name: "Sartelle Atelier",
     owner_email: "studio@sartelle-atelier.com",
-    plan_tier: "autopilot" as string,
+    plan_tier: "enterprise" as string,
     plan_status: "active" as string,
     stripe_customer_id: null as string | null,
     stripe_subscription_id: null as string | null,
@@ -3484,6 +3484,139 @@ export async function registerRoutes(
       low: item.available < 5,
     }));
     res.json({ success: true, items, count: items.length });
+  });
+
+  // ─────────────────────────────────────────────────────────────
+  // Phase 46: Developer API Key Generation (mock)
+  // ─────────────────────────────────────────────────────────────
+
+  app.post("/api/user/generate-api-key", (_req, res) => {
+    // Generate a mock key
+    const hex = Array.from({ length: 16 }, () =>
+      Math.floor(Math.random() * 256).toString(16).padStart(2, "0")
+    ).join("");
+    const mockKey = `es_live_${hex}`;
+    res.json({
+      success: true,
+      api_key: mockKey,
+      warning: "Store this key securely — it will not be shown again.",
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────
+  // Phase 46: Public API v1 Endpoints (mock — no auth in dev)
+  // ─────────────────────────────────────────────────────────────
+
+  // GET /v1/metrics
+  app.get("/v1/metrics", (_req, res) => {
+    res.json({
+      project: {
+        id: "proj_001",
+        name: "Sartelle Atelier",
+        domain: "sartelleatelier.com",
+        visibility_score: 78,
+        active_agents: 5,
+      },
+      tasks: {
+        total: MOCK_TASKS.length,
+        completed: MOCK_TASKS.filter((t) => t.status === "Completed").length,
+        failed: MOCK_TASKS.filter((t) => t.status === "Failed").length,
+        running: MOCK_TASKS.filter((t) => t.status === "Running").length,
+        pending: MOCK_TASKS.filter((t) => t.status === "Pending").length,
+        completion_rate: Math.round(
+          (MOCK_TASKS.filter((t) => t.status === "Completed").length / Math.max(MOCK_TASKS.length, 1)) * 100
+        ),
+      },
+      trend: [
+        { date: "2026-03-10", count: 4 },
+        { date: "2026-03-11", count: 6 },
+        { date: "2026-03-12", count: 3 },
+        { date: "2026-03-13", count: 8 },
+        { date: "2026-03-14", count: 5 },
+        { date: "2026-03-15", count: 7 },
+        { date: "2026-03-16", count: 2 },
+      ],
+      generated_at: new Date().toISOString(),
+    });
+  });
+
+  // GET /v1/tasks
+  app.get("/v1/tasks", (req, res) => {
+    const page = Math.max(1, parseInt((req.query.page as string) || "1", 10));
+    const limit = Math.min(100, Math.max(1, parseInt((req.query.limit as string) || "20", 10)));
+    const statusFilter = (req.query.status as string) || null;
+    const agentFilter = (req.query.agent_type as string) || null;
+
+    let filtered = [...MOCK_TASKS];
+    if (statusFilter) filtered = filtered.filter((t) => t.status === statusFilter);
+    if (agentFilter) filtered = filtered.filter((t) => t.agent_type === agentFilter);
+
+    const total = filtered.length;
+    const offset = (page - 1) * limit;
+    const tasks = filtered.slice(offset, offset + limit);
+
+    res.json({
+      tasks,
+      pagination: {
+        page,
+        limit,
+        total,
+        total_pages: Math.ceil(total / limit),
+        has_more: page * limit < total,
+      },
+    });
+  });
+
+  // POST /v1/analyze
+  app.post("/v1/analyze", (req, res) => {
+    const { url, analysis_type } = req.body || {};
+    if (!url) {
+      return res.status(400).json({ error: "url is required" });
+    }
+    const jobId = `api_job_${Date.now().toString(36)}`;
+    MOCK_TASKS.unshift({
+      id: jobId,
+      project_id: "proj_001",
+      agent_type: "cro",
+      action: `API Crawl: ${analysis_type || "full"}`,
+      status: "Pending",
+      task_description: `API-triggered ${analysis_type || "full"} analysis of ${url}`,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    });
+    res.status(202).json({
+      job_id: jobId,
+      status: "queued",
+      analysis_type: analysis_type || "full",
+      url,
+      created_at: new Date().toISOString(),
+    });
+  });
+
+  // GET /v1/analyze/:job_id
+  app.get("/v1/analyze/:job_id", (req, res) => {
+    const { job_id } = req.params;
+    const task = MOCK_TASKS.find((t) => t.id === job_id);
+    if (!task) {
+      return res.status(404).json({ error: "Job not found" });
+    }
+    let result = null;
+    if (task.result_payload) {
+      try {
+        result = JSON.parse(task.result_payload);
+      } catch {
+        result = task.result_payload;
+      }
+    }
+    res.json({
+      job_id: task.id,
+      status: task.status.toLowerCase(),
+      action: task.action,
+      description: task.task_description,
+      result,
+      created_at: task.created_at,
+      updated_at: task.updated_at,
+    });
   });
 
   return httpServer;

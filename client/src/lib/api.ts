@@ -1557,6 +1557,19 @@ export async function restoreInternalLink(
   return res.json();
 }
 
+// ── Phase 46: Developer API Key Management ──────────────────
+
+export interface GenerateApiKeyResponse {
+  success: boolean;
+  api_key: string;
+  warning: string;
+}
+
+export async function generateApiKey(): Promise<GenerateApiKeyResponse> {
+  const res = await apiRequest("POST", "/api/user/generate-api-key");
+  return res.json();
+}
+
 // ── Phase 44: Alert frequency & digest preferences ─────────
 
 export type AlertFrequency = "realtime" | "daily" | "weekly" | "muted";

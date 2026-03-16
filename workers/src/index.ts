@@ -43,6 +43,8 @@ import { handleGa4Sync } from "./cron/ga4Sync";
 import { handleGa4CroTrigger } from "./cron/ga4CroTrigger";
 import { incrementAbView, incrementAbConversion } from "./middleware/abSplit";
 import { calculateSignificance, evaluateAndConclude } from "./utils/statistics";
+import { apiAuth } from "./middleware/apiAuth";
+import { v1Router } from "./routes/api/v1";
 
 // Re-export the Durable Object class so Cloudflare can find it
 export { AgentWorkflowManager } from "./durable_object";
@@ -621,6 +623,77 @@ app.patch("/api/user/settings", async (c) => {
     return c.json({ success: false, error: "Failed to update settings" }, 500);
   }
 });
+
+// ─────────────────────────────────────────────────────────────
+// Phase 46: Generate API Key (JWT-protected, Enterprise only)
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * POST /api/user/generate-api-key
+ * Generates a new `es_live_*` API key for the authenticated user.
+ * The raw key is returned exactly ONCE — only the SHA-256 hash is stored.
+ * Overwrites any previously stored key.
+ */
+app.post("/api/user/generate-api-key", async (c) => {
+  const userId = c.get("userId") as string;
+
+  try {
+    // 1. Verify user is on enterprise plan
+    const user = await c.env.DB.prepare(
+      "SELECT id, plan, email FROM Users WHERE id = ?1"
+    )
+      .bind(userId)
+      .first<{ id: string; plan: string; email: string }>();
+
+    if (!user) {
+      return c.json({ success: false, error: "User not found" }, 404);
+    }
+    if (user.plan !== "enterprise") {
+      return c.json(
+        { success: false, error: "API keys are only available on the Enterprise plan" },
+        403
+      );
+    }
+
+    // 2. Generate raw key: es_live_ + 32 random hex chars
+    const randomBytes = new Uint8Array(16);
+    crypto.getRandomValues(randomBytes);
+    const hexSuffix = [...randomBytes]
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
+    const rawKey = `es_live_${hexSuffix}`;
+
+    // 3. SHA-256 hash the raw key
+    const encoded = new TextEncoder().encode(rawKey);
+    const hashBuffer = await crypto.subtle.digest("SHA-256", encoded);
+    const hashHex = [...new Uint8Array(hashBuffer)]
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
+
+    // 4. Store ONLY the hash in D1
+    await c.env.DB.prepare(
+      "UPDATE Users SET api_key_hash = ?1 WHERE id = ?2"
+    )
+      .bind(hashHex, userId)
+      .run();
+
+    // 5. Return raw key exactly once
+    return c.json({
+      success: true,
+      api_key: rawKey,
+      warning: "Store this key securely — it will not be shown again.",
+    });
+  } catch (err: any) {
+    console.error("[API Key] Generation error:", err);
+    return c.json({ success: false, error: "Failed to generate API key" }, 500);
+  }
+});
+
+// ─────────────────────────────────────────────────────────────
+// Phase 46: Public Developer API — /v1/* (API key auth)
+// ─────────────────────────────────────────────────────────────
+app.use("/v1/*", apiAuth());
+app.route("/v1", v1Router);
 
 // ─────────────────────────────────────────────────────────────
 // Task 2.2: Brain-to-Dashboard API Endpoints

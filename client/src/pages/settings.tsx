@@ -43,7 +43,12 @@ import {
   Phone,
   Megaphone,
   Clock,
+  Key,
+  Copy,
+  AlertTriangle,
+  Terminal,
 } from "lucide-react";
+import { generateApiKey } from "@/lib/api";
 
 // ── Types ──
 
@@ -720,6 +725,162 @@ function NotificationPreferencesCard() {
   );
 }
 
+// ── Developer API Card (Enterprise only) ──
+
+function DeveloperApiCard({ workspace }: { workspace: Workspace }) {
+  const { toast } = useToast();
+  const [apiKey, setApiKey] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const isEnterprise = workspace.plan_tier === "enterprise";
+
+  const generateMutation = useMutation({
+    mutationFn: generateApiKey,
+    onSuccess: (data) => {
+      if (data.success && data.api_key) {
+        setApiKey(data.api_key);
+        toast({
+          title: "API key generated",
+          description: "Copy and store it securely — it won't be shown again.",
+        });
+      }
+    },
+    onError: (err: Error) => {
+      toast({
+        title: "Failed to generate key",
+        description: err.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleCopy = () => {
+    if (!apiKey) return;
+    navigator.clipboard.writeText(apiKey).then(() => {
+      setCopied(true);
+      toast({ title: "Copied to clipboard" });
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
+  const curlSnippet = apiKey
+    ? `curl -H "Authorization: Bearer ${apiKey}" \\
+  https://api.swarme.io/v1/metrics`
+    : `curl -H "Authorization: Bearer es_live_..." \\
+  https://api.swarme.io/v1/metrics`;
+
+  return (
+    <Card data-testid="card-developer-api">
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Key className="h-5 w-5 text-muted-foreground" />
+            <CardTitle className="text-base">API & Webhooks</CardTitle>
+          </div>
+          <Badge variant={isEnterprise ? "default" : "secondary"}>
+            {isEnterprise ? "Enterprise" : "Upgrade Required"}
+          </Badge>
+        </div>
+        <CardDescription>
+          Programmatic access to your Swarme project via REST API.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {!isEnterprise ? (
+          <div className="flex items-start gap-3 p-3 rounded-md bg-muted/50">
+            <AlertTriangle className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
+            <p className="text-xs text-muted-foreground">
+              API keys are available exclusively on the Enterprise plan.
+              Upgrade your workspace to unlock programmatic access.
+            </p>
+          </div>
+        ) : (
+          <>
+            {/* Warning banner */}
+            <div className="flex items-start gap-3 p-3 rounded-md bg-amber-500/10 border border-amber-500/20">
+              <AlertTriangle className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
+              <p className="text-xs text-amber-700 dark:text-amber-400">
+                Generating a new key will invalidate any existing key.
+                The raw key is shown exactly once — store it securely.
+              </p>
+            </div>
+
+            {/* Generate / Key display */}
+            {apiKey ? (
+              <div className="space-y-3">
+                <Label className="text-xs font-medium">Your API Key</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    readOnly
+                    value={apiKey}
+                    className="font-mono text-xs"
+                    data-testid="input-api-key"
+                  />
+                  <Button
+                    size="icon"
+                    variant="outline"
+                    onClick={handleCopy}
+                    data-testid="button-copy-api-key"
+                  >
+                    {copied ? (
+                      <Check className="h-4 w-4 text-green-500" />
+                    ) : (
+                      <Copy className="h-4 w-4" />
+                    )}
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <Button
+                size="sm"
+                onClick={() => generateMutation.mutate()}
+                disabled={generateMutation.isPending}
+                data-testid="button-generate-api-key"
+              >
+                {generateMutation.isPending ? (
+                  <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+                ) : (
+                  <Key className="mr-2 h-3 w-3" />
+                )}
+                Generate API Key
+              </Button>
+            )}
+
+            <Separator />
+
+            {/* cURL snippet */}
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <Terminal className="h-3 w-3 text-muted-foreground" />
+                <Label className="text-xs font-medium">Quick Start</Label>
+              </div>
+              <div className="bg-zinc-950 text-zinc-200 rounded-md p-3 text-xs font-mono overflow-x-auto" data-testid="code-curl-snippet">
+                <pre className="whitespace-pre-wrap break-all">{curlSnippet}</pre>
+              </div>
+            </div>
+
+            {/* Endpoints reference */}
+            <div className="space-y-1">
+              <Label className="text-xs font-medium text-muted-foreground">Available Endpoints</Label>
+              <div className="grid grid-cols-1 gap-1 text-xs text-muted-foreground font-mono">
+                <span>GET &nbsp;/v1/metrics</span>
+                <span>GET &nbsp;/v1/tasks?page=1&limit=20</span>
+                <span>POST /v1/analyze</span>
+                <span>GET &nbsp;/v1/analyze/:job_id</span>
+              </div>
+            </div>
+
+            {/* Rate limit info */}
+            <p className="text-xs text-muted-foreground">
+              Rate limit: 100 requests per minute. Keys use SHA-256 hashing
+              and are never stored in plaintext.
+            </p>
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 // ── Main Settings Page ──
 
 export default function Settings() {
@@ -740,7 +901,7 @@ export default function Settings() {
             Settings
           </h1>
           <p className="text-xs text-muted-foreground mt-1">
-            Manage billing, notifications, and CMS publishing connections.
+            Manage billing, notifications, CMS connections, and API access.
           </p>
         </div>
 
@@ -753,6 +914,7 @@ export default function Settings() {
             <BillingCard workspace={workspaceData.workspace} />
             <NotificationPreferencesCard />
             <CMSConnectionCard projectId={defaultProjectId} />
+            <DeveloperApiCard workspace={workspaceData.workspace} />
           </>
         ) : (
           <Card>
