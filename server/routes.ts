@@ -4053,114 +4053,142 @@ export async function registerRoutes(
   });
 
   // ─────────────────────────────────────────────────────────
-  // Phase 51: Media Wallet mock endpoints
+  // Phase 51.5: Swarme Credits (closed-loop credit system)
   // ─────────────────────────────────────────────────────────
 
-  const mockWallet = {
-    id: "wal_001",
+  const mockCreditBalance = {
+    id: "cb_001",
     domain_id: "dom_001",
-    balance_cents: 24750,
-    currency: "usd",
+    available_credits: 24750,
     auto_recharge_enabled: false,
-    recharge_threshold_cents: 5000,
-    recharge_amount_cents: 25000,
+    recharge_threshold_credits: 5000,
+    recharge_amount_credits: 25000,
     stripe_customer_id: "cus_mock_abc123",
     stripe_payment_method_id: "pm_mock_visa_4242",
     created_at: "2026-01-15T10:00:00Z",
     updated_at: new Date().toISOString(),
   };
 
-  const mockWalletTransactions = [
+  const mockCreditLedger: Array<{
+    id: string;
+    balance_id: string;
+    credit_amount: number;
+    balance_after: number;
+    type: "deposit" | "deduction";
+    description: string;
+    reference_id: string;
+    created_at: string;
+  }> = [
     {
-      id: "wtx_001",
-      wallet_id: "wal_001",
-      amount_cents: 25000,
-      balance_after_cents: 25000,
-      type: "deposit" as const,
-      description: "Initial wallet funding via Stripe",
+      id: "cl_001",
+      balance_id: "cb_001",
+      credit_amount: 25000,
+      balance_after: 25000,
+      type: "deposit",
+      description: "Initial credit purchase via Stripe",
       reference_id: "pi_mock_initial_001",
       created_at: "2026-01-15T10:00:00Z",
     },
     {
-      id: "wtx_002",
-      wallet_id: "wal_001",
-      amount_cents: -500,
-      balance_after_cents: 24500,
-      type: "deduction" as const,
+      id: "cl_002",
+      balance_id: "cb_001",
+      credit_amount: -500,
+      balance_after: 24500,
+      type: "deduction",
       description: "UGC brief dispatch — Organic Cotton Tee",
       reference_id: "ugc_brief_001",
       created_at: "2026-02-20T14:35:00Z",
     },
     {
-      id: "wtx_003",
-      wallet_id: "wal_001",
-      amount_cents: 10000,
-      balance_after_cents: 34500,
-      type: "deposit" as const,
-      description: "Manual top-up via Stripe",
+      id: "cl_003",
+      balance_id: "cb_001",
+      credit_amount: 10000,
+      balance_after: 34500,
+      type: "deposit",
+      description: "Credit purchase via Stripe",
       reference_id: "pi_mock_topup_002",
       created_at: "2026-03-01T09:15:00Z",
     },
     {
-      id: "wtx_004",
-      wallet_id: "wal_001",
-      amount_cents: -4250,
-      balance_after_cents: 30250,
-      type: "deduction" as const,
-      description: "Perplexity API outlay — Trend research batch",
+      id: "cl_004",
+      balance_id: "cb_001",
+      credit_amount: -4250,
+      balance_after: 30250,
+      type: "deduction",
+      description: "API compute — Trend research batch",
       reference_id: "api_batch_trend_003",
       created_at: "2026-03-05T11:20:00Z",
     },
     {
-      id: "wtx_005",
-      wallet_id: "wal_001",
-      amount_cents: -5500,
-      balance_after_cents: 24750,
-      type: "deduction" as const,
-      description: "UGC creator payout — Recycled Denim Jacket campaign",
+      id: "cl_005",
+      balance_id: "cb_001",
+      credit_amount: -5500,
+      balance_after: 24750,
+      type: "deduction",
+      description: "UGC service — Recycled Denim Jacket campaign",
       reference_id: "ugc_payout_004",
       created_at: "2026-03-10T16:45:00Z",
     },
   ];
 
+  // New credit endpoints (Phase 51.5)
+  app.get("/api/projects/:projectId/credits", (_req, res) => {
+    res.json({
+      success: true,
+      balance: mockCreditBalance,
+      ledger: mockCreditLedger,
+    });
+  });
+
+  app.post("/api/projects/:projectId/credits/purchase", (req, res) => {
+    const { amount_credits } = req.body;
+    if (!amount_credits || amount_credits < 500) {
+      return res.status(400).json({ success: false, error: "Minimum 500 credits" });
+    }
+    mockCreditBalance.available_credits += amount_credits;
+    mockCreditBalance.updated_at = new Date().toISOString();
+    const entry = {
+      id: `cl_${Date.now()}`,
+      balance_id: mockCreditBalance.id,
+      credit_amount: amount_credits,
+      balance_after: mockCreditBalance.available_credits,
+      type: "deposit" as const,
+      description: `Credit purchase — ${amount_credits.toLocaleString()} credits via Stripe`,
+      reference_id: `pi_mock_${Date.now()}`,
+      created_at: new Date().toISOString(),
+    };
+    mockCreditLedger.push(entry);
+    console.log(`[Credits] Purchase: +${amount_credits.toLocaleString()} cr → new balance ${mockCreditBalance.available_credits.toLocaleString()} cr`);
+    res.json({ success: true, amount_credits, new_balance: mockCreditBalance.available_credits });
+  });
+
+  app.patch("/api/projects/:projectId/credits/settings", (req, res) => {
+    const { auto_recharge_enabled, recharge_threshold_credits, recharge_amount_credits } = req.body;
+    if (typeof auto_recharge_enabled === "boolean") mockCreditBalance.auto_recharge_enabled = auto_recharge_enabled;
+    if (typeof recharge_threshold_credits === "number") mockCreditBalance.recharge_threshold_credits = recharge_threshold_credits;
+    if (typeof recharge_amount_credits === "number") mockCreditBalance.recharge_amount_credits = recharge_amount_credits;
+    mockCreditBalance.updated_at = new Date().toISOString();
+    console.log(`[Credits] Settings updated — auto_recharge: ${mockCreditBalance.auto_recharge_enabled}, threshold: ${mockCreditBalance.recharge_threshold_credits} cr, amount: ${mockCreditBalance.recharge_amount_credits} cr`);
+    res.json({ success: true });
+  });
+
+  // Legacy wallet endpoints (backward compat — redirect to credit system)
   app.get("/api/projects/:projectId/wallet", (_req, res) => {
     res.json({
       success: true,
-      wallet: mockWallet,
-      transactions: mockWalletTransactions,
+      wallet: mockCreditBalance,
+      transactions: mockCreditLedger,
     });
   });
 
   app.post("/api/projects/:projectId/wallet/top-up", (req, res) => {
-    const { amount_cents } = req.body;
-    if (!amount_cents || amount_cents < 500) {
-      return res.status(400).json({ success: false, error: "Minimum $5.00" });
-    }
-    mockWallet.balance_cents += amount_cents;
-    mockWallet.updated_at = new Date().toISOString();
-    const txn = {
-      id: `wtx_${Date.now()}`,
-      wallet_id: mockWallet.id,
-      amount_cents,
-      balance_after_cents: mockWallet.balance_cents,
-      type: "deposit" as const,
-      description: `Manual top-up — ${(amount_cents / 100).toFixed(2)} via Stripe`,
-      reference_id: `pi_mock_${Date.now()}`,
-      created_at: new Date().toISOString(),
-    };
-    mockWalletTransactions.push(txn);
-    console.log(`[Wallet] Top-up: +$${(amount_cents / 100).toFixed(2)} → new balance $${(mockWallet.balance_cents / 100).toFixed(2)}`);
-    res.json({ success: true, amount_cents, new_balance_cents: mockWallet.balance_cents });
+    req.url = `/api/projects/${req.params.projectId}/credits/purchase`;
+    req.body.amount_credits = req.body.amount_cents;
+    res.redirect(307, `/api/projects/${req.params.projectId}/credits/purchase`);
   });
 
   app.patch("/api/projects/:projectId/wallet/settings", (req, res) => {
-    const { auto_recharge_enabled, recharge_threshold_cents, recharge_amount_cents } = req.body;
-    if (typeof auto_recharge_enabled === "boolean") mockWallet.auto_recharge_enabled = auto_recharge_enabled;
-    if (typeof recharge_threshold_cents === "number") mockWallet.recharge_threshold_cents = recharge_threshold_cents;
-    if (typeof recharge_amount_cents === "number") mockWallet.recharge_amount_cents = recharge_amount_cents;
-    mockWallet.updated_at = new Date().toISOString();
-    console.log(`[Wallet] Settings updated — auto_recharge: ${mockWallet.auto_recharge_enabled}, threshold: $${(mockWallet.recharge_threshold_cents / 100).toFixed(2)}, amount: $${(mockWallet.recharge_amount_cents / 100).toFixed(2)}`);
-    res.json({ success: true });
+    res.redirect(307, `/api/projects/${req.params.projectId}/credits/settings`);
   });
 
   return httpServer;

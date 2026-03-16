@@ -17,7 +17,7 @@ import {
   FlaskConical,
   Satellite,
   Globe2,
-  Wallet,
+  Coins,
 } from "lucide-react";
 import { Link } from "wouter";
 import { useHashLocation } from "wouter/use-hash-location";
@@ -69,7 +69,7 @@ const systemNav: NavItem[] = [
   { titleKey: "nav.missionControl", url: "/mission-control", icon: Satellite },
   { titleKey: "nav.edgeWorkers", url: "/workers", icon: Cpu },
   { titleKey: "nav.domains", url: "/domains", icon: Globe },
-  { titleKey: "nav.wallet", url: "/wallet", icon: Wallet },
+  { titleKey: "nav.wallet", url: "/wallet", icon: Coins },
   { titleKey: "nav.settings", url: "/settings", icon: Settings },
 ];
 

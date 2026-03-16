@@ -27,7 +27,7 @@
     "aiManager": "AI Manager",
     "missionControl": "Mission Control",
     "offDomain": "Off-Domain Trust",
-    "wallet": "Media Wallet"
+    "wallet": "Swarme Credits"
   },
   "footer": {
     "agentsActive": "{{count}} agents active"

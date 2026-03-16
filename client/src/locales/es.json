@@ -27,7 +27,7 @@
     "aiManager": "Manager IA",
     "missionControl": "Centro de Misión",
     "offDomain": "Confianza Externa",
-    "wallet": "Monedero Media"
+    "wallet": "Swarme Credits"
   },
   "footer": {
     "agentsActive": "{{count}} agentes activos"

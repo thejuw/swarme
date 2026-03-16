@@ -1,18 +1,22 @@
 /**
  * ============================================================
- * Phase 51: Media Wallet — Check & Deduction Logic
+ * Phase 51.5: Swarme Credit System — Check & Deduction Logic
  * ============================================================
  *
- * Double-entry style ledger utilities for the prepaid wallet.
- * All amounts are in INTEGER CENTS to avoid floating-point errors.
+ * Closed-loop credit ledger utilities. Swarme Credits are
+ * non-refundable digital software licenses used to provision
+ * compute power, API calls, and managed external services.
+ *
+ * 1 Credit = 1 unit of purchasing power (integer storage).
+ * Credits are NOT currency and carry no cash-out value.
  *
  * Key functions:
- *   - getOrCreateWallet(domainId) → ensures a wallet exists
- *   - deductFunds(domainId, amountCents, description, referenceId)
- *       → ACID deduction with InsufficientFundsError
- *   - depositFunds(domainId, amountCents, description, referenceId)
+ *   - getOrCreateBalance(domainId) → ensures a credit balance exists
+ *   - deductCredits(domainId, amount, description, referenceId)
+ *       → ACID deduction with InsufficientCreditsError
+ *   - depositCredits(domainId, amount, description, referenceId)
  *       → positive credit entry
- *   - getWalletWithHistory(domainId) → wallet + recent transactions
+ *   - getBalanceWithHistory(domainId) → balance + recent ledger entries
  *
  * All D1 queries use parameterized inputs (Phase 47 constraint).
  * All queries filter by domain_id for compartmentalization.
@@ -23,22 +27,22 @@ import type { Env } from "../index";
 
 // ── Types ────────────────────────────────────────────────────
 
-export interface Wallet {
+export interface CreditBalance {
   id: string;
   domain_id: string;
-  balance_cents: number;
+  available_credits: number;
   auto_recharge_enabled: number;
-  recharge_threshold_cents: number;
-  recharge_amount_cents: number;
+  recharge_threshold_credits: number;
+  recharge_amount_credits: number;
   stripe_customer_id: string;
   created_at: string;
   updated_at: string;
 }
 
-export interface WalletTransaction {
+export interface CreditLedgerEntry {
   id: string;
-  wallet_id: string;
-  amount_cents: number;
+  balance_id: string;
+  credit_amount: number;
   description: string;
   reference_id: string;
   created_at: string;
@@ -46,186 +50,200 @@ export interface WalletTransaction {
 
 // ── Custom Error ─────────────────────────────────────────────
 
-export class InsufficientFundsError extends Error {
-  public readonly required_cents: number;
-  public readonly available_cents: number;
+export class InsufficientCreditsError extends Error {
+  public readonly required_credits: number;
+  public readonly available_credits: number;
 
   constructor(required: number, available: number) {
     super(
-      `Insufficient funds: requires ${required} cents but only ${available} cents available`
+      `Insufficient credits: requires ${required} but only ${available} available`
     );
-    this.name = "InsufficientFundsError";
-    this.required_cents = required;
-    this.available_cents = available;
+    this.name = "InsufficientCreditsError";
+    this.required_credits = required;
+    this.available_credits = available;
   }
 }
 
-// ── Get or Create Wallet ─────────────────────────────────────
+// Keep legacy alias for backward compatibility in existing catch blocks
+export const InsufficientFundsError = InsufficientCreditsError;
 
-export async function getOrCreateWallet(
+// ── Get or Create Balance ────────────────────────────────────
+
+export async function getOrCreateBalance(
   env: Env,
   domainId: string
-): Promise<Wallet> {
-  // Try to fetch existing wallet
+): Promise<CreditBalance> {
   const existing = await env.DB.prepare(
-    "SELECT * FROM Wallets WHERE domain_id = ?1"
+    "SELECT * FROM Credit_Balances WHERE domain_id = ?1"
   )
     .bind(domainId)
-    .first<Wallet>();
+    .first<CreditBalance>();
 
   if (existing) return existing;
 
-  // Create new wallet with zero balance
-  const walletId = `wal_${crypto.randomUUID().split("-")[0]}`;
+  // Create new balance with zero credits
+  const balanceId = `cb_${crypto.randomUUID().split("-")[0]}`;
   const now = new Date().toISOString();
 
   await env.DB.prepare(
-    `INSERT INTO Wallets (id, domain_id, balance_cents, auto_recharge_enabled, recharge_threshold_cents, recharge_amount_cents, created_at, updated_at)
+    `INSERT INTO Credit_Balances (id, domain_id, available_credits, auto_recharge_enabled, recharge_threshold_credits, recharge_amount_credits, created_at, updated_at)
      VALUES (?1, ?2, 0, 0, 5000, 25000, ?3, ?3)`
   )
-    .bind(walletId, domainId, now)
+    .bind(balanceId, domainId, now)
     .run();
 
   return {
-    id: walletId,
+    id: balanceId,
     domain_id: domainId,
-    balance_cents: 0,
+    available_credits: 0,
     auto_recharge_enabled: 0,
-    recharge_threshold_cents: 5000,
-    recharge_amount_cents: 25000,
+    recharge_threshold_credits: 5000,
+    recharge_amount_credits: 25000,
     stripe_customer_id: "",
     created_at: now,
     updated_at: now,
   };
 }
 
-// ── Deduct Funds (ACID) ──────────────────────────────────────
+// Legacy alias
+export const getOrCreateWallet = getOrCreateBalance;
+
+// ── Deduct Credits (ACID) ────────────────────────────────────
 
 /**
- * Atomically deduct funds from a domain's wallet.
+ * Atomically deduct credits from a domain's balance.
  *
  * Uses D1 batch for transactional guarantees:
  *   1. Read current balance
- *   2. Verify sufficient funds (throw InsufficientFundsError if not)
- *   3. Insert negative transaction row
- *   4. Update wallet balance
+ *   2. Verify sufficient credits (throw InsufficientCreditsError if not)
+ *   3. Insert negative ledger entry
+ *   4. Update balance
  *
- * @throws InsufficientFundsError if balance < amountCents
+ * @throws InsufficientCreditsError if available_credits < amount
  */
-export async function deductFunds(
+export async function deductCredits(
   env: Env,
   domainId: string,
-  amountCents: number,
+  amount: number,
   description: string,
   referenceId: string
-): Promise<{ new_balance_cents: number; transaction_id: string }> {
+): Promise<{ new_balance: number; transaction_id: string }> {
   // 1. Read current balance
-  const wallet = await env.DB.prepare(
-    "SELECT id, balance_cents FROM Wallets WHERE domain_id = ?1"
+  const balance = await env.DB.prepare(
+    "SELECT id, available_credits FROM Credit_Balances WHERE domain_id = ?1"
   )
     .bind(domainId)
-    .first<{ id: string; balance_cents: number }>();
+    .first<{ id: string; available_credits: number }>();
 
-  if (!wallet) {
-    throw new Error(`No wallet found for domain ${domainId}`);
+  if (!balance) {
+    throw new Error(`No credit balance found for domain ${domainId}`);
   }
 
-  // 2. Verify sufficient funds
-  if (wallet.balance_cents < amountCents) {
-    throw new InsufficientFundsError(amountCents, wallet.balance_cents);
+  // 2. Verify sufficient credits
+  if (balance.available_credits < amount) {
+    throw new InsufficientCreditsError(amount, balance.available_credits);
   }
 
-  // 3+4. Insert transaction + update balance atomically via D1 batch
+  // 3+4. Insert ledger entry + update balance atomically via D1 batch
   const txnId = `txn_${crypto.randomUUID().split("-")[0]}`;
   const now = new Date().toISOString();
-  const newBalance = wallet.balance_cents - amountCents;
+  const newBalance = balance.available_credits - amount;
 
   await env.DB.batch([
     env.DB.prepare(
-      `INSERT INTO Wallet_Transactions (id, wallet_id, amount_cents, description, reference_id, created_at)
+      `INSERT INTO Credit_Ledger (id, balance_id, credit_amount, description, reference_id, created_at)
        VALUES (?1, ?2, ?3, ?4, ?5, ?6)`
-    ).bind(txnId, wallet.id, -amountCents, description, referenceId, now),
+    ).bind(txnId, balance.id, -amount, description, referenceId, now),
 
     env.DB.prepare(
-      `UPDATE Wallets SET balance_cents = ?1, updated_at = ?2 WHERE id = ?3 AND domain_id = ?4`
-    ).bind(newBalance, now, wallet.id, domainId),
+      `UPDATE Credit_Balances SET available_credits = ?1, updated_at = ?2 WHERE id = ?3 AND domain_id = ?4`
+    ).bind(newBalance, now, balance.id, domainId),
   ]);
 
-  return { new_balance_cents: newBalance, transaction_id: txnId };
+  return { new_balance: newBalance, transaction_id: txnId };
 }
 
-// ── Deposit Funds ────────────────────────────────────────────
+// Legacy alias
+export const deductFunds = deductCredits;
+
+// ── Deposit Credits ──────────────────────────────────────────
 
 /**
- * Credit funds to a domain's wallet (e.g., Stripe top-up, auto-recharge).
+ * Credit units to a domain's balance (e.g., Stripe purchase, auto-recharge).
  */
-export async function depositFunds(
+export async function depositCredits(
   env: Env,
   domainId: string,
-  amountCents: number,
+  amount: number,
   description: string,
   referenceId: string
-): Promise<{ new_balance_cents: number; transaction_id: string }> {
-  const wallet = await getOrCreateWallet(env, domainId);
+): Promise<{ new_balance: number; transaction_id: string }> {
+  const balance = await getOrCreateBalance(env, domainId);
 
   const txnId = `txn_${crypto.randomUUID().split("-")[0]}`;
   const now = new Date().toISOString();
-  const newBalance = wallet.balance_cents + amountCents;
+  const newBalance = balance.available_credits + amount;
 
   await env.DB.batch([
     env.DB.prepare(
-      `INSERT INTO Wallet_Transactions (id, wallet_id, amount_cents, description, reference_id, created_at)
+      `INSERT INTO Credit_Ledger (id, balance_id, credit_amount, description, reference_id, created_at)
        VALUES (?1, ?2, ?3, ?4, ?5, ?6)`
-    ).bind(txnId, wallet.id, amountCents, description, referenceId, now),
+    ).bind(txnId, balance.id, amount, description, referenceId, now),
 
     env.DB.prepare(
-      `UPDATE Wallets SET balance_cents = ?1, updated_at = ?2 WHERE id = ?3 AND domain_id = ?4`
-    ).bind(newBalance, now, wallet.id, domainId),
+      `UPDATE Credit_Balances SET available_credits = ?1, updated_at = ?2 WHERE id = ?3 AND domain_id = ?4`
+    ).bind(newBalance, now, balance.id, domainId),
   ]);
 
-  return { new_balance_cents: newBalance, transaction_id: txnId };
+  return { new_balance: newBalance, transaction_id: txnId };
 }
 
-// ── Get Wallet with History ──────────────────────────────────
+// Legacy alias
+export const depositFunds = depositCredits;
 
-export async function getWalletWithHistory(
+// ── Get Balance with History ─────────────────────────────────
+
+export async function getBalanceWithHistory(
   env: Env,
   domainId: string,
   limit = 50
 ): Promise<{
-  wallet: Wallet;
-  transactions: WalletTransaction[];
+  balance: CreditBalance;
+  ledger: CreditLedgerEntry[];
 }> {
-  const wallet = await getOrCreateWallet(env, domainId);
+  const balance = await getOrCreateBalance(env, domainId);
 
   const { results } = await env.DB.prepare(
-    `SELECT id, wallet_id, amount_cents, description, reference_id, created_at
-     FROM Wallet_Transactions
-     WHERE wallet_id = ?1
+    `SELECT id, balance_id, credit_amount, description, reference_id, created_at
+     FROM Credit_Ledger
+     WHERE balance_id = ?1
      ORDER BY created_at DESC
      LIMIT ?2`
   )
-    .bind(wallet.id, limit)
-    .all<WalletTransaction>();
+    .bind(balance.id, limit)
+    .all<CreditLedgerEntry>();
 
   return {
-    wallet,
-    transactions: results || [],
+    balance,
+    ledger: results || [],
   };
 }
 
-// ── Update Wallet Settings ───────────────────────────────────
+// Legacy alias
+export const getWalletWithHistory = getBalanceWithHistory;
 
-export async function updateWalletSettings(
+// ── Update Balance Settings ──────────────────────────────────
+
+export async function updateBalanceSettings(
   env: Env,
   domainId: string,
   settings: {
     auto_recharge_enabled?: boolean;
-    recharge_threshold_cents?: number;
-    recharge_amount_cents?: number;
+    recharge_threshold_credits?: number;
+    recharge_amount_credits?: number;
   }
-): Promise<Wallet> {
-  const wallet = await getOrCreateWallet(env, domainId);
+): Promise<CreditBalance> {
+  const balance = await getOrCreateBalance(env, domainId);
 
   const sets: string[] = [];
   const binds: (string | number)[] = [];
@@ -236,37 +254,39 @@ export async function updateWalletSettings(
     binds.push(settings.auto_recharge_enabled ? 1 : 0);
     idx++;
   }
-  if (typeof settings.recharge_threshold_cents === "number") {
-    sets.push(`recharge_threshold_cents = ?${idx}`);
-    binds.push(settings.recharge_threshold_cents);
+  if (typeof settings.recharge_threshold_credits === "number") {
+    sets.push(`recharge_threshold_credits = ?${idx}`);
+    binds.push(settings.recharge_threshold_credits);
     idx++;
   }
-  if (typeof settings.recharge_amount_cents === "number") {
-    sets.push(`recharge_amount_cents = ?${idx}`);
-    binds.push(settings.recharge_amount_cents);
+  if (typeof settings.recharge_amount_credits === "number") {
+    sets.push(`recharge_amount_credits = ?${idx}`);
+    binds.push(settings.recharge_amount_credits);
     idx++;
   }
 
-  if (sets.length === 0) return wallet;
+  if (sets.length === 0) return balance;
 
   const now = new Date().toISOString();
   sets.push(`updated_at = ?${idx}`);
   binds.push(now);
   idx++;
 
-  binds.push(wallet.id);
+  binds.push(balance.id);
   binds.push(domainId);
 
   await env.DB.prepare(
-    `UPDATE Wallets SET ${sets.join(", ")} WHERE id = ?${idx} AND domain_id = ?${idx + 1}`
+    `UPDATE Credit_Balances SET ${sets.join(", ")} WHERE id = ?${idx} AND domain_id = ?${idx + 1}`
   )
     .bind(...binds)
     .run();
 
-  // Return updated wallet
   return (await env.DB.prepare(
-    "SELECT * FROM Wallets WHERE domain_id = ?1"
+    "SELECT * FROM Credit_Balances WHERE domain_id = ?1"
   )
     .bind(domainId)
-    .first<Wallet>())!;
+    .first<CreditBalance>())!;
 }
+
+// Legacy alias
+export const updateWalletSettings = updateBalanceSettings;

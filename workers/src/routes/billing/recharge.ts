@@ -1,18 +1,18 @@
 /**
  * ============================================================
- * Phase 51: Stripe Wallet Recharge Routes
+ * Phase 51.5: Swarme Credit Purchase & Auto-Recharge Routes
  * ============================================================
  *
  * Endpoints:
- *   POST /top-up         → Manual one-time wallet top-up via
- *                           Stripe Payment Intent
- *   POST /confirm-top-up → Confirm after Stripe redirects back
+ *   POST /purchase        → Purchase credits via Stripe
+ *   POST /confirm-purchase → Confirm after Stripe redirect
  *
  * Cron:
- *   handleWalletRecharge() → Hourly auto-recharge for wallets
+ *   handleCreditRecharge() → Hourly auto-recharge for balances
  *                            below threshold using saved payment
  *                            method (off-session)
  *
+ * Credits are non-refundable digital software licenses.
  * All D1 queries use parameterized inputs.
  * All queries filter by domain_id for compartmentalization.
  * ============================================================
@@ -20,8 +20,8 @@
 
 import { Hono } from "hono";
 import type { Env } from "../../index";
-import { depositFunds, getOrCreateWallet } from "../../utils/wallet";
-import type { Wallet } from "../../utils/wallet";
+import { depositCredits, getOrCreateBalance } from "../../utils/wallet";
+import type { CreditBalance } from "../../utils/wallet";
 
 export const walletRechargeRouter = new Hono<{ Bindings: Env }>();
 
@@ -53,7 +53,8 @@ async function stripeRequest(
 }
 
 // ─────────────────────────────────────────────────────────────
-// POST /top-up — Manual one-time wallet top-up
+// POST /top-up — Purchase Swarme Credits via Stripe
+// (route kept as /top-up for API backward compat)
 // ─────────────────────────────────────────────────────────────
 
 walletRechargeRouter.post("/top-up", async (c) => {
@@ -62,20 +63,20 @@ walletRechargeRouter.post("/top-up", async (c) => {
   try {
     const body = await c.req.json<{
       domain_id: string;
-      amount_cents: number;
+      amount_credits: number;
     }>();
 
-    if (!body.domain_id || !body.amount_cents || body.amount_cents < 500) {
+    if (!body.domain_id || !body.amount_credits || body.amount_credits < 500) {
       return c.json(
-        { success: false, error: "domain_id and amount_cents (min 500) required" },
+        { success: false, error: "domain_id and amount_credits (min 500) required" },
         400
       );
     }
 
-    const wallet = await getOrCreateWallet(c.env, body.domain_id);
+    const balance = await getOrCreateBalance(c.env, body.domain_id);
 
     // Get or create Stripe customer
-    let customerId = wallet.stripe_customer_id;
+    let customerId = balance.stripe_customer_id;
     if (!customerId) {
       const user = await c.env.DB.prepare(
         "SELECT email FROM Users WHERE id = ?1"
@@ -86,30 +87,29 @@ walletRechargeRouter.post("/top-up", async (c) => {
       const customer = await stripeRequest(c.env, "/customers", {
         email: user?.email || "",
         "metadata[domain_id]": body.domain_id,
-        "metadata[wallet_id]": wallet.id,
+        "metadata[balance_id]": balance.id,
       });
 
       customerId = customer.id;
 
-      // Save Stripe customer ID to wallet
       await c.env.DB.prepare(
-        "UPDATE Wallets SET stripe_customer_id = ?1 WHERE id = ?2 AND domain_id = ?3"
+        "UPDATE Credit_Balances SET stripe_customer_id = ?1 WHERE id = ?2 AND domain_id = ?3"
       )
-        .bind(customerId, wallet.id, body.domain_id)
+        .bind(customerId, balance.id, body.domain_id)
         .run();
     }
 
-    // Create Payment Intent
+    // Create Payment Intent (Stripe charges in cents; 1 credit = 1 cent equivalent)
     const pi: StripePaymentIntentResponse = await stripeRequest(
       c.env,
       "/payment_intents",
       {
-        amount: body.amount_cents.toString(),
+        amount: body.amount_credits.toString(),
         currency: "usd",
         customer: customerId,
-        "metadata[type]": "wallet_top_up",
+        "metadata[type]": "credit_purchase",
         "metadata[domain_id]": body.domain_id,
-        "metadata[wallet_id]": wallet.id,
+        "metadata[balance_id]": balance.id,
         setup_future_usage: "off_session",
       }
     );
@@ -125,13 +125,13 @@ walletRechargeRouter.post("/top-up", async (c) => {
       status: pi.status,
     });
   } catch (err: any) {
-    console.error("[Wallet Recharge] Top-up error:", err);
+    console.error("[Credit Purchase] Error:", err);
     return c.json({ success: false, error: err.message }, 500);
   }
 });
 
 // ─────────────────────────────────────────────────────────────
-// POST /confirm-top-up — After Stripe confirms the payment
+// POST /confirm-top-up — Confirm credit purchase after Stripe
 // ─────────────────────────────────────────────────────────────
 
 walletRechargeRouter.post("/confirm-top-up", async (c) => {
@@ -139,29 +139,28 @@ walletRechargeRouter.post("/confirm-top-up", async (c) => {
     const body = await c.req.json<{
       domain_id: string;
       payment_intent_id: string;
-      amount_cents: number;
+      amount_credits: number;
     }>();
 
-    if (!body.domain_id || !body.payment_intent_id || !body.amount_cents) {
+    if (!body.domain_id || !body.payment_intent_id || !body.amount_credits) {
       return c.json({ success: false, error: "Missing required fields" }, 400);
     }
 
-    // Credit the wallet
-    const result = await depositFunds(
+    const result = await depositCredits(
       c.env,
       body.domain_id,
-      body.amount_cents,
-      `Manual top-up via Stripe`,
+      body.amount_credits,
+      `Credit purchase via Stripe`,
       body.payment_intent_id
     );
 
     return c.json({
       success: true,
-      new_balance_cents: result.new_balance_cents,
+      new_balance: result.new_balance,
       transaction_id: result.transaction_id,
     });
   } catch (err: any) {
-    console.error("[Wallet Recharge] Confirm error:", err);
+    console.error("[Credit Purchase] Confirm error:", err);
     return c.json({ success: false, error: err.message }, 500);
   }
 });
@@ -171,17 +170,14 @@ walletRechargeRouter.post("/confirm-top-up", async (c) => {
 // ─────────────────────────────────────────────────────────────
 
 /**
- * Queries wallets where:
+ * Queries credit balances where:
  *   - auto_recharge_enabled = 1
- *   - balance_cents <= recharge_threshold_cents
+ *   - available_credits <= recharge_threshold_credits
  *   - stripe_customer_id is set
  *
- * For each, creates a Stripe PaymentIntent with:
- *   - confirm: true
- *   - off_session: true
- *   - using the customer's saved default payment method
- *
- * On success, credits the wallet via depositFunds().
+ * For each, creates a confirmed off-session Stripe PaymentIntent
+ * using the customer's saved default payment method, then
+ * credits the balance via depositCredits().
  */
 export async function handleWalletRecharge(env: Env): Promise<{
   checked: number;
@@ -193,23 +189,22 @@ export async function handleWalletRecharge(env: Env): Promise<{
   let failed = 0;
 
   try {
-    // Find wallets needing recharge
     const { results } = await env.DB.prepare(
-      `SELECT * FROM Wallets
+      `SELECT * FROM Credit_Balances
        WHERE auto_recharge_enabled = 1
-         AND balance_cents <= recharge_threshold_cents
+         AND available_credits <= recharge_threshold_credits
          AND stripe_customer_id != ''
          AND stripe_customer_id IS NOT NULL`
-    ).all<Wallet>();
+    ).all<CreditBalance>();
 
-    const wallets = results || [];
-    checked = wallets.length;
+    const balances = results || [];
+    checked = balances.length;
 
-    for (const wallet of wallets) {
+    for (const balance of balances) {
       try {
         // Get the customer's default payment method
         const customerResp = await fetch(
-          `https://api.stripe.com/v1/customers/${wallet.stripe_customer_id}`,
+          `https://api.stripe.com/v1/customers/${balance.stripe_customer_id}`,
           {
             headers: {
               Authorization: `Basic ${btoa(`${env.STRIPE_SECRET_KEY}:`)}`,
@@ -223,7 +218,7 @@ export async function handleWalletRecharge(env: Env): Promise<{
 
         if (!defaultPm) {
           console.warn(
-            `[Auto-Recharge] Wallet ${wallet.id}: no default payment method for customer ${wallet.stripe_customer_id}`
+            `[Auto-Recharge] Balance ${balance.id}: no default payment method for customer ${balance.stripe_customer_id}`
           );
           failed++;
           continue;
@@ -231,40 +226,40 @@ export async function handleWalletRecharge(env: Env): Promise<{
 
         // Create confirmed off-session PaymentIntent
         const pi: any = await stripeRequest(env, "/payment_intents", {
-          amount: wallet.recharge_amount_cents.toString(),
+          amount: balance.recharge_amount_credits.toString(),
           currency: "usd",
-          customer: wallet.stripe_customer_id,
+          customer: balance.stripe_customer_id,
           payment_method: defaultPm,
           confirm: "true",
           off_session: "true",
-          "metadata[type]": "auto_recharge",
-          "metadata[domain_id]": wallet.domain_id,
-          "metadata[wallet_id]": wallet.id,
+          "metadata[type]": "credit_auto_recharge",
+          "metadata[domain_id]": balance.domain_id,
+          "metadata[balance_id]": balance.id,
         });
 
         if (pi.error || pi.status !== "succeeded") {
           console.error(
-            `[Auto-Recharge] Wallet ${wallet.id}: Stripe error — ${pi.error?.message || pi.status}`
+            `[Auto-Recharge] Balance ${balance.id}: Stripe error — ${pi.error?.message || pi.status}`
           );
           failed++;
           continue;
         }
 
-        // Credit the wallet
-        await depositFunds(
+        // Credit the balance
+        await depositCredits(
           env,
-          wallet.domain_id,
-          wallet.recharge_amount_cents,
-          `Auto-recharge (balance was $${(wallet.balance_cents / 100).toFixed(2)})`,
+          balance.domain_id,
+          balance.recharge_amount_credits,
+          `Auto-recharge (balance was ${balance.available_credits} credits)`,
           pi.id
         );
 
         recharged++;
         console.log(
-          `[Auto-Recharge] Wallet ${wallet.id}: recharged $${(wallet.recharge_amount_cents / 100).toFixed(2)} — new balance $${((wallet.balance_cents + wallet.recharge_amount_cents) / 100).toFixed(2)}`
+          `[Auto-Recharge] Balance ${balance.id}: recharged ${balance.recharge_amount_credits} credits — new balance ${balance.available_credits + balance.recharge_amount_credits}`
         );
       } catch (err) {
-        console.error(`[Auto-Recharge] Wallet ${wallet.id}: error —`, err);
+        console.error(`[Auto-Recharge] Balance ${balance.id}: error —`, err);
         failed++;
       }
     }

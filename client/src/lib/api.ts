@@ -1241,6 +1241,8 @@ export const queryKeys = {
     ["/api/projects", projectId, "ugc-campaigns"] as const,
   wallet: (projectId: string) =>
     ["/api/projects", projectId, "wallet"] as const,
+  credits: (projectId: string) =>
+    ["/api/projects", projectId, "credits"] as const,
 } as const;
 
 // ────────────────────────────────────────────
@@ -1845,65 +1847,68 @@ export async function dismissUGCCampaign(
 }
 
 // ────────────────────────────────────────────
-// Phase 51: Media Wallet types + wrappers
+// Phase 51.5: Swarme Credit System types + wrappers
 // ────────────────────────────────────────────
 
-export interface WalletData {
+export interface CreditBalanceData {
   id: string;
   domain_id: string;
-  balance_cents: number;
-  currency: string;
+  available_credits: number;
   auto_recharge_enabled: boolean;
-  recharge_threshold_cents: number;
-  recharge_amount_cents: number;
+  recharge_threshold_credits: number;
+  recharge_amount_credits: number;
   stripe_customer_id: string | null;
-  stripe_payment_method_id: string | null;
   created_at: string;
   updated_at: string;
 }
 
-export interface WalletTransactionEntry {
+export interface CreditLedgerEntry {
   id: string;
-  wallet_id: string;
-  amount_cents: number;
-  balance_after_cents: number;
-  type: "deposit" | "deduction" | "recharge" | "refund";
+  balance_id: string;
+  credit_amount: number;
   description: string;
   reference_id: string;
   created_at: string;
 }
 
-export interface WalletResponse {
+export interface CreditResponse {
   success: boolean;
-  wallet: WalletData;
-  transactions: WalletTransactionEntry[];
+  balance: CreditBalanceData;
+  ledger: CreditLedgerEntry[];
 }
 
-export async function getWalletData(
+export async function getCreditData(
   projectId: string
-): Promise<WalletResponse> {
-  const res = await apiRequest("GET", `/api/projects/${projectId}/wallet`);
+): Promise<CreditResponse> {
+  const res = await apiRequest("GET", `/api/projects/${projectId}/credits`);
   return res.json();
 }
 
-export async function topUpWallet(
+export async function purchaseCredits(
   projectId: string,
-  amountCents: number
-): Promise<{ success: boolean; amount_cents: number; new_balance_cents: number }> {
-  const res = await apiRequest("POST", `/api/projects/${projectId}/wallet/top-up`, {
-    amount_cents: amountCents,
+  amountCredits: number
+): Promise<{ success: boolean; amount_credits: number; new_balance: number }> {
+  const res = await apiRequest("POST", `/api/projects/${projectId}/credits/purchase`, {
+    amount_credits: amountCredits,
   });
   return res.json();
 }
 
-export async function updateWalletSettings(
+export async function updateCreditSettings(
   projectId: string,
   settings: {
     auto_recharge_enabled: boolean;
-    recharge_threshold_cents: number;
-    recharge_amount_cents: number;
+    recharge_threshold_credits: number;
+    recharge_amount_credits: number;
   }
 ): Promise<{ success: boolean }> {
-  const res = await apiRequest("PATCH", `/api/projects/${projectId}/wallet/settings`, settings);
+  const res = await apiRequest("PATCH", `/api/projects/${projectId}/credits/settings`, settings);
   return res.json();
 }
+
+// Legacy aliases for backward compatibility
+export type WalletData = CreditBalanceData;
+export type WalletTransactionEntry = CreditLedgerEntry;
+export const getWalletData = getCreditData;
+export const topUpWallet = purchaseCredits;
+export const updateWalletSettings = updateCreditSettings;
