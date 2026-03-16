@@ -54,6 +54,9 @@ import { handleDataSynthesizerCron } from "./cron/dataSynthesizer";
 import { llmsTxtRouter } from "./routes/llms-txt";
 import { runApiFuzzer } from "./tests/chaos/apiFuzzer";
 import { runLlmAttacker } from "./tests/chaos/llmAttacker";
+import { handleLinkRotCron } from "./cron/linkRot";
+import { getAllCircuitStatuses, CircuitBreaker, CIRCUIT_SERVICES } from "./utils/circuitBreaker";
+import type { CircuitService } from "./utils/circuitBreaker";
 
 // Re-export the Durable Object class so Cloudflare can find it
 export { AgentWorkflowManager } from "./durable_object";
@@ -242,7 +245,50 @@ app.use("/api/manager/*", protectRoute());
 app.use("/api/billing/*", protectRoute());
 app.use("/api/gsc/*", protectRoute());
 app.use("/api/ga4/*", protectRoute());
+app.use("/api/circuit-breaker/*", protectRoute());
 // Note: /api/webhooks/* is intentionally unprotected — Stripe signs its own payloads
+
+// ─────────────────────────────────────────────────────────────
+// Phase 56: Circuit Breaker Status & Control Endpoints
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * GET /api/circuit-breaker/status
+ * Returns the current state of all upstream API circuit breakers.
+ */
+app.get("/api/circuit-breaker/status", async (c) => {
+  try {
+    const statuses = await getAllCircuitStatuses(c.env.CONFIG_KV);
+    return c.json({ success: true, circuits: statuses });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Unknown";
+    return c.json({ success: false, error: msg }, 500);
+  }
+});
+
+/**
+ * POST /api/circuit-breaker/reset/:service
+ * Admin-only: Force-reset a circuit breaker to CLOSED state.
+ */
+app.post("/api/circuit-breaker/reset/:service", async (c) => {
+  const service = c.req.param("service") as CircuitService;
+
+  if (!CIRCUIT_SERVICES.includes(service)) {
+    return c.json(
+      { success: false, error: `Invalid service. Valid: ${CIRCUIT_SERVICES.join(", ")}` },
+      400,
+    );
+  }
+
+  try {
+    const breaker = new CircuitBreaker(service, c.env.CONFIG_KV);
+    await breaker.reset();
+    return c.json({ success: true, message: `Circuit breaker for ${service} reset to CLOSED` });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Unknown";
+    return c.json({ success: false, error: msg }, 500);
+  }
+});
 
 // ─────────────────────────────────────────────────────────────
 // Phase 23: Public Config — exposes non-secret widget IDs
@@ -3566,6 +3612,34 @@ async function handleScheduled(
         }
       })();
       ctx.waitUntil(chaosPromise);
+    }
+
+    // ── Phase 56: Weekly Link Rot Scan (Sundays 05:00 UTC) ──
+    if (cronPattern === "0 5 * * 0") {
+      console.log("[Swarme Cron] Starting weekly link rot scan...");
+      const linkRotPromise = (async () => {
+        try {
+          const result = await handleLinkRotCron(env);
+          console.log(
+            `[Swarme Cron] Link rot scan complete — ${result.domainsScanned} domains, ` +
+            `${result.linksChecked} links checked, ${result.deadLinksFound} dead, ` +
+            `${result.replacementsFound} replacements found`
+          );
+
+          if (result.linksChecked > 0) {
+            await env.DB.prepare(
+              `INSERT INTO Agent_Tasks (project_id, agent_type, action, status, task_description, result_payload)
+               VALUES ('system', 'link_healer', 'Weekly Link Rot Scan', 'Completed', ?1, ?2)`
+            ).bind(
+              `Scanned ${result.domainsScanned} domains, checked ${result.linksChecked} links, found ${result.deadLinksFound} dead, ${result.replacementsFound} replacements`,
+              JSON.stringify(result)
+            ).run();
+          }
+        } catch (err) {
+          console.error("[Swarme Cron] Link rot scan failed:", err);
+        }
+      })();
+      ctx.waitUntil(linkRotPromise);
     }
 
     const elapsed = Date.now() - startTime;

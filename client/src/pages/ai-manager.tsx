@@ -13,12 +13,15 @@ import {
   getProprietaryReport,
   publishProprietaryReport,
   getTelemetryStatus,
+  getCircuitBreakerStatus,
+  resetCircuitBreaker,
   queryKeys,
   type ManagerChatMessage,
   type AIRoadmapItem,
   type UGCCampaignEntry,
   type ProprietaryReport,
   type TelemetrySubsystem,
+  type CircuitBreakerStatus,
 } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -48,6 +51,9 @@ import {
   XCircle,
   Package,
   Activity,
+  AlertTriangle,
+  ShieldOff,
+  RefreshCw,
   FileText,
   Globe,
   Code2,
@@ -998,6 +1004,85 @@ const PROACTIVE_TELEMETRY_MESSAGE: ManagerChatMessage = {
     `Click the **?** button next to any subsystem for a detailed explanation.`,
 };
 
+// ─────────────────────────────────────────────────────────────
+// Phase 56: Circuit Breaker Warning Banner
+// ─────────────────────────────────────────────────────────────
+
+function CircuitBreakerBanner() {
+  const { data, isLoading } = useQuery({
+    queryKey: queryKeys.circuitBreakerStatus(),
+    queryFn: getCircuitBreakerStatus,
+    refetchInterval: 30_000, // Poll every 30s
+  });
+
+  const { toast } = useToast();
+
+  const openCircuits = (data?.circuits || []).filter(
+    (c: CircuitBreakerStatus) => c.state === "OPEN" || c.state === "HALF_OPEN",
+  );
+
+  const handleReset = async (service: string) => {
+    try {
+      await resetCircuitBreaker(service);
+      queryClient.invalidateQueries({ queryKey: queryKeys.circuitBreakerStatus() });
+      toast({ title: "Circuit Reset", description: `${service} circuit breaker has been reset.` });
+    } catch {
+      toast({ title: "Reset Failed", description: "Could not reset the circuit breaker.", variant: "destructive" });
+    }
+  };
+
+  if (isLoading || openCircuits.length === 0) {
+    return null;
+  }
+
+  return (
+    <div
+      className="bg-yellow-50 dark:bg-yellow-950/40 border-b border-yellow-200 dark:border-yellow-800 px-4 py-2.5 flex items-start gap-3"
+      data-testid="banner-circuit-breaker"
+    >
+      <AlertTriangle className="h-4 w-4 text-yellow-600 dark:text-yellow-400 mt-0.5 flex-shrink-0" />
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
+          Upstream API Degradation Detected
+        </p>
+        <div className="mt-1 space-y-1">
+          {openCircuits.map((circuit: CircuitBreakerStatus) => (
+            <div
+              key={circuit.service}
+              className="flex items-center gap-2 text-xs text-yellow-700 dark:text-yellow-300"
+              data-testid={`circuit-status-${circuit.service}`}
+            >
+              <ShieldOff className="h-3 w-3" />
+              <span className="font-mono">{circuit.service}</span>
+              <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-yellow-400 text-yellow-700 dark:text-yellow-300">
+                {circuit.state}
+              </Badge>
+              {circuit.cooldownEndsAt && (
+                <span className="text-yellow-600 dark:text-yellow-400">
+                  Recovery at {new Date(circuit.cooldownEndsAt).toLocaleTimeString()}
+                </span>
+              )}
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-5 px-1.5 text-[10px] text-yellow-700 hover:text-yellow-900 dark:text-yellow-300"
+                onClick={() => handleReset(circuit.service)}
+                data-testid={`btn-reset-circuit-${circuit.service}`}
+              >
+                <RefreshCw className="h-3 w-3 mr-0.5" />
+                Reset
+              </Button>
+            </div>
+          ))}
+        </div>
+        <p className="text-[11px] text-yellow-600 dark:text-yellow-500 mt-1">
+          AI-powered features may be temporarily limited. The system will auto-recover when the upstream service stabilizes.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 export default function AiManager() {
   const [messages, setMessages] = useState<ManagerChatMessage[]>([
     WELCOME_MESSAGE,
@@ -1050,7 +1135,11 @@ export default function AiManager() {
   );
 
   return (
-    <div className="h-full flex flex-col sm:flex-row" data-testid="page-ai-manager">
+    <div className="h-full flex flex-col" data-testid="page-ai-manager">
+      {/* Phase 56: Circuit Breaker Warning Banner */}
+      <CircuitBreakerBanner />
+
+    <div className="flex-1 min-h-0 flex flex-col sm:flex-row">
       {/* Left: Chat Panel */}
       <div className="flex-1 min-w-0 sm:max-w-[55%]">
         <ChatPanel
@@ -1081,6 +1170,7 @@ export default function AiManager() {
           <RoadmapPanel />
         </div>
       </div>
+    </div>
     </div>
   );
 }

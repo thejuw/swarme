@@ -4471,5 +4471,92 @@ export async function registerRoutes(
     });
   });
 
+  // ────────────────────────────────────────────────────────────
+  // Phase 55: GDPR Offboarding Mock
+  // ────────────────────────────────────────────────────────────
+
+  // The offboarding is triggered internally by the Stripe webhook handler,
+  // so no separate endpoint is needed. The mock Stripe webhook at
+  // POST /api/webhooks/stripe already ACKs. The actual GDPR teardown
+  // runs server-side within the subscription.deleted case.
+
+  // ────────────────────────────────────────────────────────────
+  // Phase 56: Circuit Breaker Status Mock
+  // ────────────────────────────────────────────────────────────
+
+  // In-memory circuit breaker state for mock
+  const mockCircuitState: Record<string, {
+    state: "CLOSED" | "OPEN" | "HALF_OPEN";
+    failures: number;
+    lastFailure: string | null;
+    openedAt: string | null;
+    cooldownEndsAt: string | null;
+  }> = {
+    openai: { state: "CLOSED", failures: 0, lastFailure: null, openedAt: null, cooldownEndsAt: null },
+    perplexity: { state: "CLOSED", failures: 0, lastFailure: null, openedAt: null, cooldownEndsAt: null },
+    resend: { state: "CLOSED", failures: 0, lastFailure: null, openedAt: null, cooldownEndsAt: null },
+  };
+
+  // GET /api/circuit-breaker/status
+  app.get("/api/circuit-breaker/status", (_req, res) => {
+    const circuits = Object.entries(mockCircuitState).map(([service, state]) => ({
+      service,
+      ...state,
+    }));
+    res.json({ success: true, circuits });
+  });
+
+  // POST /api/circuit-breaker/reset/:service
+  app.post("/api/circuit-breaker/reset/:service", (req, res) => {
+    const { service } = req.params;
+    const validServices = ["openai", "perplexity", "resend"];
+
+    if (!validServices.includes(service)) {
+      return res.status(400).json({
+        success: false,
+        error: `Invalid service. Valid: ${validServices.join(", ")}`,
+      });
+    }
+
+    mockCircuitState[service] = {
+      state: "CLOSED",
+      failures: 0,
+      lastFailure: null,
+      openedAt: null,
+      cooldownEndsAt: null,
+    };
+
+    res.json({
+      success: true,
+      message: `Circuit breaker for ${service} reset to CLOSED`,
+    });
+  });
+
+  // POST /api/circuit-breaker/trip/:service (Test helper — trips a breaker for QA)
+  app.post("/api/circuit-breaker/trip/:service", (req, res) => {
+    const { service } = req.params;
+    const validServices = ["openai", "perplexity", "resend"];
+
+    if (!validServices.includes(service)) {
+      return res.status(400).json({ success: false, error: "Invalid service" });
+    }
+
+    const now = new Date().toISOString();
+    const cooldownEnd = new Date(Date.now() + 900_000).toISOString(); // 15 min
+
+    mockCircuitState[service] = {
+      state: "OPEN",
+      failures: 3,
+      lastFailure: now,
+      openedAt: now,
+      cooldownEndsAt: cooldownEnd,
+    };
+
+    res.json({
+      success: true,
+      message: `Circuit breaker for ${service} tripped to OPEN for testing`,
+    });
+  });
+
   return httpServer;
 }

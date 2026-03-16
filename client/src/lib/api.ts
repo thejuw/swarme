@@ -1243,6 +1243,8 @@ export const queryKeys = {
     ["/api/projects", projectId, "wallet"] as const,
   credits: (projectId: string) =>
     ["/api/projects", projectId, "credits"] as const,
+  circuitBreakerStatus: () =>
+    ["/api/circuit-breaker", "status"] as const,
 } as const;
 
 // ────────────────────────────────────────────
@@ -2065,5 +2067,33 @@ export async function runChaosSuite(
   domainId = "dom_001"
 ): Promise<ChaosRunResponse> {
   const res = await apiRequest("POST", `/api/admin/chaos/run?domain_id=${domainId}`);
+  return res.json();
+}
+
+// ────────────────────────────────────────────
+// Phase 56: Circuit Breaker Status
+// ────────────────────────────────────────────
+
+export interface CircuitBreakerStatus {
+  service: string;
+  state: "CLOSED" | "OPEN" | "HALF_OPEN";
+  failures: number;
+  lastFailure: string | null;
+  openedAt: string | null;
+  cooldownEndsAt: string | null;
+}
+
+export interface CircuitBreakerStatusResponse {
+  success: boolean;
+  circuits: CircuitBreakerStatus[];
+}
+
+export async function getCircuitBreakerStatus(): Promise<CircuitBreakerStatusResponse> {
+  const res = await apiRequest("GET", "/api/circuit-breaker/status");
+  return res.json();
+}
+
+export async function resetCircuitBreaker(service: string): Promise<{ success: boolean; message: string }> {
+  const res = await apiRequest("POST", `/api/circuit-breaker/reset/${service}`);
   return res.json();
 }

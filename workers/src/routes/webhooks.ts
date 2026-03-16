@@ -23,6 +23,7 @@
 
 import { Hono } from "hono";
 import type { Env } from "../index";
+import { executeGdprOffboarding } from "./billing/churn";
 import {
   verifyStripeSignature,
   resolveTierFromPrice,
@@ -256,12 +257,15 @@ webhookRouter.post("/stripe", async (c) => {
 
       // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
       // Case 3: customer.subscription.deleted
-      // Subscription fully canceled — revert to free tier.
+      // Phase 55.2: GDPR Offboarding Guillotine
+      // Full compliance teardown: OAuth revoke → Credential purge
+      // → Vectorize delete → KV wipe → free tier → email
       // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
       case "customer.subscription.deleted": {
         const sub = event.data.object as StripeSubscription;
         const stripeCustomerId = sub.customer;
 
+        // Revert to free tier first (original behavior preserved)
         await c.env.DB.prepare(
           `UPDATE Users
            SET plan_tier = ?,
@@ -273,6 +277,21 @@ webhookRouter.post("/stripe", async (c) => {
           .run();
 
         console.log(`[Stripe] Customer ${stripeCustomerId} subscription deleted → free tier`);
+
+        // Execute full GDPR offboarding teardown
+        const offboardResult = await executeGdprOffboarding(c.env, stripeCustomerId);
+
+        console.log(
+          `[GDPR Offboarding] Complete for user ${offboardResult.userId}: ` +
+          `${offboardResult.oauthRevoked} OAuth revoked, ` +
+          `${offboardResult.credentialsPurged} credentials purged, ` +
+          `vectorize=${offboardResult.vectorizeDeleted}, ` +
+          `${offboardResult.kvCachesPurged} KV caches cleared, ` +
+          `email=${offboardResult.complianceEmailSent}` +
+          (offboardResult.errors.length > 0
+            ? ` (${offboardResult.errors.length} non-fatal error(s))`
+            : ""),
+        );
 
         break;
       }
