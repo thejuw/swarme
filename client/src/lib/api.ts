@@ -103,6 +103,15 @@ export interface DraftResult {
   source: "openai" | "mock_fallback";
 }
 
+export interface MediaGenerationResult {
+  totalPlaceholders: number;
+  imagesGenerated: number;
+  imagesSkipped: number;
+  r2Keys: string[];
+  completedAt: string;
+  source: "dalle3_r2" | "mock_fallback";
+}
+
 export interface ImageAuditResult {
   totalImages: number;
   imagesMissingAlt: number;
@@ -135,6 +144,7 @@ export type WorkflowState =
   | "IDLE"
   | "RESEARCHING"
   | "DRAFTING"
+  | "MEDIA_GENERATION"
   | "IMAGE_AUDITING"
   | "AUDITING"
   | "AWAITING_APPROVAL"
@@ -156,6 +166,7 @@ export interface WorkflowStateData {
   pipeline: {
     research: ResearchResult | null;
     draft: DraftResult | null;
+    mediaGeneration: MediaGenerationResult | null;
     imageAudit: ImageAuditResult | null;
     audit: AuditResult | null;
     publishResult: PublishResult | null;

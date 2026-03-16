@@ -27,6 +27,8 @@ const MOCK_TASKS = [
   { id: "task_007", project_id: "proj_001", agent_type: "scraper", action: "Trend Detection", status: "Completed", task_description: 'Breakout term detected: "serverless seo" (velocity: 4.2x)', created_at: "2026-03-13T20:29:00", updated_at: "2026-03-13T20:29:00" },
   { id: "task_008", project_id: "proj_001", agent_type: "writer", action: "Response Article", status: "Completed", task_description: 'Auto-drafted response to trending query "ai seo tools 2026"', created_at: "2026-03-13T20:22:00", updated_at: "2026-03-13T20:22:00" },
   { id: "task_009", project_id: "proj_001", agent_type: "auditor", action: "Schema Validation", status: "Failed", task_description: "FAQ schema on /help rejected by Google — missing mainEntity", created_at: "2026-03-13T20:15:00", updated_at: "2026-03-13T20:15:00" },
+  { id: "task_010", project_id: "proj_001", agent_type: "media", action: "Media Generation", status: "Completed", task_description: '[dalle3_r2] Generated 3/3 images for "Edge Computing in 2026" — stored in R2', created_at: "2026-03-13T20:52:30", updated_at: "2026-03-13T20:52:30" },
+  { id: "task_011", project_id: "proj_001", agent_type: "media", action: "Media Generation", status: "Completed", task_description: '[dalle3_r2] Generated 2/2 images for "Serverless SEO Tools" — stored in R2', created_at: "2026-03-13T20:21:00", updated_at: "2026-03-13T20:21:00" },
 ];
 
 const MOCK_VISIBILITY = [
@@ -203,6 +205,18 @@ export async function registerRoutes(
       source: "mock_fallback",
     };
 
+    const mediaGeneration = {
+      totalPlaceholders: 2 + (Math.abs(hash) % 3),
+      imagesGenerated: 2 + (Math.abs(hash) % 2),
+      imagesSkipped: Math.abs(hash) % 2,
+      r2Keys: [
+        `media/${projectId}/img_${Date.now()}_1.png`,
+        `media/${projectId}/img_${Date.now()}_2.png`,
+      ],
+      completedAt: now,
+      source: "mock_fallback",
+    };
+
     const imageAudit = {
       totalImages: 3 + (Math.abs(hash) % 5),
       imagesMissingAlt: 2 + (Math.abs(hash) % 3),
@@ -250,7 +264,7 @@ export async function registerRoutes(
       error: null,
       retryCount: 0,
       failedAtStep: null,
-      pipeline: { research, draft, imageAudit, audit, publishResult },
+      pipeline: { research, draft, mediaGeneration, imageAudit, audit, publishResult },
     };
 
     workflowStore.set(projectId, workflow);
@@ -300,7 +314,7 @@ export async function registerRoutes(
           error: null,
           retryCount: 0,
           failedAtStep: null,
-          pipeline: { research: null, draft: null, imageAudit: null, audit: null, publishResult: null },
+          pipeline: { research: null, draft: null, mediaGeneration: null, imageAudit: null, audit: null, publishResult: null },
         },
       });
     }
@@ -1752,6 +1766,7 @@ export async function registerRoutes(
     usr_005: [
       { id: "t_501", agent_type: "orchestrator", action: "full_pipeline", status: "Completed", task_description: "Full content pipeline for 'Edge AI in Enterprise'", created_at: "2026-03-14T07:00:00" },
       { id: "t_502", agent_type: "publisher", action: "cms_publish", status: "Completed", task_description: "Published to Shopify blog", created_at: "2026-03-13T15:00:00" },
+      { id: "t_511", agent_type: "media", action: "media_generation", status: "Completed", task_description: "[dalle3_r2] Generated 3/4 images for 'Edge AI in Enterprise' — 1 skipped (content policy)", created_at: "2026-03-14T06:55:00" },
       { id: "t_503", agent_type: "visibility", action: "visibility_check", status: "Completed", task_description: "AI Visibility scan — 12 engines", created_at: "2026-03-12T10:00:00" },
       { id: "t_504", agent_type: "writer", action: "draft_article", status: "Running", task_description: "Draft: 'Enterprise SEO Playbook 2026'", created_at: "2026-03-11T13:00:00" },
       { id: "t_505", agent_type: "cro", action: "ab_test", status: "Completed", task_description: "A/B test hero CTA on /solutions", created_at: "2026-03-10T08:00:00" },
@@ -2736,6 +2751,7 @@ export async function registerRoutes(
       { agent_type: "visibility", status: "healthy", tasks_last_hour: 8, errors_last_hour: 0, avg_latency_ms: 620 },
       { agent_type: "researcher", status: "degraded", tasks_last_hour: 2, errors_last_hour: 2, avg_latency_ms: 4500 },
       { agent_type: "social", status: "healthy", tasks_last_hour: 3, errors_last_hour: 0, avg_latency_ms: 1100 },
+      { agent_type: "media", status: "healthy", tasks_last_hour: 4, errors_last_hour: 0, avg_latency_ms: 3200 },
       { agent_type: "publisher", status: "healthy", tasks_last_hour: 5, errors_last_hour: 0, avg_latency_ms: 890 },
     ];
 

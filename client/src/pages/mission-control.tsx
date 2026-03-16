@@ -136,6 +136,7 @@ function agentLabel(type: string): string {
     visibility: "Visibility",
     researcher: "Researcher",
     social: "Social",
+    media: "Media",
     publisher: "Publisher",
   };
   return labels[type] || type;

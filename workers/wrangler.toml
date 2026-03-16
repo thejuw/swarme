@@ -32,6 +32,13 @@ compatibility_flags = ["nodejs_compat"]
 # These bindings are the same across staging and production.
 # D1 and KV are overridden per-environment below.
 
+# ─── R2 Media Storage (Phase 40) ─────────────────────────
+# Stores DALL-E generated hero images and infographics.
+# Provision: npx wrangler r2 bucket create swarme-media
+[[r2_buckets]]
+binding = "MEDIA_BUCKET"
+bucket_name = "swarme-media"
+
 # ─── Vectorize ────────────────────────────────────────────
 # Semantic memory: brand guidelines, internal link graph
 # Dimensions: 768 (BGE-base-en-v1.5 via Workers AI)
@@ -111,6 +118,7 @@ ENVIRONMENT = "development"
 SWARM_MODE = "copilot"
 TREND_VELOCITY_THRESHOLD = "2.0"
 BOUNCE_RATE_THRESHOLD = "70"
+R2_PUBLIC_BASE = "https://media.swarme.io"
 
 
 # ════════════════════════════════════════════════════════════
@@ -139,6 +147,7 @@ ENVIRONMENT = "staging"
 SWARM_MODE = "copilot"
 TREND_VELOCITY_THRESHOLD = "2.0"
 BOUNCE_RATE_THRESHOLD = "70"
+R2_PUBLIC_BASE = "https://media-staging.swarme.io"
 
 [[env.staging.d1_databases]]
 binding = "DB"
@@ -184,6 +193,7 @@ ENVIRONMENT = "production"
 SWARM_MODE = "copilot"
 TREND_VELOCITY_THRESHOLD = "2.0"
 BOUNCE_RATE_THRESHOLD = "70"
+R2_PUBLIC_BASE = "https://media.swarme.io"
 
 [[env.production.d1_databases]]
 binding = "DB"

@@ -60,6 +60,9 @@ export interface Env {
   VECTORIZE: VectorizeIndex;
   AI: Ai;
 
+  // ── R2 Media Storage (Phase 40) ──
+  MEDIA_BUCKET: R2Bucket;
+
   // ── Browser Rendering Binding (Phase 11) ──
   BROWSER: Fetcher;
 
@@ -107,6 +110,9 @@ export interface Env {
   // ── Phase 34: Google Search Console OAuth ──
   GOOGLE_CLIENT_ID: string;
   GOOGLE_CLIENT_SECRET: string;
+
+  // ── Phase 40: Media Generation ──
+  R2_PUBLIC_BASE: string;
 }
 
 /**

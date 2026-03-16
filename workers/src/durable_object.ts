@@ -67,6 +67,10 @@ import {
   injectSemanticLinks,
   embedAndIndexArticle,
 } from "./utils/vectorize";
+import {
+  processMediaPlaceholders,
+  type MediaGenerationResult,
+} from "./utils/media";
 
 // ─────────────────────────────────────────────────────────────
 // Type Definitions
@@ -80,6 +84,7 @@ export type WorkflowState =
   | "IDLE"
   | "RESEARCHING"
   | "DRAFTING"
+  | "MEDIA_GENERATION"
   | "IMAGE_AUDITING"
   | "AUDITING"
   | "AWAITING_APPROVAL"
@@ -132,6 +137,7 @@ export interface WorkflowStateData {
   pipeline: {
     research: ResearchOutput | null;
     draft: DraftOutput | null;
+    mediaGeneration: MediaGenerationOutput | null;
     imageAudit: ImageAuditOutput | null;
     audit: AuditOutput | null;
     publishResult: PublishOutput | null;
@@ -161,6 +167,16 @@ export interface DraftOutput {
   tokensUsed: number;
   completedAt: string;
   source: "openai_api" | "mock_fallback";
+}
+
+/** Phase 40: Media generation output from DALL-E pipeline. */
+export interface MediaGenerationOutput {
+  totalPlaceholders: number;
+  imagesGenerated: number;
+  imagesSkipped: number;
+  r2Keys: string[];
+  completedAt: string;
+  source: "dalle3_r2" | "mock_fallback";
 }
 
 /** Phase 8: Image audit output from the vision pipeline. */
@@ -238,7 +254,8 @@ const DEFAULT_BRAND_GUIDELINES: BrandGuidelines = {
 const VALID_TRANSITIONS: Record<WorkflowState, WorkflowState[]> = {
   IDLE: ["RESEARCHING"],
   RESEARCHING: ["DRAFTING", "FAILED"],
-  DRAFTING: ["IMAGE_AUDITING", "FAILED"],
+  DRAFTING: ["MEDIA_GENERATION", "FAILED"],
+  MEDIA_GENERATION: ["IMAGE_AUDITING", "FAILED"],
   IMAGE_AUDITING: ["AUDITING", "FAILED"],
   AUDITING: ["AWAITING_APPROVAL", "PUBLISHING", "FAILED"],
   AWAITING_APPROVAL: ["PUBLISHING", "FAILED"],
@@ -351,6 +368,7 @@ export class AgentWorkflowManager implements DurableObject {
       pipeline: {
         research: null,
         draft: null,
+        mediaGeneration: null,
         imageAudit: null,
         audit: null,
         publishResult: null,
@@ -421,6 +439,7 @@ export class AgentWorkflowManager implements DurableObject {
       pipeline: {
         research: null,
         draft: null,
+        mediaGeneration: null,
         imageAudit: null,
         audit: null,
         publishResult: null,
@@ -444,6 +463,9 @@ export class AgentWorkflowManager implements DurableObject {
 
       await this.transitionTo("DRAFTING");
       await this.stepDraft();
+
+      await this.transitionTo("MEDIA_GENERATION");
+      await this.stepMediaGeneration();
 
       await this.transitionTo("IMAGE_AUDITING");
       await this.stepImageAudit();
@@ -691,7 +713,130 @@ export class AgentWorkflowManager implements DurableObject {
   }
 
   // ───────────────────────────────────────────────────────────
-  // Pipeline Step 2.5: Image Audit (Phase 8 — Vision Pipeline)
+  // Pipeline Step 2.5: Media Generation (Phase 40 — DALL-E 3 + R2)
+  // ───────────────────────────────────────────────────────────
+
+  /**
+   * Processes `<media-placeholder>` tags in the drafted HTML:
+   *   1. Extracts all placeholder tags with descriptions
+   *   2. For each, generates an image via DALL-E 3
+   *   3. Uploads the image bytes to Cloudflare R2
+   *   4. Replaces the placeholder with an ADA-compliant <img> tag
+   *      pointing at the permanent R2 public URL
+   *
+   * Error handling:
+   *   - Individual image failures are logged and skipped — the
+   *     placeholder is removed, never left raw in the HTML.
+   *   - Full pipeline failures degrade gracefully — the draft
+   *     HTML is returned with placeholders stripped.
+   */
+  private async stepMediaGeneration(): Promise<void> {
+    if (!this.workflow) throw new Error("No active workflow");
+    if (!this.workflow.pipeline.draft) throw new Error("Draft step not completed");
+
+    const projectId = this.workflow.projectId;
+    const keyword = this.workflow.keyword;
+    const draft = this.workflow.pipeline.draft;
+
+    await this.logTask(
+      projectId,
+      "media",
+      "Media Generation",
+      "Running",
+      `Scanning drafted HTML for <media-placeholder> tags…`
+    );
+
+    try {
+      // Retrieve OpenAI key from KV vault for DALL-E 3 calls
+      const openaiKey = await this.env.SWARME_KV.get(
+        KV_KEYS.openaiKey(projectId)
+      );
+
+      if (!openaiKey) {
+        // No API key — skip media generation gracefully
+        const skipOutput: MediaGenerationOutput = {
+          totalPlaceholders: 0,
+          imagesGenerated: 0,
+          imagesSkipped: 0,
+          r2Keys: [],
+          completedAt: new Date().toISOString(),
+          source: "mock_fallback",
+        };
+        this.workflow.pipeline.mediaGeneration = skipOutput;
+        await this.persistWorkflow();
+
+        await this.logTask(
+          projectId,
+          "media",
+          "Media Generation",
+          "Completed",
+          `[skipped] No OpenAI API key — media generation bypassed`
+        );
+        return;
+      }
+
+      // Run the full media pipeline from media.ts
+      const result: MediaGenerationResult = await processMediaPlaceholders(
+        draft.htmlContent,
+        {
+          openaiApiKey: openaiKey,
+          r2Bucket: this.env.MEDIA_BUCKET,
+          r2PublicBase: this.env.R2_PUBLIC_BASE,
+          projectId,
+          articleContext: `Article about "${keyword}" — ${draft.title}`,
+        }
+      );
+
+      // Update the draft HTML with media-enriched version
+      this.workflow.pipeline.draft.htmlContent = result.processedHtml;
+
+      const mediaOutput: MediaGenerationOutput = {
+        totalPlaceholders: result.totalPlaceholders,
+        imagesGenerated: result.imagesGenerated,
+        imagesSkipped: result.imagesSkipped,
+        r2Keys: result.r2Keys,
+        completedAt: new Date().toISOString(),
+        source: "dalle3_r2",
+      };
+
+      this.workflow.pipeline.mediaGeneration = mediaOutput;
+      await this.persistWorkflow();
+
+      await this.logTask(
+        projectId,
+        "media",
+        "Media Generation",
+        "Completed",
+        `[dalle3_r2] Generated ${result.imagesGenerated}/${result.totalPlaceholders} images, ` +
+          `${result.imagesSkipped} skipped, ${result.r2Keys.length} stored in R2`
+      );
+    } catch (err) {
+      // Graceful degradation — strip placeholders and continue
+      const message = err instanceof Error ? err.message : "Unknown media generation error";
+
+      const fallbackOutput: MediaGenerationOutput = {
+        totalPlaceholders: 0,
+        imagesGenerated: 0,
+        imagesSkipped: 0,
+        r2Keys: [],
+        completedAt: new Date().toISOString(),
+        source: "mock_fallback",
+      };
+      this.workflow.pipeline.mediaGeneration = fallbackOutput;
+      await this.persistWorkflow();
+
+      await this.logTask(
+        projectId,
+        "media",
+        "Media Generation",
+        "Completed",
+        `[warning] Media generation failed (${message}) — placeholders stripped, pipeline continues`
+      );
+    }
+  }
+
+  // ───────────────────────────────────────────────────────────
+  // Pipeline Step 3: Image Audit (Phase 8 — Vision Pipeline)
   // ───────────────────────────────────────────────────────────
 
   /**
