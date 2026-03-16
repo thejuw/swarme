@@ -1,0 +1,429 @@
+{
+  "brand": {
+    "name": "Swarme",
+    "tagline": "Essaim SEO Edge"
+  },
+  "header": {
+    "commandCenter": "Centre de Commande"
+  },
+  "nav": {
+    "commandCenter": "Centre de Commande",
+    "dashboard": "Tableau de Bord",
+    "agentActivity": "Activité des Agents",
+    "aiVisibility": "Visibilité IA",
+    "executionEngine": "Moteur d'Exécution",
+    "siteAudit": "Audit du Site",
+    "trendRadar": "Radar de Tendances",
+    "digitalPr": "RP Numérique",
+    "croTelemetry": "Télémétrie CRO",
+    "abTests": "Tests A/B",
+    "socialQueue": "File Sociale",
+    "decayManager": "Gestion Contenu",
+    "system": "Système",
+    "edgeWorkers": "Workers Edge",
+    "domains": "Domaines",
+    "settings": "Paramètres",
+    "revenue": "Revenus",
+    "aiManager": "Manager IA",
+    "missionControl": "Centre de Mission"
+  },
+  "footer": {
+    "agentsActive": "{{count}} agents actifs"
+  },
+  "locale": {
+    "label": "Langue",
+    "en": "English",
+    "fr": "Français",
+    "es": "Español"
+  },
+  "settings": {
+    "title": "Paramètres",
+    "billing": {
+      "title": "Facturation & Forfait",
+      "description": "Gérez votre abonnement et votre mode de paiement.",
+      "currentPlan": "Forfait Actuel",
+      "free": "Gratuit",
+      "growth": "Croissance",
+      "upgrade": "Passer à Croissance",
+      "manage": "Gérer l'Abonnement",
+      "perMonth": "/mois"
+    },
+    "cms": {
+      "title": "Connexion CMS",
+      "description": "Connectez votre système de gestion de contenu pour la publication automatisée.",
+      "platform": "Plateforme",
+      "shopifyDomain": "Domaine Shopify",
+      "shopifyBlogId": "ID Blog Shopify",
+      "accessToken": "Jeton d'Accès",
+      "save": "Enregistrer les Paramètres CMS",
+      "saving": "Enregistrement...",
+      "connected": "Connecté",
+      "notConnected": "Non Connecté"
+    }
+  },
+  "dashboard": {
+    "title": "Tableau de Bord",
+    "kpi": {
+      "visibilityScore": "Score de Visibilité IA",
+      "activeAgents": "Agents Actifs",
+      "pendingTasks": "Tâches en Attente",
+      "pagesPublished": "Pages Publiées"
+    }
+  },
+  "common": {
+    "loading": "Chargement...",
+    "error": "Une erreur est survenue",
+    "retry": "Réessayer",
+    "save": "Enregistrer",
+    "cancel": "Annuler",
+    "approve": "Approuver",
+    "reject": "Rejeter"
+  },
+  "audit": {
+    "title": "Audit du Site",
+    "healthScore": "Score de Santé",
+    "findingsOverview": "Aperçu des Résultats",
+    "totalFindings": "Résultats totaux",
+    "pagesCrawled": "pages analysées",
+    "pagesCrawledLabel": "Pages auditées",
+    "highImpactFixes": "Corrections à fort impact",
+    "quickWins": "Gains rapides",
+    "detailedFindings": "Résultats Détaillés",
+    "remediationRoadmap": "Feuille de Route de Remédiation",
+    "roadmapDesc": "Actions prioritaires triées par impact. Envoyez les éléments prioritaires à l'essaim pour une remédiation autonome.",
+    "runButton": "Lancer l'Audit IA",
+    "running": "Audit en cours...",
+    "started": "Audit lancé",
+    "startedDesc": "L'audit IA approfondi est en cours. Les résultats apparaîtront sous peu.",
+    "errorDesc": "Échec du lancement de l'audit.",
+    "runningTitle": "Audit approfondi en cours...",
+    "runningDesc": "Analyse des pages, signaux SEO, vérification d'accessibilité. Cela prend généralement 30 à 60 secondes.",
+    "failedTitle": "Échec de l'audit",
+    "failedDesc": "Une erreur est survenue pendant l'audit.",
+    "emptyTitle": "Aucune donnée d'audit",
+    "emptyDescription": "Lancez un audit IA approfondi pour analyser la santé SEO, les performances, l'accessibilité et la sécurité de votre site.",
+    "sendToSwarm": "Envoyer à l'Essaim",
+    "dispatching": "Envoi en cours...",
+    "swarmDeployed": "Essaim Déployé",
+    "dispatched": "Envoyé à l'Essaim",
+    "dispatchedDesc": "La tâche a été envoyée à l'essaim d'agents.",
+    "dispatchError": "Échec de l'envoi de la tâche à l'essaim.",
+    "effortLabel": "Effort",
+    "impactLabel": "Impact",
+    "effort": {
+      "low": "Faible",
+      "medium": "Moyen",
+      "high": "Élevé"
+    },
+    "impact": {
+      "low": "Faible",
+      "medium": "Moyen",
+      "high": "Élevé"
+    },
+    "all": "Tout"
+  },
+  "wizard": {
+    "title": "Connecter votre boutique",
+    "subtitle": "Configurez votre intégration e-commerce en 3 étapes simples",
+    "step1": "Choisir la plateforme",
+    "step2": "Instructions",
+    "step3": "Connexion",
+    "selectPlatform": "Sélectionnez votre plateforme",
+    "shopify": {
+      "name": "Shopify",
+      "desc": "Publication de blog via l'API Admin",
+      "instructions": {
+        "title": "Comment obtenir vos identifiants API Shopify",
+        "step1": "Connectez-vous à votre panneau admin Shopify et allez dans Paramètres > Applications et canaux de vente.",
+        "step2": "Cliquez sur 'Développer des applications' (activez le mode développeur si nécessaire).",
+        "step3": "Cliquez sur 'Créer une application' et nommez-la 'Swarme Edge-Swarm'.",
+        "step4": "Sous 'Portées API', sélectionnez 'write_content' (accès blog/articles).",
+        "step5": "Cliquez sur 'Installer l'application' et copiez le jeton d'accès API Admin."
+      },
+      "domainLabel": "Domaine de la boutique",
+      "domainPlaceholder": "votre-boutique.myshopify.com",
+      "blogIdLabel": "ID du blog (optionnel)",
+      "blogIdPlaceholder": "ex. 12345678",
+      "tokenLabel": "Jeton d'accès API Admin",
+      "tokenPlaceholder": "shpat_xxxxxxxxxxxxxxxxxxxxx"
+    },
+    "woocommerce": {
+      "name": "WooCommerce",
+      "desc": "Publication WordPress via l'API REST",
+      "instructions": {
+        "title": "Comment obtenir vos identifiants API WooCommerce",
+        "step1": "Connectez-vous à votre admin WordPress (votredomaine.com/wp-admin).",
+        "step2": "Allez dans WooCommerce > Réglages > Avancé > API REST.",
+        "step3": "Cliquez sur 'Ajouter une clé'. Description : 'Intégration Swarme'.",
+        "step4": "Définissez les permissions sur 'Lecture/Écriture'.",
+        "step5": "Cliquez sur 'Générer la clé API'. Copiez la Clé client et le Secret client."
+      },
+      "domainLabel": "Domaine du site",
+      "domainPlaceholder": "votre-boutique.com",
+      "consumerKeyLabel": "Clé client",
+      "consumerKeyPlaceholder": "ck_xxxxxxxxxxxxxxxxxxxxxxxx",
+      "consumerSecretLabel": "Secret client",
+      "consumerSecretPlaceholder": "cs_xxxxxxxxxxxxxxxxxxxxxxxx"
+    },
+    "bigcommerce": {
+      "name": "BigCommerce",
+      "desc": "Publication de blog via l'API Management",
+      "instructions": {
+        "title": "Comment obtenir vos identifiants API BigCommerce",
+        "step1": "Connectez-vous à votre panneau de contrôle BigCommerce.",
+        "step2": "Allez dans Paramètres > API > Comptes API.",
+        "step3": "Cliquez sur 'Créer un compte API' > 'Créer un jeton API V2/V3'.",
+        "step4": "Nommez-le 'Intégration Swarme'. Accordez la portée 'Modifier' pour 'Contenu'.",
+        "step5": "Cliquez sur 'Enregistrer'. Copiez le jeton d'accès et notez le chemin API (contient votre Store Hash)."
+      },
+      "storeHashLabel": "Hash de la boutique",
+      "storeHashPlaceholder": "ex. abc123def",
+      "domainLabel": "Domaine vitrine (optionnel)",
+      "domainPlaceholder": "votre-boutique.mybigcommerce.com",
+      "tokenLabel": "Jeton d'accès API",
+      "tokenPlaceholder": "Votre jeton d'accès API"
+    },
+    "securityNotice": "Nous ne demandons accès qu'à vos données Blog/Article pour publier du contenu. Nous n'accédons JAMAIS à vos données de paiement, clients ou commandes.",
+    "connect": "Connecter la boutique",
+    "connecting": "Vérification des identifiants...",
+    "successTitle": "Connexion réussie",
+    "successMessage": "Votre boutique \"{{storeName}}\" est maintenant connectée. Swarme peut publier directement sur votre plateforme.",
+    "returnToDashboard": "Retour au tableau de bord",
+    "goToSettings": "Aller aux paramètres",
+    "back": "Retour",
+    "showToken": "Afficher",
+    "hideToken": "Masquer",
+    "connectionFailed": "Échec de la connexion",
+    "tryAgain": "Réessayer",
+    "needHelp": "Besoin d'aide ? Consultez le guide ci-dessus.",
+    "noStoreConnected": "Aucune boutique connectée. Connectez une boutique pour activer la publication en autopilote."
+  },
+  "cro": {
+    "title": "Télémétrie CRO",
+    "totalViews": "Vues Totales",
+    "avgScrollDepth": "Profondeur de Défilement Moy.",
+    "avgDwellTime": "Temps de Séjour Moy.",
+    "totalCtaClicks": "Clics CTA",
+    "scrollDepthByAsset": "Profondeur de Défilement par Article",
+    "allTrackedAssets": "Tous les Articles Suivis",
+    "article": "Article",
+    "views": "Vues",
+    "scrollDepth": "Défilement",
+    "dwellTime": "Séjour",
+    "ctaClicks": "CTAs",
+    "status": "Statut",
+    "trackedAssets": "{{count}} articles suivis",
+    "belowThreshold": "Sous le seuil",
+    "healthy": "Normal",
+    "underperformingTitle": "{{count}} article(s) sous-performant(s)",
+    "reasonCtaBuried": "CTA Enfoui",
+    "reasonWeakIntro": "Intro Faible"
+  },
+  "roi": {
+    "title": "Attribution des Revenus",
+    "attributedRevenue": "Revenus Attribués (30j)",
+    "totalOrders": "Commandes Totales (30j)",
+    "momGrowth": "Croissance MoM",
+    "monthlyRevenue": "Revenus Mensuels",
+    "topPerformers": "Contenu le Plus Performant",
+    "article": "Article",
+    "revenue": "Revenus",
+    "orders": "Commandes",
+    "last30": "30 derniers jours"
+  },
+  "analyzer": {
+    "pageTitle": "Analyseur de site gratuit",
+    "heroTitle": "Analysez n'importe quel site en quelques secondes",
+    "heroSubtitle": "Obtenez un audit gratuit SEO, accessibilité, performance et sécurité propulsé par l'IA. Aucune inscription requise.",
+    "urlPlaceholder": "Entrez l'URL d'un site (ex: exemple.com)",
+    "analyzeButton": "Analyser",
+    "analyzing": "Analyse en cours...",
+    "overall": "Global",
+    "seo": "SEO",
+    "accessibility": "Accessibilité",
+    "performance": "Performance",
+    "security": "Sécurité",
+    "content": "Contenu",
+    "findings": "Résultats",
+    "noFindings": "Aucun problème trouvé dans cette catégorie.",
+    "critical": "Critique",
+    "high": "Élevé",
+    "medium": "Moyen",
+    "low": "Faible",
+    "wordCount": "Nombre de mots",
+    "loadTime": "Vitesse de chargement",
+    "fast": "Rapide",
+    "medium_speed": "Moyen",
+    "slow": "Lent",
+    "analyzeAnother": "Analyser un autre",
+    "poweredBy": "Propulsé par Swarme Edge SEO Swarm",
+    "ctaTitle": "Vous voulez le tableau complet ?",
+    "ctaSubtitle": "Les agents autonomes de Swarme auditent, optimisent et publient continuellement du contenu pour votre site.",
+    "ctaButton": "Commencer gratuitement",
+    "errorTitle": "L'analyse a échoué",
+    "back": "Retour"
+  },
+  "social": {
+    "title": "File Sociale",
+    "subtitle": "Révisez, modifiez et approuvez les publications sociales générées par l'IA avant publication.",
+    "pendingReview": "En attente",
+    "statusPending": "En attente",
+    "statusApproved": "Approuvé",
+    "statusPublished": "Publié",
+    "statusRejected": "Rejeté",
+    "filterAll": "Tous les brouillons",
+    "thread": "Fil de {{count}} parties",
+    "approvePost": "Approuver et publier",
+    "reject": "Rejeter",
+    "updateSuccess": "Statut du brouillon mis à jour avec succès.",
+    "updateFailed": "Échec de la mise à jour du statut.",
+    "emptyState": "Aucun brouillon social pour le moment. Les brouillons apparaissent ici lorsque l'agent de contenu les génère."
+  },
+  "decay": {
+    "title": "Gestion du Déclin",
+    "subtitle": "Identifiez le contenu vieillissant, examinez les rafraîchissements générés par l'IA et approuvez les mises à jour.",
+    "draftsReady": "Brouillons prêts",
+    "staleArticles": "Articles obsolètes",
+    "refreshedLabel": "Actualisés",
+    "avgAge": "Âge moyen",
+    "critical": "Critique",
+    "stale": "Obsolète",
+    "aging": "Vieillissant",
+    "fresh": "Récent",
+    "draftReady": "Brouillon prêt",
+    "refreshed": "Actualisé",
+    "discarded": "Rejeté",
+    "generating": "Génération...",
+    "noDraft": "Pas de brouillon",
+    "review": "Examiner",
+    "decayLevel": "Niveau de déclin",
+    "daysOld": "jours",
+    "viewLive": "Voir en ligne",
+    "currentVersion": "Version actuelle",
+    "proposedRefresh": "Mise à jour proposée",
+    "noDraftYet": "Aucun brouillon généré pour le moment. Cet article sera actualisé lors du prochain scan hebdomadaire.",
+    "approveOverwrite": "Approuver et publier",
+    "discardUpdate": "Rejeter la mise à jour",
+    "approved": "Actualisation approuvée",
+    "approvedDesc": "Contenu mis à jour et envoyé au CMS.",
+    "discardedTitle": "Mise à jour rejetée",
+    "discardedDesc": "Le brouillon d'actualisation a été rejeté.",
+    "actionFailed": "Échec du traitement de l'action.",
+    "emptyState": "Aucun contenu obsolète détecté. Le scan hebdomadaire affichera les articles vieillissants ici."
+  },
+  "auth": {
+    "loginTitle": "Bon retour",
+    "loginSubtitle": "Connectez-vous à votre centre de commande Swarme.",
+    "signupTitle": "Créer un compte",
+    "signupSubtitle": "Essai gratuit. Aucune carte bancaire requise.",
+    "emailLabel": "E-mail",
+    "passwordLabel": "Mot de passe",
+    "passwordPlaceholder": "Min. 8 caractères",
+    "confirmPasswordLabel": "Confirmer le mot de passe",
+    "confirmPasswordPlaceholder": "Répétez votre mot de passe",
+    "loginButton": "Se connecter",
+    "signupButton": "Créer un compte",
+    "noAccount": "Pas de compte ? Inscrivez-vous",
+    "hasAccount": "Déjà un compte ? Connectez-vous",
+    "passwordMismatch": "Les mots de passe ne correspondent pas.",
+    "passwordTooShort": "Le mot de passe doit contenir au moins 8 caractères.",
+    "genericError": "Une erreur est survenue. Veuillez réessayer.",
+    "termsNotice": "En continuant, vous acceptez nos Conditions d'utilisation et notre Politique de confidentialité."
+  },
+  "landing": {
+    "nav": {
+      "login": "Connexion",
+      "startTrial": "Commencer"
+    },
+    "hero": {
+      "badge": "Opérations de contenu autonomes",
+      "title": "L'infrastructure SEO qui s'exécute seule",
+      "subtitle": "Swarme déploie une équipe coordonnée d'agents IA pour rechercher, produire, auditer et publier du contenu sur l'ensemble de votre vitrine — en continu, à la périphérie, sans goulots d'étranglement humains.",
+      "cta": "Commencer",
+      "tryAnalyzer": "Lancer un audit gratuit"
+    },
+    "stats": {
+      "agents": "Agents spécialisés",
+      "edge": "Edge-Native",
+      "latency": "Réponse moy.",
+      "monitoring": "Toujours actif"
+    },
+    "features": {
+      "heading": "Conçu pour les équipes qui refusent de scaler manuellement",
+      "subheading": "Une plateforme d'opérations de contenu de bout en bout sur le réseau mondial Cloudflare — zéro infrastructure à gérer.",
+      "multilang": {
+        "title": "Production multilingue native",
+        "desc": "Produisez et publiez du contenu optimisé en anglais, français, espagnol et d'autres langues — sans workflow de traduction."
+      },
+      "vision": {
+        "title": "Vision par ordinateur à la périphérie",
+        "desc": "Génération automatique d'alt-text, audit d'accessibilité WCAG et balisage de données structurées via Workers AI."
+      },
+      "integrations": {
+        "title": "Publication CMS directe",
+        "desc": "Intégrez Shopify, WooCommerce ou BigCommerce et publiez directement sur votre vitrine — sans exports manuels."
+      },
+      "cro": {
+        "title": "Intelligence de conversion",
+        "desc": "Télémétrie continue de profondeur de scroll, temps de lecture et engagement CTA. Le contenu sous-performant est identifié et priorisé."
+      },
+      "edge": {
+        "title": "Architecture Edge mondiale",
+        "desc": "Propulsé par Cloudflare D1, KV, Durable Objects et Vectorize — zéro démarrage à froid, réponses sub-50ms."
+      },
+      "decay": {
+        "title": "Cycle de vie automatisé du contenu",
+        "desc": "L'analyse de dégradation planifiée identifie le contenu vieillissant. Les brouillons de mise à jour sont soumis à validation éditoriale."
+      }
+    },
+    "analyzer": {
+      "badge": "OUTIL OFFERT",
+      "heading": "Évaluez n'importe quel site en quelques secondes",
+      "subheading": "Entrez une URL pour recevoir un diagnostic complet SEO, accessibilité et performance — sans compte requis.",
+      "placeholder": "Entrez une URL (ex. exemple.com)",
+      "button": "Lancer l'audit",
+      "issuesFound": "problèmes identifiés",
+      "fullReport": "Voir le rapport complet",
+      "ctaSignup": "Résolvez ces problèmes automatiquement — Commencer"
+    },
+    "howItWorks": {
+      "heading": "Trois étapes vers le contenu autonome",
+      "stepLabel": "Étape",
+      "step1": {
+        "title": "Connectez votre vitrine",
+        "desc": "Authentifiez Shopify, WooCommerce ou BigCommerce en moins de deux minutes."
+      },
+      "step2": {
+        "title": "Les agents s'activent",
+        "desc": "Douze agents spécialisés démarrent immédiatement la recherche de mots-clés, la production de contenu et l'audit technique."
+      },
+      "step3": {
+        "title": "Mesurez l'impact",
+        "desc": "Suivez les gains de visibilité, l'attribution de revenus et la télémétrie de conversion depuis un centre de commande unifié."
+      }
+    },
+    "cta": {
+      "heading": "Le contenu opérationnel à grande échelle commence ici",
+      "subheading": "Les équipes sur Swarme publient plus vite, se positionnent mieux et attribuent davantage de revenus au contenu organique.",
+      "button": "Commencer",
+      "noCreditCard": "Sans carte bancaire",
+      "freeTrial": "Essai gratuit de 14 jours"
+    }
+  },
+  "outreach": {
+    "title": "Campagnes de prospection",
+    "prospect": "Prospecter",
+    "draft": "Brouillon",
+    "approved": "Approuvé",
+    "sent": "Envoyé",
+    "replied": "Répondu",
+    "noEmail": "Aucun e-mail trouvé",
+    "previewOutreach": "Aperçu de la prospection",
+    "editDraft": "Modifier le brouillon",
+    "saveDraft": "Enregistrer le brouillon",
+    "sendEmail": "Envoyer l'e-mail",
+    "prospectingComplete": "Prospection terminée",
+    "campaignUpdated": "Campagne mise à jour",
+    "emailSent": "E-mail envoyé"
+  }
+}

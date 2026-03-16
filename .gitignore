@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.env
+.env.local
+.env.production
+.wrangler/
+.dev.vars
+*.log
+.DS_Store
+.vite/
+skills/

@@ -1,0 +1,421 @@
+{
+  "brand": {
+    "name": "Swarme",
+    "tagline": "Edge SEO Swarm"
+  },
+  "header": {
+    "commandCenter": "Command Center"
+  },
+  "nav": {
+    "commandCenter": "Command Center",
+    "dashboard": "Dashboard",
+    "agentActivity": "Agent Activity",
+    "aiVisibility": "AI Visibility",
+    "executionEngine": "Execution Engine",
+    "siteAudit": "Site Audit",
+    "trendRadar": "Trend Radar",
+    "digitalPr": "Digital PR",
+    "croTelemetry": "CRO Telemetry",
+    "abTests": "A/B Tests",
+    "socialQueue": "Social Queue",
+    "decayManager": "Decay Manager",
+    "system": "System",
+    "edgeWorkers": "Edge Workers",
+    "domains": "Domains",
+    "settings": "Settings",
+    "revenue": "Revenue",
+    "aiManager": "AI Manager",
+    "missionControl": "Mission Control"
+  },
+  "footer": {
+    "agentsActive": "{{count}} agents active"
+  },
+  "locale": {
+    "label": "Language",
+    "en": "English",
+    "fr": "Français",
+    "es": "Español"
+  },
+  "settings": {
+    "title": "Settings",
+    "billing": {
+      "title": "Billing & Plan",
+      "description": "Manage your subscription and payment method.",
+      "currentPlan": "Current Plan",
+      "free": "Free",
+      "growth": "Growth",
+      "upgrade": "Upgrade to Growth",
+      "manage": "Manage Subscription",
+      "perMonth": "/month"
+    },
+    "cms": {
+      "title": "CMS Connection",
+      "description": "Connect your content management system for automated publishing.",
+      "platform": "Platform",
+      "shopifyDomain": "Shopify Domain",
+      "shopifyBlogId": "Shopify Blog ID",
+      "accessToken": "Access Token",
+      "save": "Save CMS Settings",
+      "saving": "Saving...",
+      "connected": "Connected",
+      "notConnected": "Not Connected"
+    }
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "kpi": {
+      "visibilityScore": "AI Visibility Score",
+      "activeAgents": "Active Agents",
+      "pendingTasks": "Pending Tasks",
+      "pagesPublished": "Pages Published"
+    }
+  },
+  "common": {
+    "loading": "Loading...",
+    "error": "Something went wrong",
+    "retry": "Retry",
+    "save": "Save",
+    "cancel": "Cancel",
+    "approve": "Approve",
+    "reject": "Reject"
+  },
+  "audit": {
+    "title": "Site Audit",
+    "healthScore": "Health Score",
+    "findingsOverview": "Findings Overview",
+    "totalFindings": "Total findings",
+    "pagesCrawled": "pages crawled",
+    "pagesCrawledLabel": "Pages audited",
+    "highImpactFixes": "High-impact fixes",
+    "quickWins": "Quick wins",
+    "detailedFindings": "Detailed Findings",
+    "remediationRoadmap": "Remediation Roadmap",
+    "roadmapDesc": "Prioritised action items sorted by impact. Send high-priority items to the swarm for autonomous remediation.",
+    "runButton": "Run Deep AI Audit",
+    "running": "Auditing...",
+    "started": "Audit started",
+    "startedDesc": "Deep AI audit is running. Results will appear shortly.",
+    "errorDesc": "Failed to start the audit.",
+    "runningTitle": "Deep audit in progress...",
+    "runningDesc": "Crawling pages, analyzing SEO signals, checking accessibility. This typically takes 30–60 seconds.",
+    "failedTitle": "Audit failed",
+    "failedDesc": "An error occurred during the audit.",
+    "emptyTitle": "No audit data yet",
+    "emptyDescription": "Run a deep AI audit to analyze your site's SEO health, performance, accessibility, and security.",
+    "sendToSwarm": "Send to Swarm",
+    "dispatching": "Dispatching...",
+    "swarmDeployed": "Swarm Deployed",
+    "dispatched": "Sent to Swarm",
+    "dispatchedDesc": "The task has been dispatched to the agent swarm.",
+    "dispatchError": "Failed to dispatch task to the swarm.",
+    "effortLabel": "Effort",
+    "impactLabel": "Impact",
+    "effort": { "low": "Low", "medium": "Medium", "high": "High" },
+    "impact": { "low": "Low", "medium": "Medium", "high": "High" },
+    "all": "All"
+  },
+  "wizard": {
+    "title": "Connect Your Store",
+    "subtitle": "Set up your e-commerce integration in 3 easy steps",
+    "step1": "Choose Platform",
+    "step2": "Setup Instructions",
+    "step3": "Connect",
+    "selectPlatform": "Select your platform",
+    "shopify": {
+      "name": "Shopify",
+      "desc": "Blog & article publishing via Admin API",
+      "instructions": {
+        "title": "How to get your Shopify API credentials",
+        "step1": "Log in to your Shopify admin panel and go to Settings > Apps and sales channels.",
+        "step2": "Click 'Develop apps' (you may need to enable developer mode first).",
+        "step3": "Click 'Create an app' and name it 'Swarme Edge-Swarm'.",
+        "step4": "Under 'API Scopes', select 'write_content' (this allows blog/article access).",
+        "step5": "Click 'Install app' and copy the Admin API Access Token that appears."
+      },
+      "domainLabel": "Store Domain",
+      "domainPlaceholder": "your-store.myshopify.com",
+      "blogIdLabel": "Blog ID (optional)",
+      "blogIdPlaceholder": "e.g. 12345678",
+      "tokenLabel": "Admin API Access Token",
+      "tokenPlaceholder": "shpat_xxxxxxxxxxxxxxxxxxxxx"
+    },
+    "woocommerce": {
+      "name": "WooCommerce",
+      "desc": "WordPress blog publishing via REST API",
+      "instructions": {
+        "title": "How to get your WooCommerce API credentials",
+        "step1": "Log in to your WordPress admin (yourdomain.com/wp-admin).",
+        "step2": "Go to WooCommerce > Settings > Advanced > REST API.",
+        "step3": "Click 'Add key'. Set a description like 'Swarme Integration'.",
+        "step4": "Set Permissions to 'Read/Write'.",
+        "step5": "Click 'Generate API key'. Copy both the Consumer Key and Consumer Secret."
+      },
+      "domainLabel": "Site Domain",
+      "domainPlaceholder": "your-store.com",
+      "consumerKeyLabel": "Consumer Key",
+      "consumerKeyPlaceholder": "ck_xxxxxxxxxxxxxxxxxxxxxxxx",
+      "consumerSecretLabel": "Consumer Secret",
+      "consumerSecretPlaceholder": "cs_xxxxxxxxxxxxxxxxxxxxxxxx"
+    },
+    "bigcommerce": {
+      "name": "BigCommerce",
+      "desc": "Blog post publishing via Management API",
+      "instructions": {
+        "title": "How to get your BigCommerce API credentials",
+        "step1": "Log in to your BigCommerce control panel.",
+        "step2": "Go to Settings > API > API Accounts.",
+        "step3": "Click 'Create API Account' > 'Create V2/V3 API Token'.",
+        "step4": "Name it 'Swarme Integration'. Grant 'Modify' scope for 'Content'.",
+        "step5": "Click 'Save'. Copy the Access Token and note the API Path (contains your Store Hash)."
+      },
+      "storeHashLabel": "Store Hash",
+      "storeHashPlaceholder": "e.g. abc123def",
+      "domainLabel": "Storefront Domain (optional)",
+      "domainPlaceholder": "your-store.mybigcommerce.com",
+      "tokenLabel": "API Access Token",
+      "tokenPlaceholder": "Your API access token"
+    },
+    "securityNotice": "We only request access to your Blog/Article data to publish content. We NEVER request access to your payment, customer, or order data.",
+    "connect": "Connect Store",
+    "connecting": "Verifying credentials...",
+    "successTitle": "Connection Successful",
+    "successMessage": "Your store \"{{storeName}}\" is now connected. Swarme can publish content directly to your platform.",
+    "returnToDashboard": "Return to Dashboard",
+    "goToSettings": "Go to Settings",
+    "back": "Back",
+    "showToken": "Show",
+    "hideToken": "Hide",
+    "connectionFailed": "Connection Failed",
+    "tryAgain": "Try Again",
+    "needHelp": "Need help? Check the setup guide above.",
+    "noStoreConnected": "No store connected yet. Connect a store to enable autopilot publishing."
+  },
+  "cro": {
+    "title": "CRO Telemetry",
+    "totalViews": "Total Views",
+    "avgScrollDepth": "Avg Scroll Depth",
+    "avgDwellTime": "Avg Dwell Time",
+    "totalCtaClicks": "CTA Clicks",
+    "scrollDepthByAsset": "Scroll Depth by Asset",
+    "allTrackedAssets": "All Tracked Assets",
+    "article": "Article",
+    "views": "Views",
+    "scrollDepth": "Scroll",
+    "dwellTime": "Dwell",
+    "ctaClicks": "CTAs",
+    "status": "Status",
+    "trackedAssets": "{{count}} assets tracked",
+    "belowThreshold": "Below threshold",
+    "healthy": "Healthy",
+    "underperformingTitle": "{{count}} underperforming asset(s)",
+    "reasonCtaBuried": "CTA Buried",
+    "reasonWeakIntro": "Weak Intro"
+  },
+  "roi": {
+    "title": "Revenue Attribution",
+    "attributedRevenue": "Attributed Revenue (30d)",
+    "totalOrders": "Total Orders (30d)",
+    "momGrowth": "MoM Growth",
+    "monthlyRevenue": "Monthly Revenue",
+    "topPerformers": "Top Performing Content",
+    "article": "Article",
+    "revenue": "Revenue",
+    "orders": "Orders",
+    "last30": "Last 30 days"
+  },
+  "analyzer": {
+    "pageTitle": "Free Site Analyzer",
+    "heroTitle": "Analyze any website in seconds",
+    "heroSubtitle": "Get a free SEO, accessibility, performance, and security audit powered by AI. No sign-up required.",
+    "urlPlaceholder": "Enter a website URL (e.g. example.com)",
+    "analyzeButton": "Analyze",
+    "analyzing": "Analyzing...",
+    "overall": "Overall",
+    "seo": "SEO",
+    "accessibility": "Accessibility",
+    "performance": "Performance",
+    "security": "Security",
+    "content": "Content",
+    "findings": "Findings",
+    "noFindings": "No issues found in this category.",
+    "critical": "Critical",
+    "high": "High",
+    "medium": "Medium",
+    "low": "Low",
+    "wordCount": "Word Count",
+    "loadTime": "Load Speed",
+    "fast": "Fast",
+    "medium_speed": "Medium",
+    "slow": "Slow",
+    "analyzeAnother": "Analyze Another",
+    "poweredBy": "Powered by Swarme Edge SEO Swarm",
+    "ctaTitle": "Want the full picture?",
+    "ctaSubtitle": "Swarme’s autonomous agents continuously audit, optimize, and publish content for your site.",
+    "ctaButton": "Get Started Free",
+    "errorTitle": "Analysis Failed",
+    "back": "Back"
+  },
+  "social": {
+    "title": "Social Queue",
+    "subtitle": "Review, edit, and approve AI-generated social posts before publishing.",
+    "pendingReview": "Pending Review",
+    "statusPending": "Pending",
+    "statusApproved": "Approved",
+    "statusPublished": "Published",
+    "statusRejected": "Rejected",
+    "filterAll": "All Drafts",
+    "thread": "{{count}}-part thread",
+    "approvePost": "Approve & Post",
+    "reject": "Reject",
+    "updateSuccess": "Draft status updated successfully.",
+    "updateFailed": "Failed to update draft status.",
+    "emptyState": "No social drafts yet. Drafts appear here when the content agent generates them."
+  },
+  "decay": {
+    "title": "Decay Manager",
+    "subtitle": "Identify aging content, review AI-generated refreshes, and approve updates before they go live.",
+    "draftsReady": "Drafts Ready",
+    "staleArticles": "Stale Articles",
+    "refreshedLabel": "Refreshed",
+    "avgAge": "Avg Age",
+    "critical": "Critical",
+    "stale": "Stale",
+    "aging": "Aging",
+    "fresh": "Fresh",
+    "draftReady": "Draft Ready",
+    "refreshed": "Refreshed",
+    "discarded": "Discarded",
+    "generating": "Generating...",
+    "noDraft": "No Draft",
+    "review": "Review",
+    "decayLevel": "Decay level",
+    "daysOld": "days old",
+    "viewLive": "View live",
+    "currentVersion": "Current Live Version",
+    "proposedRefresh": "Swarm Suggested Update",
+    "noDraftYet": "No refresh draft generated yet. This article will be refreshed in the next weekly scan.",
+    "approveOverwrite": "Approve & Overwrite Live CMS",
+    "discardUpdate": "Discard Update",
+    "approved": "Refresh Approved",
+    "approvedDesc": "Content updated and CMS push initiated.",
+    "discardedTitle": "Update Discarded",
+    "discardedDesc": "The refresh draft has been discarded.",
+    "actionFailed": "Failed to process the action.",
+    "emptyState": "No aging content detected. The weekly decay scan will surface stale articles here."
+  },
+  "auth": {
+    "loginTitle": "Welcome back",
+    "loginSubtitle": "Sign in to your Swarme command center.",
+    "signupTitle": "Create your account",
+    "signupSubtitle": "Start your free trial. No credit card required.",
+    "emailLabel": "Email",
+    "passwordLabel": "Password",
+    "passwordPlaceholder": "Min. 8 characters",
+    "confirmPasswordLabel": "Confirm Password",
+    "confirmPasswordPlaceholder": "Repeat your password",
+    "loginButton": "Sign In",
+    "signupButton": "Create Account",
+    "noAccount": "Don't have an account? Sign up",
+    "hasAccount": "Already have an account? Sign in",
+    "passwordMismatch": "Passwords do not match.",
+    "passwordTooShort": "Password must be at least 8 characters.",
+    "genericError": "Something went wrong. Please try again.",
+    "termsNotice": "By continuing, you agree to our Terms of Service and Privacy Policy."
+  },
+  "landing": {
+    "nav": {
+      "login": "Sign In",
+      "startTrial": "Get Started"
+    },
+    "hero": {
+      "badge": "Autonomous Content Operations",
+      "title": "The SEO Infrastructure That Runs Itself",
+      "subtitle": "Swarme deploys a coordinated team of AI agents to research, produce, audit, and publish content across your entire storefront — continuously, at the edge, without human bottlenecks.",
+      "cta": "Get Started",
+      "tryAnalyzer": "Run a Free Audit"
+    },
+    "stats": {
+      "agents": "Specialized Agents",
+      "edge": "Edge-Native",
+      "latency": "Avg. Response",
+      "monitoring": "Always-On"
+    },
+    "features": {
+      "heading": "Built for teams that refuse to scale manually",
+      "subheading": "An end-to-end content operations platform running on Cloudflare's global edge network — zero infrastructure overhead.",
+      "multilang": {
+        "title": "Native Multi-Language Output",
+        "desc": "Produce and publish search-optimized content in English, French, Spanish, and additional languages — without translation workflows."
+      },
+      "vision": {
+        "title": "Computer Vision at the Edge",
+        "desc": "Automated image alt-text generation, WCAG accessibility auditing, and structured data markup via Workers AI."
+      },
+      "integrations": {
+        "title": "Direct CMS Publishing",
+        "desc": "Integrate with Shopify, WooCommerce, or BigCommerce and publish directly to your storefront — no manual exports."
+      },
+      "cro": {
+        "title": "Conversion Rate Intelligence",
+        "desc": "Continuous scroll-depth, dwell-time, and CTA engagement telemetry. Underperforming content is flagged and queued for optimization."
+      },
+      "edge": {
+        "title": "Global Edge Architecture",
+        "desc": "Powered by Cloudflare D1, KV, Durable Objects, and Vectorize — zero cold starts, sub-50ms responses worldwide."
+      },
+      "decay": {
+        "title": "Automated Content Lifecycle",
+        "desc": "Scheduled decay analysis identifies aging content. AI-generated refresh drafts are surfaced for editorial review before going live."
+      }
+    },
+    "analyzer": {
+      "badge": "COMPLIMENTARY TOOL",
+      "heading": "Assess any website in seconds",
+      "subheading": "Enter a URL to receive a comprehensive SEO, accessibility, and performance diagnostic — no account required.",
+      "placeholder": "Enter a website URL (e.g. example.com)",
+      "button": "Run Audit",
+      "issuesFound": "issues identified",
+      "fullReport": "View Full Report",
+      "ctaSignup": "Resolve these issues automatically — Get Started"
+    },
+    "howItWorks": {
+      "heading": "Three steps to autonomous content",
+      "stepLabel": "Step",
+      "step1": {
+        "title": "Connect your storefront",
+        "desc": "Authenticate Shopify, WooCommerce, or BigCommerce in under two minutes."
+      },
+      "step2": {
+        "title": "Agents activate",
+        "desc": "Twelve specialized agents begin keyword research, content production, and technical auditing immediately."
+      },
+      "step3": {
+        "title": "Measure the impact",
+        "desc": "Monitor visibility gains, revenue attribution, and conversion telemetry from a unified command center."
+      }
+    },
+    "cta": {
+      "heading": "Operational content at scale starts here",
+      "subheading": "Teams on Swarme publish faster, rank higher, and attribute more revenue to organic content.",
+      "button": "Get Started",
+      "noCreditCard": "No credit card required",
+      "freeTrial": "14-day free trial"
+    }
+  },
+  "outreach": {
+    "title": "Outreach Campaigns",
+    "prospect": "Prospect",
+    "draft": "Draft",
+    "approved": "Approved",
+    "sent": "Sent",
+    "replied": "Replied",
+    "noEmail": "No email found",
+    "previewOutreach": "Preview Outreach",
+    "editDraft": "Edit Outreach Draft",
+    "saveDraft": "Save Draft",
+    "sendEmail": "Send Email",
+    "prospectingComplete": "Prospecting complete",
+    "campaignUpdated": "Campaign updated",
+    "emailSent": "Email sent"
+  }
+}

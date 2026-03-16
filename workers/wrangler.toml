@@ -1,0 +1,206 @@
+# ============================================================
+# Swarme — Edge-Native Autonomous SEO Swarm Platform
+# Cloudflare Workers Configuration (v2.0.0 — Phase 25 CI/CD)
+# ============================================================
+#
+# This file defines three deployment targets:
+#   1. Top-level (default)  — used by `wrangler dev` for local development
+#   2. [env.staging]        — deployed by the Staging CI on Pull Requests
+#   3. [env.production]     — deployed by the Production CI on merge to main
+#
+# Staging and Production use SEPARATE D1 databases and KV namespaces
+# so testing never corrupts live user data.
+#
+# Prerequisites:
+#   1. `npm install -g wrangler` (or use npx)
+#   2. `wrangler login`
+#   3. Follow DEPLOYMENT.md for provisioning commands
+#
+# ============================================================
+
+name = "swarme-api"
+main = "src/index.ts"
+compatibility_date = "2026-03-13"
+compatibility_flags = ["nodejs_compat"]
+
+# ─── Account & Routing ────────────────────────────────────
+# Uncomment and set when binding to a custom domain:
+# account_id = "<YOUR_ACCOUNT_ID>"
+# route = { pattern = "api.swarme.io/*", zone_name = "swarme.io" }
+
+# ─── Shared Bindings (inherited by all environments) ──────
+# These bindings are the same across staging and production.
+# D1 and KV are overridden per-environment below.
+
+# ─── Vectorize ────────────────────────────────────────────
+# Semantic memory: brand guidelines, internal link graph
+# Dimensions: 768 (BGE-base-en-v1.5 via Workers AI)
+[[vectorize]]
+binding = "VECTORIZE"
+index_name = "swarme-semantic-memory"
+
+# ─── Durable Objects ──────────────────────────────────────
+# AgentWorkflowManager: crash-resilient state machine per project
+# States: IDLE → RESEARCHING → DRAFTING → AUDITING
+#   → AWAITING_APPROVAL (copilot) / PUBLISHING (autopilot)
+#   → COMPLETED / FAILED
+[[durable_objects.bindings]]
+name = "AGENT_WORKFLOW"
+class_name = "AgentWorkflowManager"
+
+# DO migration — declares the class to the runtime
+[[migrations]]
+tag = "v1"
+new_classes = ["AgentWorkflowManager"]
+
+# ─── Browser Rendering (Phase 11) ────────────────────────
+# Headless Chromium for deep site auditing via /crawl endpoint
+[browser]
+binding = "BROWSER"
+
+# ─── Workers AI ───────────────────────────────────────────
+# Models:
+#   @cf/meta/llama-3-8b-instruct  — edge summarization
+#   @cf/baai/bge-base-en-v1.5     — embeddings for Vectorize
+[ai]
+binding = "AI"
+
+# ─── Secrets ──────────────────────────────────────────────
+# Set per-environment via:
+#   wrangler secret put <NAME> --env staging
+#   wrangler secret put <NAME> --env production
+#
+# Required for core pipeline:
+#   OPENAI_API_KEY        — GPT-4o content generation (drafting)
+#   PERPLEXITY_API_KEY    — Sonar research API (SERP + citations)
+#
+# Monetization (Phase 7):
+#   STRIPE_SECRET_KEY     — Stripe secret key for billing checkout
+#   STRIPE_WEBHOOK_SECRET — Stripe webhook signing secret (whsec_...)
+#
+# Optional (future phases):
+#   ANTHROPIC_API_KEY     — Claude fallback for reasoning tasks
+#   HUNTER_API_KEY        — Hunter.io email lookup (outreach)
+#   RESEND_API_KEY        — Transactional email sending (outreach)
+#   POSTHOG_API_KEY       — CRO telemetry & A/B test tracking
+#
+# Authentication (Phase 19):
+#   JWT_SECRET            — Signing secret for JWT tokens (min 32 chars)
+#
+# Affiliate (Phase 24):
+#   REWARDFUL_API_KEY     — Rewardful affiliate tracking
+
+# ─── Local Development ────────────────────────────────────
+[dev]
+port = 8787
+local_protocol = "http"
+
+# Default D1 + KV for local `wrangler dev` (uses local persistence)
+[[d1_databases]]
+binding = "DB"
+database_name = "edge-swarm-db"
+database_id = "<INSERT_PRODUCTION_D1_ID>"
+migrations_dir = "migrations"
+
+[[kv_namespaces]]
+binding = "CONFIG_KV"
+id = "<INSERT_PRODUCTION_KV_ID>"
+
+[vars]
+ENVIRONMENT = "development"
+SWARM_MODE = "copilot"
+TREND_VELOCITY_THRESHOLD = "2.0"
+BOUNCE_RATE_THRESHOLD = "70"
+
+
+# ════════════════════════════════════════════════════════════
+# STAGING ENVIRONMENT
+# ════════════════════════════════════════════════════════════
+#
+# Deployed by GitHub Actions on Pull Request to `main`.
+# Uses separate D1 database + KV namespace to isolate test data.
+#
+# Provision these resources once:
+#   npx wrangler d1 create edge-swarm-db-staging
+#   npx wrangler kv namespace create CONFIG_KV_STAGING
+#
+# Set secrets:
+#   npx wrangler secret put JWT_SECRET --env staging
+#   npx wrangler secret put OPENAI_API_KEY --env staging
+#   (etc.)
+#
+# ════════════════════════════════════════════════════════════
+
+[env.staging]
+name = "swarme-api-staging"
+
+[env.staging.vars]
+ENVIRONMENT = "staging"
+SWARM_MODE = "copilot"
+TREND_VELOCITY_THRESHOLD = "2.0"
+BOUNCE_RATE_THRESHOLD = "70"
+
+[[env.staging.d1_databases]]
+binding = "DB"
+database_name = "edge-swarm-db-staging"
+database_id = "<INSERT_STAGING_D1_ID>"
+migrations_dir = "migrations"
+
+[[env.staging.kv_namespaces]]
+binding = "CONFIG_KV"
+id = "<INSERT_STAGING_KV_ID>"
+
+# Staging crons — disabled (empty array) to prevent accidental
+# autonomous operations against staging data.
+[env.staging.triggers]
+crons = []
+
+
+# ════════════════════════════════════════════════════════════
+# PRODUCTION ENVIRONMENT
+# ════════════════════════════════════════════════════════════
+#
+# Deployed by GitHub Actions on push/merge to `main`.
+# Points to the live D1 database and KV namespace.
+#
+# Provision these resources once:
+#   npx wrangler d1 create edge-swarm-db
+#   npx wrangler kv namespace create CONFIG_KV
+#
+# Set secrets:
+#   npx wrangler secret put JWT_SECRET --env production
+#   npx wrangler secret put OPENAI_API_KEY --env production
+#   (etc.)
+#
+# ════════════════════════════════════════════════════════════
+
+[env.production]
+name = "swarme-api"
+
+# route = { pattern = "api.swarme.io/*", zone_name = "swarme.io" }
+
+[env.production.vars]
+ENVIRONMENT = "production"
+SWARM_MODE = "copilot"
+TREND_VELOCITY_THRESHOLD = "2.0"
+BOUNCE_RATE_THRESHOLD = "70"
+
+[[env.production.d1_databases]]
+binding = "DB"
+database_name = "edge-swarm-db"
+database_id = "<INSERT_PRODUCTION_D1_ID>"
+migrations_dir = "migrations"
+
+[[env.production.kv_namespaces]]
+binding = "CONFIG_KV"
+id = "<INSERT_PRODUCTION_KV_ID>"
+
+# Production crons — full autonomous schedule
+[env.production.triggers]
+crons = [
+  "0 * * * *",     # Hourly  — Swarm visibility check + task orchestration
+  "0 6 * * *",     # Daily at 06:00 UTC — Full AI visibility audit
+  "*/15 * * * *",  # Every 15 min — Trend velocity polling
+  "0 0 * * 0",     # Weekly (Sunday 00:00 UTC) — Content decay scan
+  "0 14 * * *"     # Daily at 14:00 UTC — Phase 27: Retention engine
+]
