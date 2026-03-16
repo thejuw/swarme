@@ -8,7 +8,7 @@
  */
 
 import { useQuery } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
@@ -20,6 +20,19 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
+import {
+  getFailsafeStatus,
+  unblockFailsafe,
+  getThrottleStatus,
+  getCircuitBreakerStatus,
+  resetCircuitBreaker,
+  queryKeys,
+  type FailsafeStatus,
+  type ThrottleServiceStatus,
+  type CircuitBreakerStatus,
+} from "@/lib/api";
 import {
   DollarSign,
   TrendingUp,
@@ -27,6 +40,10 @@ import {
   Zap,
   AlertTriangle,
   Activity,
+  ShieldAlert,
+  ShieldOff,
+  Gauge,
+  RefreshCw,
 } from "lucide-react";
 import {
   ComposedChart,
@@ -182,6 +199,207 @@ function MetricCard({
 }
 
 // ─────────────────────────────────────────────────────────────
+// Phase 57: Agent Failsafe Kill-Switch Banner (admin-only)
+// ─────────────────────────────────────────────────────────────
+
+function FailsafeBanner() {
+  const { data, isLoading } = useQuery({
+    queryKey: queryKeys.failsafeStatus(),
+    queryFn: getFailsafeStatus,
+    refetchInterval: 30000,
+  });
+
+  const { toast } = useToast();
+
+  const blockedTasks = (data?.failsafes || []).filter(
+    (f: FailsafeStatus) => f.blocked,
+  );
+
+  async function handleUnblock(taskType: string) {
+    try {
+      await unblockFailsafe(taskType);
+      queryClient.invalidateQueries({ queryKey: queryKeys.failsafeStatus() });
+      toast({ title: "Task Unblocked", description: `"${taskType}" has been unblocked and can resume.` });
+    } catch {
+      toast({ title: "Unblock Failed", description: "Could not unblock the task.", variant: "destructive" });
+    }
+  }
+
+  if (isLoading || blockedTasks.length === 0) {
+    return null;
+  }
+
+  return (
+    <Card className="border-red-500/30 bg-red-500/5" data-testid="banner-failsafe">
+      <CardHeader className="pb-2">
+        <div className="flex items-center gap-2">
+          <ShieldAlert className="h-4 w-4 text-red-400" />
+          <CardTitle className="text-sm font-semibold text-red-400">Kill-Switch Active</CardTitle>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        {blockedTasks.map((fs: FailsafeStatus) => (
+          <div
+            key={fs.task_type}
+            className="flex items-center justify-between text-xs text-muted-foreground"
+            data-testid={`failsafe-status-${fs.task_type}`}
+          >
+            <div>
+              <span className="font-mono text-red-300">{fs.task_type}</span>
+              <span className="ml-2 text-red-400/70">
+                {fs.attempt_count} failures — {fs.blocked_reason}
+              </span>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-6 text-xs border-red-500/30 text-red-300 hover:bg-red-500/10"
+              onClick={() => handleUnblock(fs.task_type)}
+              data-testid={`btn-unblock-${fs.task_type}`}
+            >
+              Unblock
+            </Button>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// Phase 56: Circuit Breaker Warning Banner (admin-only)
+// ─────────────────────────────────────────────────────────────
+
+function CircuitBreakerBanner() {
+  const { data, isLoading } = useQuery({
+    queryKey: queryKeys.circuitBreakerStatus(),
+    queryFn: getCircuitBreakerStatus,
+    refetchInterval: 30_000,
+  });
+
+  const { toast } = useToast();
+
+  const openCircuits = (data?.circuits || []).filter(
+    (c: CircuitBreakerStatus) => c.state === "OPEN" || c.state === "HALF_OPEN",
+  );
+
+  const handleReset = async (service: string) => {
+    try {
+      await resetCircuitBreaker(service);
+      queryClient.invalidateQueries({ queryKey: queryKeys.circuitBreakerStatus() });
+      toast({ title: "Circuit Reset", description: `${service} circuit breaker has been reset.` });
+    } catch {
+      toast({ title: "Reset Failed", description: "Could not reset the circuit breaker.", variant: "destructive" });
+    }
+  };
+
+  if (isLoading || openCircuits.length === 0) {
+    return null;
+  }
+
+  return (
+    <Card className="border-yellow-500/30 bg-yellow-500/5" data-testid="banner-circuit-breaker">
+      <CardHeader className="pb-2">
+        <div className="flex items-center gap-2">
+          <AlertTriangle className="h-4 w-4 text-yellow-400" />
+          <CardTitle className="text-sm font-semibold text-yellow-300">
+            Upstream API Degradation Detected
+          </CardTitle>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-1">
+          {openCircuits.map((circuit: CircuitBreakerStatus) => (
+            <div
+              key={circuit.service}
+              className="flex items-center gap-2 text-xs text-yellow-700 dark:text-yellow-300"
+              data-testid={`circuit-status-${circuit.service}`}
+            >
+              <ShieldOff className="h-3 w-3" />
+              <span className="font-mono">{circuit.service}</span>
+              <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-yellow-400 text-yellow-700 dark:text-yellow-300">
+                {circuit.state}
+              </Badge>
+              {circuit.cooldownEndsAt && (
+                <span className="text-yellow-600 dark:text-yellow-400">
+                  Recovery at {new Date(circuit.cooldownEndsAt).toLocaleTimeString()}
+                </span>
+              )}
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-5 px-1.5 text-[10px] text-yellow-700 hover:text-yellow-900 dark:text-yellow-300"
+                onClick={() => handleReset(circuit.service)}
+                data-testid={`btn-reset-circuit-${circuit.service}`}
+              >
+                <RefreshCw className="h-3 w-3 mr-0.5" />
+                Reset
+              </Button>
+            </div>
+          ))}
+        </div>
+        <p className="text-[11px] text-yellow-600 dark:text-yellow-500 mt-2">
+          AI-powered features may be temporarily limited. The system will auto-recover when the upstream service stabilizes.
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// Phase 57: Throttle Queue Status Widget (admin-only)
+// ─────────────────────────────────────────────────────────────
+
+function ThrottleStatusWidget() {
+  const { data, isLoading } = useQuery({
+    queryKey: queryKeys.throttleStatus(),
+    queryFn: getThrottleStatus,
+    refetchInterval: 15000,
+  });
+
+  if (isLoading || !data?.services) return null;
+
+  const services = data.services;
+
+  return (
+    <Card className="border-border/50" data-testid="widget-throttle-status">
+      <CardHeader className="pb-2">
+        <div className="flex items-center gap-2">
+          <Gauge className="h-4 w-4 text-muted-foreground" />
+          <CardTitle className="text-sm font-semibold">API Rate Limits</CardTitle>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div className="grid grid-cols-3 gap-3">
+          {services.map((svc: ThrottleServiceStatus) => (
+            <div key={svc.service} className="text-center" data-testid={`throttle-${svc.service}`}>
+              <div className="text-[10px] uppercase tracking-wider text-muted-foreground/70 mb-1">
+                {svc.service}
+              </div>
+              <div className="h-2 bg-muted rounded-full overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all ${
+                    svc.utilizationPct > 75
+                      ? "bg-red-400"
+                      : svc.utilizationPct > 40
+                        ? "bg-amber-400"
+                        : "bg-emerald-400"
+                  }`}
+                  style={{ width: `${Math.min(svc.utilizationPct, 100)}%` }}
+                />
+              </div>
+              <div className="text-[10px] text-muted-foreground/60 mt-0.5">
+                {svc.availableTokens}/{svc.maxTokens}
+              </div>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
 // Main Component
 // ─────────────────────────────────────────────────────────────
 
@@ -218,6 +436,11 @@ export default function AdminOverview() {
           Platform-wide value generation, financials, and operational health.
         </p>
       </div>
+
+      {/* ── Doomsday Protocol Widgets (superadmin-only) ── */}
+      <FailsafeBanner />
+      <CircuitBreakerBanner />
+      <ThrottleStatusWidget />
 
       {/* ── Metric Grid ── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

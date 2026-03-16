@@ -13,20 +13,12 @@ import {
   getProprietaryReport,
   publishProprietaryReport,
   getTelemetryStatus,
-  getCircuitBreakerStatus,
-  resetCircuitBreaker,
-  getFailsafeStatus,
-  unblockFailsafe,
-  getThrottleStatus,
   queryKeys,
   type ManagerChatMessage,
   type AIRoadmapItem,
   type UGCCampaignEntry,
   type ProprietaryReport,
   type TelemetrySubsystem,
-  type CircuitBreakerStatus,
-  type FailsafeStatus,
-  type ThrottleServiceStatus,
 } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -42,13 +34,11 @@ import {
   Send,
   Rocket,
   CheckCircle2,
-  Clock,
   Sparkles,
   Loader2,
   BrainCircuit,
   ListChecks,
   ArrowUpRight,
-  ChevronRight,
   ImageIcon,
   Eye,
   Video,
@@ -56,11 +46,6 @@ import {
   XCircle,
   Package,
   Activity,
-  AlertTriangle,
-  ShieldOff,
-  ShieldAlert,
-  Gauge,
-  RefreshCw,
   FileText,
   Globe,
   Code2,
@@ -68,7 +53,6 @@ import {
   Zap,
   HelpCircle,
   BookOpen,
-  TrendingUp,
 } from "lucide-react";
 import {
   Dialog,
@@ -1015,202 +999,6 @@ const PROACTIVE_TELEMETRY_MESSAGE: ManagerChatMessage = {
 // Phase 57: Agent Failsafe Kill-Switch Banner
 // ─────────────────────────────────────────────────────────────
 
-function FailsafeBanner() {
-  const { data, isLoading } = useQuery({
-    queryKey: queryKeys.failsafeStatus(),
-    queryFn: getFailsafeStatus,
-    refetchInterval: 30000,
-  });
-
-  const { toast } = useToast();
-
-  const blockedTasks = (data?.failsafes || []).filter(
-    (f: FailsafeStatus) => f.blocked,
-  );
-
-  async function handleUnblock(taskType: string) {
-    try {
-      await unblockFailsafe(taskType);
-      queryClient.invalidateQueries({ queryKey: queryKeys.failsafeStatus() });
-      toast({ title: "Task Unblocked", description: `"${taskType}" has been unblocked and can resume.` });
-    } catch {
-      toast({ title: "Unblock Failed", description: "Could not unblock the task.", variant: "destructive" });
-    }
-  }
-
-  if (isLoading || blockedTasks.length === 0) {
-    return null;
-  }
-
-  return (
-    <div
-      className="bg-red-500/10 border border-red-500/30 px-4 py-3 rounded-md mx-3 mt-3"
-      data-testid="banner-failsafe"
-    >
-      <div className="flex items-center gap-2 mb-2">
-        <ShieldAlert className="h-4 w-4 text-red-400" />
-        <span className="text-sm font-semibold text-red-400">Kill-Switch Active</span>
-      </div>
-      <div className="space-y-2">
-        {blockedTasks.map((fs: FailsafeStatus) => (
-          <div
-            key={fs.task_type}
-            className="flex items-center justify-between text-xs text-muted-foreground"
-            data-testid={`failsafe-status-${fs.task_type}`}
-          >
-            <div>
-              <span className="font-mono text-red-300">{fs.task_type}</span>
-              <span className="ml-2 text-red-400/70">
-                {fs.attempt_count} failures — {fs.blocked_reason}
-              </span>
-            </div>
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-6 text-xs border-red-500/30 text-red-300 hover:bg-red-500/10"
-              onClick={() => handleUnblock(fs.task_type)}
-              data-testid={`btn-unblock-${fs.task_type}`}
-            >
-              Unblock
-            </Button>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────
-// Phase 57: Throttle Queue Status Widget
-// ─────────────────────────────────────────────────────────────
-
-function ThrottleStatusWidget() {
-  const { data, isLoading } = useQuery({
-    queryKey: queryKeys.throttleStatus(),
-    queryFn: getThrottleStatus,
-    refetchInterval: 15000,
-  });
-
-  if (isLoading || !data?.services) return null;
-
-  const services = data.services;
-
-  return (
-    <div
-      className="px-3 py-2 rounded-md mx-3 mt-2 bg-muted/50 border border-border"
-      data-testid="widget-throttle-status"
-    >
-      <div className="flex items-center gap-2 mb-1.5">
-        <Gauge className="h-3.5 w-3.5 text-muted-foreground" />
-        <span className="text-xs font-medium text-muted-foreground">API Rate Limits</span>
-      </div>
-      <div className="grid grid-cols-3 gap-2">
-        {services.map((svc: ThrottleServiceStatus) => (
-          <div key={svc.service} className="text-center" data-testid={`throttle-${svc.service}`}>
-            <div className="text-[10px] uppercase tracking-wider text-muted-foreground/70 mb-0.5">
-              {svc.service}
-            </div>
-            <div className="h-1.5 bg-muted rounded-full overflow-hidden">
-              <div
-                className={`h-full rounded-full transition-all ${
-                  svc.utilizationPct > 75
-                    ? "bg-red-400"
-                    : svc.utilizationPct > 40
-                      ? "bg-amber-400"
-                      : "bg-emerald-400"
-                }`}
-                style={{ width: `${Math.min(svc.utilizationPct, 100)}%` }}
-              />
-            </div>
-            <div className="text-[10px] text-muted-foreground/60 mt-0.5">
-              {svc.availableTokens}/{svc.maxTokens}
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────
-// Phase 56: Circuit Breaker Warning Banner
-// ─────────────────────────────────────────────────────────────
-
-function CircuitBreakerBanner() {
-  const { data, isLoading } = useQuery({
-    queryKey: queryKeys.circuitBreakerStatus(),
-    queryFn: getCircuitBreakerStatus,
-    refetchInterval: 30_000, // Poll every 30s
-  });
-
-  const { toast } = useToast();
-
-  const openCircuits = (data?.circuits || []).filter(
-    (c: CircuitBreakerStatus) => c.state === "OPEN" || c.state === "HALF_OPEN",
-  );
-
-  const handleReset = async (service: string) => {
-    try {
-      await resetCircuitBreaker(service);
-      queryClient.invalidateQueries({ queryKey: queryKeys.circuitBreakerStatus() });
-      toast({ title: "Circuit Reset", description: `${service} circuit breaker has been reset.` });
-    } catch {
-      toast({ title: "Reset Failed", description: "Could not reset the circuit breaker.", variant: "destructive" });
-    }
-  };
-
-  if (isLoading || openCircuits.length === 0) {
-    return null;
-  }
-
-  return (
-    <div
-      className="bg-yellow-50 dark:bg-yellow-950/40 border-b border-yellow-200 dark:border-yellow-800 px-4 py-2.5 flex items-start gap-3"
-      data-testid="banner-circuit-breaker"
-    >
-      <AlertTriangle className="h-4 w-4 text-yellow-600 dark:text-yellow-400 mt-0.5 flex-shrink-0" />
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
-          Upstream API Degradation Detected
-        </p>
-        <div className="mt-1 space-y-1">
-          {openCircuits.map((circuit: CircuitBreakerStatus) => (
-            <div
-              key={circuit.service}
-              className="flex items-center gap-2 text-xs text-yellow-700 dark:text-yellow-300"
-              data-testid={`circuit-status-${circuit.service}`}
-            >
-              <ShieldOff className="h-3 w-3" />
-              <span className="font-mono">{circuit.service}</span>
-              <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-yellow-400 text-yellow-700 dark:text-yellow-300">
-                {circuit.state}
-              </Badge>
-              {circuit.cooldownEndsAt && (
-                <span className="text-yellow-600 dark:text-yellow-400">
-                  Recovery at {new Date(circuit.cooldownEndsAt).toLocaleTimeString()}
-                </span>
-              )}
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-5 px-1.5 text-[10px] text-yellow-700 hover:text-yellow-900 dark:text-yellow-300"
-                onClick={() => handleReset(circuit.service)}
-                data-testid={`btn-reset-circuit-${circuit.service}`}
-              >
-                <RefreshCw className="h-3 w-3 mr-0.5" />
-                Reset
-              </Button>
-            </div>
-          ))}
-        </div>
-        <p className="text-[11px] text-yellow-600 dark:text-yellow-500 mt-1">
-          AI-powered features may be temporarily limited. The system will auto-recover when the upstream service stabilizes.
-        </p>
-      </div>
-    </div>
-  );
-}
-
 export default function AiManager() {
   const [messages, setMessages] = useState<ManagerChatMessage[]>([
     WELCOME_MESSAGE,
@@ -1264,13 +1052,6 @@ export default function AiManager() {
 
   return (
     <div className="h-full flex flex-col" data-testid="page-ai-manager">
-      {/* Phase 57: Agent Failsafe Kill-Switch Banner */}
-      <FailsafeBanner />
-      {/* Phase 56: Circuit Breaker Warning Banner */}
-      <CircuitBreakerBanner />
-      {/* Phase 57: Throttle Queue Status */}
-      <ThrottleStatusWidget />
-
     <div className="flex-1 min-h-0 flex flex-col sm:flex-row">
       {/* Left: Chat Panel */}
       <div className="flex-1 min-w-0 sm:max-w-[55%]">
