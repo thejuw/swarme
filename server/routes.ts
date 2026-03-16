@@ -2958,5 +2958,206 @@ export async function registerRoutes(
     });
   });
 
+  // ─────────────────────────────────────────────────────────
+  // Phase 39: Internal Link Graph
+  // ─────────────────────────────────────────────────────────
+
+  const mockInternalLinks = [
+    {
+      id: "il_001",
+      project_id: "proj_001",
+      source_asset_id: "asset_401",
+      source_title: "How Sartelle Atelier Built a Zero-Waste Supply Chain",
+      source_slug: "zero-waste-supply-chain",
+      target_asset_id: "asset_404",
+      target_title: "The Future of Sustainable Luxury Materials",
+      target_slug: "sustainable-luxury-materials-future",
+      target_url: "https://sartelle-atelier.com/blog/sustainable-luxury-materials-future",
+      anchor_text: "sustainable luxury materials",
+      similarity_score: 0.91,
+      status: "active" as const,
+      injected_at: "2026-03-10T14:22:00Z",
+      created_at: "2026-03-10T14:22:00Z",
+    },
+    {
+      id: "il_002",
+      project_id: "proj_001",
+      source_asset_id: "asset_404",
+      source_title: "The Future of Sustainable Luxury Materials",
+      source_slug: "sustainable-luxury-materials-future",
+      target_asset_id: "asset_401",
+      target_title: "How Sartelle Atelier Built a Zero-Waste Supply Chain",
+      target_slug: "zero-waste-supply-chain",
+      target_url: "https://sartelle-atelier.com/blog/zero-waste-supply-chain",
+      anchor_text: "zero-waste supply chain",
+      similarity_score: 0.89,
+      status: "active" as const,
+      injected_at: "2026-03-10T14:22:05Z",
+      created_at: "2026-03-10T14:22:05Z",
+    },
+    {
+      id: "il_003",
+      project_id: "proj_001",
+      source_asset_id: "asset_402",
+      source_title: "The Psychology of Haute Couture Pricing",
+      source_slug: "haute-couture-pricing-psychology",
+      target_asset_id: "asset_403",
+      target_title: "Sartelle Atelier's Digital-First Fashion Week Strategy",
+      target_slug: "digital-first-fashion-week",
+      target_url: "https://sartelle-atelier.com/blog/digital-first-fashion-week",
+      anchor_text: "digital fashion week strategy",
+      similarity_score: 0.82,
+      status: "active" as const,
+      injected_at: "2026-03-11T09:15:00Z",
+      created_at: "2026-03-11T09:15:00Z",
+    },
+    {
+      id: "il_004",
+      project_id: "proj_001",
+      source_asset_id: "asset_403",
+      source_title: "Sartelle Atelier's Digital-First Fashion Week Strategy",
+      source_slug: "digital-first-fashion-week",
+      target_asset_id: "asset_402",
+      target_title: "The Psychology of Haute Couture Pricing",
+      target_slug: "haute-couture-pricing-psychology",
+      target_url: "https://sartelle-atelier.com/blog/haute-couture-pricing-psychology",
+      anchor_text: "luxury pricing psychology",
+      similarity_score: 0.78,
+      status: "active" as const,
+      injected_at: "2026-03-11T09:15:05Z",
+      created_at: "2026-03-11T09:15:05Z",
+    },
+    {
+      id: "il_005",
+      project_id: "proj_001",
+      source_asset_id: "asset_401",
+      source_title: "How Sartelle Atelier Built a Zero-Waste Supply Chain",
+      source_slug: "zero-waste-supply-chain",
+      target_asset_id: "asset_403",
+      target_title: "Sartelle Atelier's Digital-First Fashion Week Strategy",
+      target_slug: "digital-first-fashion-week",
+      target_url: "https://sartelle-atelier.com/blog/digital-first-fashion-week",
+      anchor_text: "our digital-first strategy",
+      similarity_score: 0.74,
+      status: "active" as const,
+      injected_at: "2026-03-12T11:30:00Z",
+      created_at: "2026-03-12T11:30:00Z",
+    },
+    {
+      id: "il_006",
+      project_id: "proj_001",
+      source_asset_id: "asset_403",
+      source_title: "Sartelle Atelier's Digital-First Fashion Week Strategy",
+      source_slug: "digital-first-fashion-week",
+      target_asset_id: "asset_401",
+      target_title: "How Sartelle Atelier Built a Zero-Waste Supply Chain",
+      target_slug: "zero-waste-supply-chain",
+      target_url: "https://sartelle-atelier.com/blog/zero-waste-supply-chain",
+      anchor_text: "sustainable supply chain practices",
+      similarity_score: 0.71,
+      status: "active" as const,
+      injected_at: "2026-03-12T11:30:05Z",
+      created_at: "2026-03-12T11:30:05Z",
+    },
+    {
+      id: "il_007",
+      project_id: "proj_001",
+      source_asset_id: "asset_402",
+      source_title: "The Psychology of Haute Couture Pricing",
+      source_slug: "haute-couture-pricing-psychology",
+      target_asset_id: "asset_401",
+      target_title: "How Sartelle Atelier Built a Zero-Waste Supply Chain",
+      target_slug: "zero-waste-supply-chain",
+      target_url: "https://sartelle-atelier.com/blog/zero-waste-supply-chain",
+      anchor_text: "our zero-waste initiative",
+      similarity_score: 0.69,
+      status: "removed" as const,
+      injected_at: "2026-03-08T16:00:00Z",
+      created_at: "2026-03-08T16:00:00Z",
+    },
+  ];
+
+  // GET /api/projects/:projectId/internal-links
+  app.get("/api/projects/:projectId/internal-links", (_req, res) => {
+    const projectId = _req.params.projectId;
+    const statusFilter = _req.query.status as string | undefined;
+
+    let links = mockInternalLinks.filter((l) => l.project_id === projectId);
+    if (statusFilter) {
+      links = links.filter((l) => l.status === statusFilter);
+    }
+
+    // Build graph summary
+    const activeLinks = mockInternalLinks.filter(
+      (l) => l.project_id === projectId && l.status === "active"
+    );
+
+    // Unique articles that participate in links
+    const nodeSet = new Set<string>();
+    for (const l of activeLinks) {
+      nodeSet.add(l.source_asset_id);
+      nodeSet.add(l.target_asset_id);
+    }
+
+    // Build node list with link counts
+    const nodeMap = new Map<string, { id: string; title: string; slug: string; inbound: number; outbound: number }>();
+    for (const l of activeLinks) {
+      if (!nodeMap.has(l.source_asset_id)) {
+        nodeMap.set(l.source_asset_id, { id: l.source_asset_id, title: l.source_title, slug: l.source_slug, inbound: 0, outbound: 0 });
+      }
+      if (!nodeMap.has(l.target_asset_id)) {
+        nodeMap.set(l.target_asset_id, { id: l.target_asset_id, title: l.target_title, slug: l.target_slug, inbound: 0, outbound: 0 });
+      }
+      nodeMap.get(l.source_asset_id)!.outbound++;
+      nodeMap.get(l.target_asset_id)!.inbound++;
+    }
+
+    const avgSimilarity = activeLinks.length > 0
+      ? Number((activeLinks.reduce((sum, l) => sum + l.similarity_score, 0) / activeLinks.length).toFixed(2))
+      : 0;
+
+    res.json({
+      links,
+      graph: {
+        nodes: Array.from(nodeMap.values()),
+        edges: activeLinks.map((l) => ({
+          source: l.source_asset_id,
+          target: l.target_asset_id,
+          anchor_text: l.anchor_text,
+          similarity_score: l.similarity_score,
+        })),
+      },
+      summary: {
+        total_links: links.length,
+        active_links: activeLinks.length,
+        removed_links: links.filter((l) => l.status === "removed").length,
+        articles_connected: nodeSet.size,
+        avg_similarity: avgSimilarity,
+      },
+    });
+  });
+
+  // DELETE /api/projects/:projectId/internal-links/:linkId
+  app.delete("/api/projects/:projectId/internal-links/:linkId", (req, res) => {
+    const link = mockInternalLinks.find(
+      (l) => l.id === req.params.linkId && l.project_id === req.params.projectId
+    );
+    if (!link) return res.status(404).json({ success: false, error: "Link not found" });
+
+    link.status = "removed";
+    res.json({ success: true, link });
+  });
+
+  // POST /api/projects/:projectId/internal-links/:linkId/restore
+  app.post("/api/projects/:projectId/internal-links/:linkId/restore", (req, res) => {
+    const link = mockInternalLinks.find(
+      (l) => l.id === req.params.linkId && l.project_id === req.params.projectId
+    );
+    if (!link) return res.status(404).json({ success: false, error: "Link not found" });
+
+    link.status = "active";
+    res.json({ success: true, link });
+  });
+
   return httpServer;
 }

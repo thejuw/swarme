@@ -1151,6 +1151,8 @@ export const queryKeys = {
     ["/api/projects", projectId, "mission-control"] as const,
   outreachCampaigns: (projectId: string) =>
     ["/api/projects", projectId, "outreach-campaigns"] as const,
+  internalLinks: (projectId: string) =>
+    ["/api/projects", projectId, "internal-links"] as const,
 } as const;
 
 // ────────────────────────────────────────────
@@ -1396,5 +1398,81 @@ export async function runOutreachProspecting(
   keyword: string
 ): Promise<OutreachProspectResponse> {
   const res = await apiRequest("POST", `/api/projects/${projectId}/outreach-campaigns/prospect`, { keyword });
+  return res.json();
+}
+
+// ── Phase 39: Internal Link Graph ──
+
+export interface InternalLink {
+  id: string;
+  project_id: string;
+  source_asset_id: string;
+  source_title: string;
+  source_slug: string;
+  target_asset_id: string;
+  target_title: string;
+  target_slug: string;
+  target_url: string;
+  anchor_text: string;
+  similarity_score: number;
+  status: "active" | "removed" | "broken";
+  injected_at: string;
+  created_at: string;
+}
+
+export interface LinkGraphNode {
+  id: string;
+  title: string;
+  slug: string;
+  inbound: number;
+  outbound: number;
+}
+
+export interface LinkGraphEdge {
+  source: string;
+  target: string;
+  anchor_text: string;
+  similarity_score: number;
+}
+
+export interface LinkGraphSummary {
+  total_links: number;
+  active_links: number;
+  removed_links: number;
+  articles_connected: number;
+  avg_similarity: number;
+}
+
+export interface InternalLinksResponse {
+  links: InternalLink[];
+  graph: {
+    nodes: LinkGraphNode[];
+    edges: LinkGraphEdge[];
+  };
+  summary: LinkGraphSummary;
+}
+
+export async function getInternalLinks(
+  projectId: string,
+  status?: string
+): Promise<InternalLinksResponse> {
+  const qs = status ? `?status=${encodeURIComponent(status)}` : "";
+  const res = await apiRequest("GET", `/api/projects/${projectId}/internal-links${qs}`);
+  return res.json();
+}
+
+export async function removeInternalLink(
+  projectId: string,
+  linkId: string
+): Promise<{ success: boolean; link: InternalLink }> {
+  const res = await apiRequest("DELETE", `/api/projects/${projectId}/internal-links/${linkId}`);
+  return res.json();
+}
+
+export async function restoreInternalLink(
+  projectId: string,
+  linkId: string
+): Promise<{ success: boolean; link: InternalLink }> {
+  const res = await apiRequest("POST", `/api/projects/${projectId}/internal-links/${linkId}/restore`);
   return res.json();
 }

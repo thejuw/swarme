@@ -9,6 +9,9 @@ import {
   updateOutreachCampaign,
   sendOutreachCampaign,
   runOutreachProspecting,
+  getInternalLinks,
+  removeInternalLink,
+  restoreInternalLink,
   queryKeys,
   type ActionHistoryEntry,
   type IntegrationHealth,
@@ -16,6 +19,9 @@ import {
   type CronJobStatus,
   type OutreachCampaign,
   type OutreachDraftContent,
+  type InternalLink,
+  type LinkGraphNode,
+  type InternalLinksResponse,
 } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -70,6 +76,11 @@ import {
   Eye,
   ThumbsUp,
   LinkIcon,
+  Network,
+  Unlink,
+  RefreshCw,
+  ArrowRight,
+  Circle,
 } from "lucide-react";
 
 const PROJECT_ID = "proj_001";
@@ -881,6 +892,309 @@ function OutreachPanel() {
 }
 
 // ─────────────────────────────────────────────────────────────
+// Link Graph Panel (Phase 39)
+// ─────────────────────────────────────────────────────────────
+
+function LinkGraphPanel() {
+  const { toast } = useToast();
+  const [statusFilter, setStatusFilter] = useState<string | null>(null);
+
+  const { data, isLoading } = useQuery<InternalLinksResponse>({
+    queryKey: [...queryKeys.internalLinks(PROJECT_ID), statusFilter],
+    queryFn: () => getInternalLinks(PROJECT_ID, statusFilter ?? undefined),
+  });
+
+  const removeMutation = useMutation({
+    mutationFn: (linkId: string) => removeInternalLink(PROJECT_ID, linkId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.internalLinks(PROJECT_ID) });
+      toast({ title: "Link removed", description: "The internal link has been deactivated." });
+    },
+  });
+
+  const restoreMutation = useMutation({
+    mutationFn: (linkId: string) => restoreInternalLink(PROJECT_ID, linkId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.internalLinks(PROJECT_ID) });
+      toast({ title: "Link restored", description: "The internal link has been reactivated." });
+    },
+  });
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  const summary = data?.summary;
+  const links = data?.links ?? [];
+  const graph = data?.graph;
+
+  return (
+    <div className="space-y-4" data-testid="link-graph-panel">
+      {/* KPI row */}
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+        <Card className="border-border/50">
+          <CardContent className="p-3 text-center">
+            <p className="text-lg font-bold text-foreground" data-testid="kpi-total-links">{summary?.total_links ?? 0}</p>
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Total Links</p>
+          </CardContent>
+        </Card>
+        <Card className="border-border/50">
+          <CardContent className="p-3 text-center">
+            <p className="text-lg font-bold text-emerald-400" data-testid="kpi-active-links">{summary?.active_links ?? 0}</p>
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Active</p>
+          </CardContent>
+        </Card>
+        <Card className="border-border/50">
+          <CardContent className="p-3 text-center">
+            <p className="text-lg font-bold text-orange-400" data-testid="kpi-removed-links">{summary?.removed_links ?? 0}</p>
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Removed</p>
+          </CardContent>
+        </Card>
+        <Card className="border-border/50">
+          <CardContent className="p-3 text-center">
+            <p className="text-lg font-bold text-foreground" data-testid="kpi-articles-connected">{summary?.articles_connected ?? 0}</p>
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Articles</p>
+          </CardContent>
+        </Card>
+        <Card className="border-border/50">
+          <CardContent className="p-3 text-center">
+            <p className="text-lg font-bold text-sky-400" data-testid="kpi-avg-similarity">{summary?.avg_similarity ?? 0}</p>
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Avg Score</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Graph Visualization (force-directed placeholder using SVG) */}
+      {graph && graph.nodes.length > 0 && (
+        <Card className="border-border/50">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium flex items-center gap-2">
+              <Network className="h-4 w-4 text-sky-400" />
+              Semantic Link Map
+            </CardTitle>
+            <CardDescription className="text-xs">Visual graph of how your articles are semantically linked</CardDescription>
+          </CardHeader>
+          <CardContent className="p-4">
+            <LinkGraphVisualization nodes={graph.nodes} edges={graph.edges} />
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Filter chips */}
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-muted-foreground">Filter:</span>
+        {[null, "active", "removed"].map((f) => (
+          <Badge
+            key={f ?? "all"}
+            variant={statusFilter === f ? "default" : "outline"}
+            className={`cursor-pointer text-[10px] ${
+              statusFilter === f ? "" : "text-muted-foreground border-border/50 hover:text-foreground"
+            }`}
+            onClick={() => setStatusFilter(f)}
+            data-testid={`filter-${f ?? "all"}`}
+          >
+            {f === null ? "All" : f.charAt(0).toUpperCase() + f.slice(1)}
+          </Badge>
+        ))}
+      </div>
+
+      {/* Links Table */}
+      <Card className="border-border/50">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium flex items-center gap-2">
+            <LinkIcon className="h-4 w-4 text-emerald-400" />
+            Internal Links
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          {links.length === 0 ? (
+            <div className="p-6 text-center text-sm text-muted-foreground">
+              No internal links found.
+            </div>
+          ) : (
+            <div className="divide-y divide-border/50">
+              {links.map((link) => (
+                <LinkRow
+                  key={link.id}
+                  link={link}
+                  onRemove={() => removeMutation.mutate(link.id)}
+                  onRestore={() => restoreMutation.mutate(link.id)}
+                  isRemoving={removeMutation.isPending}
+                  isRestoring={restoreMutation.isPending}
+                />
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function LinkRow({
+  link,
+  onRemove,
+  onRestore,
+  isRemoving,
+  isRestoring,
+}: {
+  link: InternalLink;
+  onRemove: () => void;
+  onRestore: () => void;
+  isRemoving: boolean;
+  isRestoring: boolean;
+}) {
+  const isActive = link.status === "active";
+  return (
+    <div
+      className={`flex items-center gap-3 px-4 py-3 text-xs ${
+        !isActive ? "opacity-60" : ""
+      }`}
+      data-testid={`link-row-${link.id}`}
+    >
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-1.5 mb-1">
+          <span className="font-medium text-foreground truncate max-w-[180px]" title={link.source_title}>
+            {link.source_title.length > 35 ? link.source_title.slice(0, 35) + "..." : link.source_title}
+          </span>
+          <ArrowRight className="h-3 w-3 shrink-0 text-muted-foreground" />
+          <span className="font-medium text-foreground truncate max-w-[180px]" title={link.target_title}>
+            {link.target_title.length > 35 ? link.target_title.slice(0, 35) + "..." : link.target_title}
+          </span>
+        </div>
+        <div className="flex items-center gap-2 text-muted-foreground">
+          <span className="italic">"{link.anchor_text}"</span>
+          <span>·</span>
+          <span className="font-mono">{(link.similarity_score * 100).toFixed(0)}% match</span>
+        </div>
+      </div>
+      <Badge
+        variant="outline"
+        className={`text-[10px] shrink-0 ${
+          isActive
+            ? "text-emerald-400 border-emerald-400/30 bg-emerald-400/10"
+            : "text-orange-400 border-orange-400/30 bg-orange-400/10"
+        }`}
+      >
+        {link.status}
+      </Badge>
+      {isActive ? (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 px-2 text-xs text-muted-foreground hover:text-red-400"
+          onClick={onRemove}
+          disabled={isRemoving}
+          data-testid={`remove-link-${link.id}`}
+        >
+          {isRemoving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Unlink className="h-3 w-3" />}
+        </Button>
+      ) : (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 px-2 text-xs text-muted-foreground hover:text-emerald-400"
+          onClick={onRestore}
+          disabled={isRestoring}
+          data-testid={`restore-link-${link.id}`}
+        >
+          {isRestoring ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+        </Button>
+      )}
+    </div>
+  );
+}
+
+function LinkGraphVisualization({
+  nodes,
+  edges,
+}: {
+  nodes: LinkGraphNode[];
+  edges: { source: string; target: string; anchor_text: string; similarity_score: number }[];
+}) {
+  // Simple circular layout for the nodes
+  const width = 600;
+  const height = 320;
+  const cx = width / 2;
+  const cy = height / 2;
+  const radius = Math.min(cx, cy) - 60;
+
+  const nodePositions = new Map<string, { x: number; y: number }>();
+  nodes.forEach((node, i) => {
+    const angle = (2 * Math.PI * i) / nodes.length - Math.PI / 2;
+    nodePositions.set(node.id, {
+      x: cx + radius * Math.cos(angle),
+      y: cy + radius * Math.sin(angle),
+    });
+  });
+
+  return (
+    <div className="flex justify-center" data-testid="link-graph-svg">
+      <svg viewBox={`0 0 ${width} ${height}`} className="w-full max-w-[600px] h-auto">
+        {/* Edges */}
+        {edges.map((edge, i) => {
+          const from = nodePositions.get(edge.source);
+          const to = nodePositions.get(edge.target);
+          if (!from || !to) return null;
+          const opacity = 0.3 + edge.similarity_score * 0.5;
+          return (
+            <line
+              key={`edge-${i}`}
+              x1={from.x}
+              y1={from.y}
+              x2={to.x}
+              y2={to.y}
+              stroke="hsl(var(--primary))"
+              strokeWidth={1 + edge.similarity_score * 2}
+              strokeOpacity={opacity}
+            />
+          );
+        })}
+        {/* Nodes */}
+        {nodes.map((node) => {
+          const pos = nodePositions.get(node.id);
+          if (!pos) return null;
+          const totalLinks = node.inbound + node.outbound;
+          const r = 16 + totalLinks * 3;
+          return (
+            <g key={node.id}>
+              <circle
+                cx={pos.x}
+                cy={pos.y}
+                r={r}
+                fill="hsl(var(--primary) / 0.15)"
+                stroke="hsl(var(--primary))"
+                strokeWidth={1.5}
+              />
+              <text
+                x={pos.x}
+                y={pos.y - r - 8}
+                textAnchor="middle"
+                className="fill-foreground text-[10px] font-medium"
+              >
+                {node.title.length > 28 ? node.title.slice(0, 28) + "..." : node.title}
+              </text>
+              <text
+                x={pos.x}
+                y={pos.y + 4}
+                textAnchor="middle"
+                className="fill-muted-foreground text-[9px] font-mono"
+              >
+                {node.inbound}↓ {node.outbound}↑
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
 // Main Page
 // ─────────────────────────────────────────────────────────────
 
@@ -921,11 +1235,12 @@ export default function MissionControl() {
 
         {/* Tabbed sections */}
         <Tabs defaultValue="overview" className="w-full">
-          <TabsList className="grid w-full grid-cols-4 max-w-lg">
+          <TabsList className="grid w-full grid-cols-5 max-w-2xl">
             <TabsTrigger value="overview" data-testid="tab-overview">Overview</TabsTrigger>
             <TabsTrigger value="agents" data-testid="tab-agents">Agents</TabsTrigger>
             <TabsTrigger value="history" data-testid="tab-history">History</TabsTrigger>
             <TabsTrigger value="outreach" data-testid="tab-outreach">Outreach</TabsTrigger>
+            <TabsTrigger value="link-graph" data-testid="tab-link-graph">Link Graph</TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview" className="mt-4 space-y-4">
@@ -945,6 +1260,10 @@ export default function MissionControl() {
 
           <TabsContent value="outreach" className="mt-4">
             <OutreachPanel />
+          </TabsContent>
+
+          <TabsContent value="link-graph" className="mt-4">
+            <LinkGraphPanel />
           </TabsContent>
         </Tabs>
       </div>

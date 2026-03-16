@@ -63,6 +63,10 @@ import {
   saveRefreshDraft,
 } from "./utils/refresh";
 import { notifyUser } from "./utils/notifications";
+import {
+  injectSemanticLinks,
+  embedAndIndexArticle,
+} from "./utils/vectorize";
 
 // ─────────────────────────────────────────────────────────────
 // Type Definitions
@@ -994,6 +998,24 @@ export class AgentWorkflowManager implements DurableObject {
       // ── Autopilot: Attempt CMS webhook publish ──
       await this.transitionTo("PUBLISHING");
 
+      // ── Phase 39: Inject semantic internal links before CMS push ──
+      try {
+        const linkResult = await injectSemanticLinks(
+          contentAssetId ?? "",
+          draft.htmlContent,
+          keyword,
+          projectId,
+          this.env,
+        );
+        if (linkResult.linksInjected.length > 0) {
+          draft.htmlContent = linkResult.modifiedHtml;
+          console.log(`[DO] Phase 39: Injected ${linkResult.linksInjected.length} internal links into "${keyword}"`);
+        }
+      } catch (linkErr) {
+        // Non-fatal — publish without links if injection fails
+        console.warn(`[DO] Phase 39: Link injection skipped: ${linkErr instanceof Error ? linkErr.message : linkErr}`);
+      }
+
       let publishedUrl: string | null = null;
       let cmsResponseId: string | null = null;
       let publishSource: PublishOutput["source"] = "mock_fallback";
@@ -1199,6 +1221,28 @@ export class AgentWorkflowManager implements DurableObject {
         console.error("[DO] User notification failed (non-fatal):", notifyErr);
       }
 
+      // ── Phase 39: Index published article in Vectorize for future link injection ──
+      if (contentAssetId && publishedUrl) {
+        try {
+          await embedAndIndexArticle(
+            contentAssetId,
+            draft.htmlContent,
+            {
+              assetId: contentAssetId,
+              projectId,
+              title: draft.title,
+              keyword,
+              slug,
+              publishedUrl,
+            },
+            this.env,
+          );
+          console.log(`[DO] Phase 39: Indexed article in Vectorize: "${draft.title}"`);
+        } catch (indexErr) {
+          console.error(`[DO] Phase 39: Vectorize indexing failed (non-fatal): ${indexErr instanceof Error ? indexErr.message : indexErr}`);
+        }
+      }
+
       await this.transitionTo("COMPLETED");
     } else {
       // ── Copilot: Pause for human approval ──
@@ -1253,6 +1297,26 @@ export class AgentWorkflowManager implements DurableObject {
     const keyword = this.workflow.keyword;
     const slug = keyword.replace(/\s+/g, "-").toLowerCase();
     const contentAssetId = this.workflow.pipeline.publishResult?.contentAssetId ?? null;
+
+    // ── Phase 39: Inject semantic internal links before CMS push ──
+    if (draft?.htmlContent) {
+      try {
+        const linkResult = await injectSemanticLinks(
+          contentAssetId ?? "",
+          draft.htmlContent,
+          keyword,
+          projectId,
+          this.env,
+        );
+        if (linkResult.linksInjected.length > 0) {
+          draft.htmlContent = linkResult.modifiedHtml;
+          console.log(`[DO] Phase 39 (copilot): Injected ${linkResult.linksInjected.length} internal links into "${keyword}"`);
+        }
+      } catch (linkErr) {
+        // Non-fatal — publish without links if injection fails
+        console.warn(`[DO] Phase 39 (copilot): Link injection skipped: ${linkErr instanceof Error ? linkErr.message : linkErr}`);
+      }
+    }
 
     let publishedUrl: string | null = null;
     let cmsResponseId: string | null = null;
@@ -1361,7 +1425,6 @@ export class AgentWorkflowManager implements DurableObject {
     }
 
     // ── Phase 17: Generate social media drafts (copilot-approved path) ──
-    const contentAssetId = this.workflow.pipeline.publishResult?.contentAssetId;
     if (contentAssetId && publishedUrl) {
       try {
         const articleText = draft?.htmlContent?.replace(/<[^>]*>/g, "") || "";
@@ -1382,6 +1445,28 @@ export class AgentWorkflowManager implements DurableObject {
         );
       } catch (socialErr) {
         console.error("[DO] Social draft generation failed (non-fatal):", socialErr);
+      }
+    }
+
+    // ── Phase 39: Index published article in Vectorize for future link injection ──
+    if (contentAssetId && publishedUrl && draft) {
+      try {
+        await embedAndIndexArticle(
+          contentAssetId,
+          draft.htmlContent,
+          {
+            assetId: contentAssetId,
+            projectId,
+            title: draft.title,
+            keyword,
+            slug,
+            publishedUrl,
+          },
+          this.env,
+        );
+        console.log(`[DO] Phase 39 (copilot): Indexed article in Vectorize: "${draft.title}"`);
+      } catch (indexErr) {
+        console.error(`[DO] Phase 39 (copilot): Vectorize indexing failed (non-fatal): ${indexErr instanceof Error ? indexErr.message : indexErr}`);
       }
     }
 

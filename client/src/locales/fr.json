@@ -425,5 +425,21 @@
     "prospectingComplete": "Prospection terminée",
     "campaignUpdated": "Campagne mise à jour",
     "emailSent": "E-mail envoyé"
+  },
+  "linkGraph": {
+    "title": "Graphe de liens",
+    "totalLinks": "Total des liens",
+    "active": "Actif",
+    "removed": "Supprimé",
+    "articles": "Articles",
+    "avgScore": "Score moyen",
+    "semanticMap": "Carte sémantique des liens",
+    "semanticMapDesc": "Graphique visuel montrant comment vos articles sont liés sémantiquement",
+    "internalLinks": "Liens internes",
+    "noLinks": "Aucun lien interne trouvé.",
+    "linkRemoved": "Lien supprimé",
+    "linkRestored": "Lien restauré",
+    "match": "correspondance",
+    "filterAll": "Tous"
   }
 }

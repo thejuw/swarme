@@ -417,5 +417,21 @@
     "prospectingComplete": "Prospecting complete",
     "campaignUpdated": "Campaign updated",
     "emailSent": "Email sent"
+  },
+  "linkGraph": {
+    "title": "Link Graph",
+    "totalLinks": "Total Links",
+    "active": "Active",
+    "removed": "Removed",
+    "articles": "Articles",
+    "avgScore": "Avg Score",
+    "semanticMap": "Semantic Link Map",
+    "semanticMapDesc": "Visual graph of how your articles are semantically linked",
+    "internalLinks": "Internal Links",
+    "noLinks": "No internal links found.",
+    "linkRemoved": "Link removed",
+    "linkRestored": "Link restored",
+    "match": "match",
+    "filterAll": "All"
   }
 }
