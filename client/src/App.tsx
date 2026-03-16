@@ -30,6 +30,7 @@ import AbTests from "@/pages/ab-tests";
 import AiManager from "@/pages/ai-manager";
 import MissionControl from "@/pages/mission-control";
 import OffDomain from "@/pages/off-domain";
+import MediaWallet from "@/pages/wallet";
 import LandingPage from "@/pages/landing";
 import { LoginPage, SignupPage } from "@/pages/auth";
 import MagicLogin from "@/pages/magic-login";
@@ -114,6 +115,7 @@ function ShellRoutes() {
       <Route path="/ai-manager" component={AiManager} />
       <Route path="/mission-control" component={MissionControl} />
       <Route path="/off-domain" component={OffDomain} />
+      <Route path="/wallet" component={MediaWallet} />
       <Route path="/settings" component={Settings} />
       <Route component={NotFound} />
     </Switch>

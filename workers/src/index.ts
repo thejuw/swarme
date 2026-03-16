@@ -49,6 +49,7 @@ import { calculateSignificance, evaluateAndConclude } from "./utils/statistics";
 import { apiAuth } from "./middleware/apiAuth";
 import { domainAuth } from "./middleware/domainAuth";
 import { v1Router } from "./routes/api/v1";
+import { walletRechargeRouter, handleWalletRecharge } from "./routes/billing/recharge";
 
 // Re-export the Durable Object class so Cloudflare can find it
 export { AgentWorkflowManager } from "./durable_object";
@@ -196,6 +197,9 @@ app.route("/api/ga4", ga4Router);
 // ── Phase 49: Pinterest & Reddit OAuth (protected — JWT required) ──
 app.route("/api/pinterest", pinterestRouter);
 app.route("/api/reddit", redditRouter);
+
+// ── Phase 51: Media Wallet recharge routes (protected — JWT required) ──
+app.route("/api/billing/wallet", walletRechargeRouter);
 
 // ── Public Routes (no JWT required) ──
 // /health, /api/public/*, /api/billing/webhook, /api/webhooks/* are unprotected
@@ -3298,6 +3302,19 @@ async function handleScheduled(
         }
       })();
       ctx.waitUntil(weeklyDigestPromise);
+    }
+
+    // ── Phase 51: Hourly wallet auto-recharge check ──
+    if (cronPattern === "0 * * * *") {
+      const walletRechargePromise = (async () => {
+        try {
+          await handleWalletRecharge(env);
+          console.log("[Swarme Cron] Wallet auto-recharge check complete");
+        } catch (err) {
+          console.error("[Swarme Cron] Wallet recharge failed:", err);
+        }
+      })();
+      ctx.waitUntil(walletRechargePromise);
     }
 
     const elapsed = Date.now() - startTime;

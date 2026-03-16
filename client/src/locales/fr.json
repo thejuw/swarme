@@ -26,7 +26,8 @@
     "revenue": "Revenus",
     "aiManager": "Manager IA",
     "missionControl": "Centre de Mission",
-    "offDomain": "Confiance Externe"
+    "offDomain": "Confiance Externe",
+    "wallet": "Portefeuille Média"
   },
   "footer": {
     "agentsActive": "{{count}} agents actifs"

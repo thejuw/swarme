@@ -26,7 +26,8 @@
     "revenue": "Ingresos",
     "aiManager": "Manager IA",
     "missionControl": "Centro de Misión",
-    "offDomain": "Confianza Externa"
+    "offDomain": "Confianza Externa",
+    "wallet": "Monedero Media"
   },
   "footer": {
     "agentsActive": "{{count}} agentes activos"

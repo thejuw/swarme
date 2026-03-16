@@ -1239,6 +1239,8 @@ export const queryKeys = {
     ["/api/projects", projectId, "off-domain"] as const,
   ugcCampaigns: (projectId: string) =>
     ["/api/projects", projectId, "ugc-campaigns"] as const,
+  wallet: (projectId: string) =>
+    ["/api/projects", projectId, "wallet"] as const,
 } as const;
 
 // ────────────────────────────────────────────
@@ -1839,5 +1841,69 @@ export async function dismissUGCCampaign(
   ledgerId: string
 ): Promise<{ success: boolean; status: string }> {
   const res = await apiRequest("POST", `/api/projects/${projectId}/ugc-campaigns/${ledgerId}/dismiss`);
+  return res.json();
+}
+
+// ────────────────────────────────────────────
+// Phase 51: Media Wallet types + wrappers
+// ────────────────────────────────────────────
+
+export interface WalletData {
+  id: string;
+  domain_id: string;
+  balance_cents: number;
+  currency: string;
+  auto_recharge_enabled: boolean;
+  recharge_threshold_cents: number;
+  recharge_amount_cents: number;
+  stripe_customer_id: string | null;
+  stripe_payment_method_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface WalletTransactionEntry {
+  id: string;
+  wallet_id: string;
+  amount_cents: number;
+  balance_after_cents: number;
+  type: "deposit" | "deduction" | "recharge" | "refund";
+  description: string;
+  reference_id: string;
+  created_at: string;
+}
+
+export interface WalletResponse {
+  success: boolean;
+  wallet: WalletData;
+  transactions: WalletTransactionEntry[];
+}
+
+export async function getWalletData(
+  projectId: string
+): Promise<WalletResponse> {
+  const res = await apiRequest("GET", `/api/projects/${projectId}/wallet`);
+  return res.json();
+}
+
+export async function topUpWallet(
+  projectId: string,
+  amountCents: number
+): Promise<{ success: boolean; amount_cents: number; new_balance_cents: number }> {
+  const res = await apiRequest("POST", `/api/projects/${projectId}/wallet/top-up`, {
+    amount_cents: amountCents,
+  });
+  return res.json();
+}
+
+export async function updateWalletSettings(
+  projectId: string,
+  settings: {
+    auto_recharge_enabled: boolean;
+    recharge_threshold_cents: number;
+    recharge_amount_cents: number;
+  }
+): Promise<{ success: boolean }> {
+  const res = await apiRequest("PATCH", `/api/projects/${projectId}/wallet/settings`, settings);
   return res.json();
 }

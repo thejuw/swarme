@@ -4052,5 +4052,116 @@ export async function registerRoutes(
     res.json({ success: true, status: "rejected" });
   });
 
+  // ─────────────────────────────────────────────────────────
+  // Phase 51: Media Wallet mock endpoints
+  // ─────────────────────────────────────────────────────────
+
+  const mockWallet = {
+    id: "wal_001",
+    domain_id: "dom_001",
+    balance_cents: 24750,
+    currency: "usd",
+    auto_recharge_enabled: false,
+    recharge_threshold_cents: 5000,
+    recharge_amount_cents: 25000,
+    stripe_customer_id: "cus_mock_abc123",
+    stripe_payment_method_id: "pm_mock_visa_4242",
+    created_at: "2026-01-15T10:00:00Z",
+    updated_at: new Date().toISOString(),
+  };
+
+  const mockWalletTransactions = [
+    {
+      id: "wtx_001",
+      wallet_id: "wal_001",
+      amount_cents: 25000,
+      balance_after_cents: 25000,
+      type: "deposit" as const,
+      description: "Initial wallet funding via Stripe",
+      reference_id: "pi_mock_initial_001",
+      created_at: "2026-01-15T10:00:00Z",
+    },
+    {
+      id: "wtx_002",
+      wallet_id: "wal_001",
+      amount_cents: -500,
+      balance_after_cents: 24500,
+      type: "deduction" as const,
+      description: "UGC brief dispatch — Organic Cotton Tee",
+      reference_id: "ugc_brief_001",
+      created_at: "2026-02-20T14:35:00Z",
+    },
+    {
+      id: "wtx_003",
+      wallet_id: "wal_001",
+      amount_cents: 10000,
+      balance_after_cents: 34500,
+      type: "deposit" as const,
+      description: "Manual top-up via Stripe",
+      reference_id: "pi_mock_topup_002",
+      created_at: "2026-03-01T09:15:00Z",
+    },
+    {
+      id: "wtx_004",
+      wallet_id: "wal_001",
+      amount_cents: -4250,
+      balance_after_cents: 30250,
+      type: "deduction" as const,
+      description: "Perplexity API outlay — Trend research batch",
+      reference_id: "api_batch_trend_003",
+      created_at: "2026-03-05T11:20:00Z",
+    },
+    {
+      id: "wtx_005",
+      wallet_id: "wal_001",
+      amount_cents: -5500,
+      balance_after_cents: 24750,
+      type: "deduction" as const,
+      description: "UGC creator payout — Recycled Denim Jacket campaign",
+      reference_id: "ugc_payout_004",
+      created_at: "2026-03-10T16:45:00Z",
+    },
+  ];
+
+  app.get("/api/projects/:projectId/wallet", (_req, res) => {
+    res.json({
+      success: true,
+      wallet: mockWallet,
+      transactions: mockWalletTransactions,
+    });
+  });
+
+  app.post("/api/projects/:projectId/wallet/top-up", (req, res) => {
+    const { amount_cents } = req.body;
+    if (!amount_cents || amount_cents < 500) {
+      return res.status(400).json({ success: false, error: "Minimum $5.00" });
+    }
+    mockWallet.balance_cents += amount_cents;
+    mockWallet.updated_at = new Date().toISOString();
+    const txn = {
+      id: `wtx_${Date.now()}`,
+      wallet_id: mockWallet.id,
+      amount_cents,
+      balance_after_cents: mockWallet.balance_cents,
+      type: "deposit" as const,
+      description: `Manual top-up — ${(amount_cents / 100).toFixed(2)} via Stripe`,
+      reference_id: `pi_mock_${Date.now()}`,
+      created_at: new Date().toISOString(),
+    };
+    mockWalletTransactions.push(txn);
+    console.log(`[Wallet] Top-up: +$${(amount_cents / 100).toFixed(2)} → new balance $${(mockWallet.balance_cents / 100).toFixed(2)}`);
+    res.json({ success: true, amount_cents, new_balance_cents: mockWallet.balance_cents });
+  });
+
+  app.patch("/api/projects/:projectId/wallet/settings", (req, res) => {
+    const { auto_recharge_enabled, recharge_threshold_cents, recharge_amount_cents } = req.body;
+    if (typeof auto_recharge_enabled === "boolean") mockWallet.auto_recharge_enabled = auto_recharge_enabled;
+    if (typeof recharge_threshold_cents === "number") mockWallet.recharge_threshold_cents = recharge_threshold_cents;
+    if (typeof recharge_amount_cents === "number") mockWallet.recharge_amount_cents = recharge_amount_cents;
+    mockWallet.updated_at = new Date().toISOString();
+    console.log(`[Wallet] Settings updated — auto_recharge: ${mockWallet.auto_recharge_enabled}, threshold: $${(mockWallet.recharge_threshold_cents / 100).toFixed(2)}, amount: $${(mockWallet.recharge_amount_cents / 100).toFixed(2)}`);
+    res.json({ success: true });
+  });
+
   return httpServer;
 }

@@ -26,7 +26,8 @@
     "revenue": "Revenue",
     "aiManager": "AI Manager",
     "missionControl": "Mission Control",
-    "offDomain": "Off-Domain Trust"
+    "offDomain": "Off-Domain Trust",
+    "wallet": "Media Wallet"
   },
   "footer": {
     "agentsActive": "{{count}} agents active"
