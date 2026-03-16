@@ -293,3 +293,228 @@ webhookRouter.post("/stripe", async (c) => {
   // Always ACK with 200 so Stripe marks delivery as successful
   return c.json({ received: true });
 });
+
+// ─────────────────────────────────────────────────────────────
+// Phase 41: Shopify Inventory Webhook
+// ─────────────────────────────────────────────────────────────
+//
+// POST /shopify/inventory
+//
+// Receives `inventory_levels/update` webhooks from Shopify.
+// Verifies HMAC-SHA256 signature using SHOPIFY_WEBHOOK_SECRET,
+// then stores the inventory level in CONFIG_KV so the Durable
+// Object can circuit-break on low-stock products.
+//
+// KV key pattern: `inventory:{product_url}`
+// KV value: JSON `{ available: number, updated_at: string, inventory_item_id: number, location_id: number }`
+//
+// Shopify payload shape (inventory_levels/update):
+//   { inventory_item_id, location_id, available, updated_at }
+//
+// To resolve inventory_item_id → product URL, we query Shopify's
+// Admin API. If the token is missing or the lookup fails, we still
+// store the level keyed by inventory_item_id as a fallback.
+// ─────────────────────────────────────────────────────────────
+
+interface ShopifyInventoryPayload {
+  inventory_item_id: number;
+  location_id: number;
+  available: number | null;
+  updated_at: string;
+}
+
+/**
+ * Verify Shopify HMAC-SHA256 signature (Web Crypto, edge-safe).
+ * Shared helper — identical to the one in index.ts for the orders webhook.
+ */
+async function verifyShopifyHmac(
+  rawBody: string,
+  hmacHeader: string,
+  secret: string
+): Promise<boolean> {
+  const encoder = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  const signature = await crypto.subtle.sign(
+    "HMAC",
+    key,
+    encoder.encode(rawBody)
+  );
+  const computed = btoa(
+    String.fromCharCode(...new Uint8Array(signature))
+  );
+  return computed === hmacHeader;
+}
+
+webhookRouter.post("/shopify/inventory", async (c) => {
+  // ── Step 1: Read raw body for HMAC verification ──
+  const rawBody = await c.req.text();
+  const hmacHeader = c.req.header("X-Shopify-Hmac-Sha256") ?? "";
+
+  // ── Step 2: Validate HMAC (skip if no secret — dev mode) ──
+  if (c.env.SHOPIFY_WEBHOOK_SECRET) {
+    const valid = await verifyShopifyHmac(
+      rawBody,
+      hmacHeader,
+      c.env.SHOPIFY_WEBHOOK_SECRET
+    );
+    if (!valid) {
+      console.error("[Inventory Webhook] Invalid Shopify HMAC signature");
+      return c.json({ success: false, error: "Invalid signature" }, 401);
+    }
+  }
+
+  try {
+    // ── Step 3: Parse the inventory payload ──
+    const payload = JSON.parse(rawBody) as ShopifyInventoryPayload;
+    const { inventory_item_id, location_id, available, updated_at } = payload;
+    const quantity = available ?? 0;
+
+    console.log(
+      `[Inventory Webhook] inventory_item_id=${inventory_item_id} ` +
+      `location_id=${location_id} available=${quantity}`
+    );
+
+    // ── Step 4: Resolve inventory_item_id → product handle/URL ──
+    // Try to find the associated Shopify product handle by querying
+    // the Shopify Admin API. This requires a per-project access token.
+    //
+    // Since webhooks are global (not project-scoped), we check the
+    // X-Shopify-Shop-Domain header to identify which project.
+    const shopDomain = c.req.header("X-Shopify-Shop-Domain") ?? "";
+    let productUrl = `shopify:inventory_item:${inventory_item_id}`;
+
+    if (shopDomain) {
+      // Attempt to find the project with this Shopify domain
+      const projectRow = await c.env.DB.prepare(
+        `SELECT id FROM Projects
+         WHERE shopify_domain = ?
+         LIMIT 1`
+      ).bind(shopDomain.replace(/^https?:\/\//, "").replace(/\/$/, "")).first<{ id: string }>();
+
+      if (projectRow) {
+        const accessToken = await c.env.CONFIG_KV.get(
+          `vault:project:${projectRow.id}:shopify_access_token`
+        );
+
+        if (accessToken) {
+          try {
+            // Query Shopify Admin API to resolve inventory_item → product
+            const shopifyRes = await fetch(
+              `https://${shopDomain}/admin/api/2024-01/inventory_items/${inventory_item_id}.json`,
+              {
+                headers: {
+                  "X-Shopify-Access-Token": accessToken,
+                  "Content-Type": "application/json",
+                },
+              }
+            );
+
+            if (shopifyRes.ok) {
+              const data = await shopifyRes.json() as {
+                inventory_item: {
+                  id: number;
+                  sku: string;
+                  tracked: boolean;
+                };
+              };
+
+              // Now get the product variant with this inventory_item_id
+              const variantRes = await fetch(
+                `https://${shopDomain}/admin/api/2024-01/variants.json?` +
+                `inventory_item_ids=${inventory_item_id}`,
+                {
+                  headers: {
+                    "X-Shopify-Access-Token": accessToken,
+                    "Content-Type": "application/json",
+                  },
+                }
+              );
+
+              if (variantRes.ok) {
+                const variantData = await variantRes.json() as {
+                  variants: Array<{
+                    product_id: number;
+                    id: number;
+                  }>;
+                };
+
+                if (variantData.variants?.[0]?.product_id) {
+                  const productId = variantData.variants[0].product_id;
+                  // Fetch the product handle
+                  const productRes = await fetch(
+                    `https://${shopDomain}/admin/api/2024-01/products/${productId}.json?fields=handle`,
+                    {
+                      headers: {
+                        "X-Shopify-Access-Token": accessToken,
+                        "Content-Type": "application/json",
+                      },
+                    }
+                  );
+
+                  if (productRes.ok) {
+                    const productData = await productRes.json() as {
+                      product: { handle: string };
+                    };
+                    productUrl = `https://${shopDomain}/products/${productData.product.handle}`;
+                  }
+                }
+              }
+            }
+          } catch (apiErr) {
+            // Shopify API lookup failed — fall back to inventory_item_id key
+            console.warn(
+              `[Inventory Webhook] Shopify API lookup failed for item ${inventory_item_id}: ` +
+              (apiErr instanceof Error ? apiErr.message : "Unknown error")
+            );
+          }
+        }
+      }
+    }
+
+    // ── Step 5: Store inventory level in CONFIG_KV ──
+    const kvKey = `inventory:${productUrl}`;
+    const kvValue = JSON.stringify({
+      available: quantity,
+      updated_at: updated_at || new Date().toISOString(),
+      inventory_item_id,
+      location_id,
+      product_url: productUrl,
+    });
+
+    await c.env.CONFIG_KV.put(kvKey, kvValue, {
+      // TTL of 24 hours — if Shopify stops sending webhooks,
+      // stale inventory data auto-expires rather than blocking indefinitely
+      expirationTtl: 86400,
+    });
+
+    console.log(
+      `[Inventory Webhook] Stored: ${kvKey} → available=${quantity}`
+    );
+
+    // Also store a reverse lookup: inventory_item_id → product_url
+    // so the DO can resolve product URLs from inventory_item_ids
+    await c.env.CONFIG_KV.put(
+      `inventory:item_map:${inventory_item_id}`,
+      productUrl,
+      { expirationTtl: 86400 }
+    );
+
+    return c.json({
+      success: true,
+      inventory_item_id,
+      product_url: productUrl,
+      available: quantity,
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Unknown error";
+    console.error(`[Inventory Webhook] Processing error: ${msg}`);
+    // Return 200 so Shopify doesn't retry indefinitely
+    return c.json({ success: false, error: msg });
+  }
+});

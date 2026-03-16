@@ -29,6 +29,8 @@ const MOCK_TASKS = [
   { id: "task_009", project_id: "proj_001", agent_type: "auditor", action: "Schema Validation", status: "Failed", task_description: "FAQ schema on /help rejected by Google — missing mainEntity", created_at: "2026-03-13T20:15:00", updated_at: "2026-03-13T20:15:00" },
   { id: "task_010", project_id: "proj_001", agent_type: "media", action: "Media Generation", status: "Completed", task_description: '[dalle3_r2] Generated 3/3 images for "Edge Computing in 2026" — stored in R2', created_at: "2026-03-13T20:52:30", updated_at: "2026-03-13T20:52:30" },
   { id: "task_011", project_id: "proj_001", agent_type: "media", action: "Media Generation", status: "Completed", task_description: '[dalle3_r2] Generated 2/2 images for "Serverless SEO Tools" — stored in R2', created_at: "2026-03-13T20:21:00", updated_at: "2026-03-13T20:21:00" },
+  { id: "task_012", project_id: "proj_001", agent_type: "orchestrator", action: "Inventory Check", status: "Low_Inventory", task_description: '[circuit-breaker] Aborted pipeline for "Cashmere Wrap Coat" — inventory qty 2 < threshold 5. Flagged Low_Inventory, compute rerouted.', created_at: "2026-03-13T20:10:00", updated_at: "2026-03-13T20:10:00" },
+  { id: "task_013", project_id: "proj_001", agent_type: "orchestrator", action: "Inventory Check", status: "Low_Inventory", task_description: '[circuit-breaker] Aborted pipeline for "Silk Midi Skirt" — inventory qty 0 (out of stock). Flagged Low_Inventory, compute rerouted.', created_at: "2026-03-13T20:05:00", updated_at: "2026-03-13T20:05:00" },
 ];
 
 const MOCK_VISIBILITY = [
@@ -3173,6 +3175,84 @@ export async function registerRoutes(
 
     link.status = "active";
     res.json({ success: true, link });
+  });
+
+  // ── Phase 41: Mock Inventory Webhook ──────────────────────────
+
+  const mockInventoryStore: Record<string, { available: number; updated_at: string; inventory_item_id: string; location_id: string; product_url: string }> = {
+    "https://sartelleatelier.com/products/cashmere-wrap-coat": {
+      available: 2,
+      updated_at: "2026-03-13T20:09:00Z",
+      inventory_item_id: "inv_90001",
+      location_id: "loc_001",
+      product_url: "https://sartelleatelier.com/products/cashmere-wrap-coat",
+    },
+    "https://sartelleatelier.com/products/silk-midi-skirt": {
+      available: 0,
+      updated_at: "2026-03-13T20:04:00Z",
+      inventory_item_id: "inv_90002",
+      location_id: "loc_001",
+      product_url: "https://sartelleatelier.com/products/silk-midi-skirt",
+    },
+    "https://sartelleatelier.com/products/leather-biker-jacket": {
+      available: 43,
+      updated_at: "2026-03-13T19:50:00Z",
+      inventory_item_id: "inv_90003",
+      location_id: "loc_001",
+      product_url: "https://sartelleatelier.com/products/leather-biker-jacket",
+    },
+  };
+
+  // POST /api/webhooks/shopify/inventory (mock — simulates Shopify inventory_levels/update)
+  app.post("/api/webhooks/shopify/inventory", (req, res) => {
+    const hmac = req.headers["x-shopify-hmac-sha256"];
+    if (!hmac) {
+      console.log("[Mock] Inventory webhook missing HMAC — accepting anyway in dev");
+    }
+    const body = req.body ?? {};
+    const inventoryItemId = body.inventory_item_id || "inv_unknown";
+    const available = body.available ?? 0;
+    const locationId = body.location_id || "loc_001";
+
+    // Find or create entry by inventory_item_id
+    let productUrl = Object.keys(mockInventoryStore).find(
+      (url) => mockInventoryStore[url].inventory_item_id === inventoryItemId
+    ) || `https://sartelleatelier.com/products/item-${inventoryItemId}`;
+
+    mockInventoryStore[productUrl] = {
+      available,
+      updated_at: new Date().toISOString(),
+      inventory_item_id: inventoryItemId,
+      location_id: locationId,
+      product_url: productUrl,
+    };
+
+    console.log(`[Mock] Inventory webhook: item=${inventoryItemId} qty=${available} url=${productUrl}`);
+
+    // If low inventory, push a task into MOCK_TASKS
+    if (available < 5) {
+      MOCK_TASKS.unshift({
+        id: `task_inv_${Date.now()}`,
+        project_id: "proj_001",
+        agent_type: "orchestrator",
+        action: "Inventory Check",
+        status: "Low_Inventory",
+        task_description: `[circuit-breaker] Inventory update: item ${inventoryItemId} qty ${available} < threshold 5. Flagged Low_Inventory, compute rerouted.`,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      });
+    }
+
+    res.json({ received: true, stored: { product_url: productUrl, available } });
+  });
+
+  // GET /api/inventory/status (mock — returns current inventory store for debugging)
+  app.get("/api/inventory/status", (_req, res) => {
+    const items = Object.values(mockInventoryStore).map((item) => ({
+      ...item,
+      low: item.available < 5,
+    }));
+    res.json({ success: true, items, count: items.length });
   });
 
   return httpServer;

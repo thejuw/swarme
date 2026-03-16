@@ -228,6 +228,8 @@ const KV_KEYS = {
   bigcommerceAccessToken: (projectId: string) => `vault:project:${projectId}:bigcommerce_access_token`,
   magentoAccessToken: (projectId: string) => `vault:project:${projectId}:magento_access_token`,
   indexNowKey: (projectId: string) => `vault:project:${projectId}:indexnow_key`,
+  /** Phase 41: Inventory level for a product URL (set by Shopify webhook) */
+  inventoryLevel: (productUrl: string) => `inventory:${productUrl}`,
 } as const;
 
 // ─────────────────────────────────────────────────────────────
@@ -270,6 +272,28 @@ class WorkflowTransitionError extends Error {
     this.name = "WorkflowTransitionError";
   }
 }
+
+/**
+ * Phase 41: Thrown when the circuit-breaker detects low inventory
+ * for the target product URL. This is a controlled abort, not a
+ * retryable error — the pipeline should stop and flag the task.
+ */
+class LowInventoryError extends Error {
+  productUrl: string;
+  available: number;
+  constructor(productUrl: string, available: number) {
+    super(
+      `Low inventory circuit-breaker: "${productUrl}" has ${available} units ` +
+      `(threshold: 5). Task aborted to prevent wasted compute.`
+    );
+    this.name = "LowInventoryError";
+    this.productUrl = productUrl;
+    this.available = available;
+  }
+}
+
+/** Phase 41: Minimum stock threshold — below this, pipeline aborts. */
+const INVENTORY_LOW_THRESHOLD = 5;
 
 // ─────────────────────────────────────────────────────────────
 // Durable Object Class
@@ -456,6 +480,11 @@ export class AgentWorkflowManager implements DurableObject {
       `Workflow triggered for keyword "${trigger.keyword}" by ${trigger.initiator}`
     );
 
+    // ── Phase 41: Inventory circuit-breaker ──
+    // If the keyword maps to a product URL with inventory data in KV,
+    // check stock level before burning compute on the full pipeline.
+    await this.checkInventoryLevel(trigger.projectId, trigger.keyword, trigger.metadata);
+
     // Execute the pipeline
     try {
       await this.transitionTo("RESEARCHING");
@@ -475,6 +504,44 @@ export class AgentWorkflowManager implements DurableObject {
 
       await this.evaluatePublishRouting();
     } catch (err) {
+      // ── Phase 41: Special handling for inventory circuit-breaker ──
+      if (err instanceof LowInventoryError) {
+        if (this.workflow) {
+          this.workflow.error = err.message;
+          this.workflow.failedAtStep = this.workflow.state;
+          this.workflow.state = "FAILED";
+          this.workflow.completedAt = new Date().toISOString();
+          await this.persistWorkflow();
+        }
+
+        await this.logTask(
+          trigger.projectId,
+          "orchestrator",
+          "Inventory Circuit-Breaker",
+          "Low_Inventory",
+          `[aborted] Product "${err.productUrl}" has only ${err.available} units in stock. ` +
+          `Swarm compute rerouted to next highest-priority roadmap item.`
+        );
+
+        // Autonomously reroute: log the reroute intent for the scheduler
+        // to pick up on the next cron cycle
+        await this.logTask(
+          trigger.projectId,
+          "orchestrator",
+          "Compute Rerouted",
+          "Completed",
+          `Low-stock abort for "${trigger.keyword}" — swarm capacity freed for next priority item`
+        );
+
+        return {
+          success: false,
+          state: "FAILED" as WorkflowState,
+          projectId: trigger.projectId,
+          keyword: trigger.keyword,
+          error: err.message,
+        };
+      }
+
       const message = err instanceof Error ? err.message : "Unknown pipeline error";
       const isRetryable = err instanceof ExternalAPIError && err.retryable;
 
@@ -509,6 +576,89 @@ export class AgentWorkflowManager implements DurableObject {
       keyword: trigger.keyword,
       ...(this.workflow?.error ? { error: this.workflow.error } : {}),
     };
+  }
+
+  // ───────────────────────────────────────────────────────────
+  // Phase 41: Inventory Circuit-Breaker
+  // ───────────────────────────────────────────────────────────
+
+  /**
+   * Checks CONFIG_KV for inventory data associated with the target
+   * keyword's product URL. If available quantity is below the
+   * threshold (5 units), throws LowInventoryError to abort the
+   * pipeline before any compute is wasted.
+   *
+   * Resolution strategy:
+   *   1. Check trigger.metadata.product_url directly (if provided)
+   *   2. Query D1 Content_Assets for a published_url matching the keyword
+   *   3. If no product URL is resolved, skip the check (non-product content)
+   */
+  private async checkInventoryLevel(
+    projectId: string,
+    keyword: string,
+    metadata?: Record<string, unknown>
+  ): Promise<void> {
+    // Strategy 1: Explicit product_url in trigger metadata
+    let productUrl = metadata?.product_url as string | undefined;
+
+    // Strategy 2: Lookup from Content_Assets by keyword
+    if (!productUrl) {
+      try {
+        const row = await this.env.DB.prepare(
+          `SELECT published_url FROM Content_Assets
+           WHERE project_id = ? AND keyword = ? AND published_url IS NOT NULL
+           ORDER BY created_at DESC LIMIT 1`
+        ).bind(projectId, keyword).first<{ published_url: string }>();
+
+        if (row?.published_url) {
+          productUrl = row.published_url;
+        }
+      } catch {
+        // D1 query failed — skip inventory check gracefully
+        return;
+      }
+    }
+
+    // No product URL resolved → not a product page → skip check
+    if (!productUrl) return;
+
+    // Lookup inventory level in KV
+    try {
+      const kvKey = KV_KEYS.inventoryLevel(productUrl);
+      const raw = await this.env.CONFIG_KV.get(kvKey);
+
+      if (!raw) {
+        // No inventory data for this URL — either not a tracked product
+        // or Shopify hasn't sent an update yet. Allow pipeline to proceed.
+        return;
+      }
+
+      const data = JSON.parse(raw) as {
+        available: number;
+        updated_at: string;
+        inventory_item_id: number;
+        location_id: number;
+        product_url: string;
+      };
+
+      if (data.available < INVENTORY_LOW_THRESHOLD) {
+        throw new LowInventoryError(productUrl, data.available);
+      }
+
+      // Inventory is healthy — log and continue
+      console.log(
+        `[Inventory Check] ${productUrl}: ${data.available} units in stock (threshold: ${INVENTORY_LOW_THRESHOLD}) — pipeline proceeds`
+      );
+    } catch (err) {
+      // Re-throw LowInventoryError (intentional abort)
+      if (err instanceof LowInventoryError) throw err;
+
+      // Any other error (KV read failure, JSON parse) — skip check gracefully
+      console.warn(
+        `[Inventory Check] KV lookup failed for ${productUrl}: ` +
+        (err instanceof Error ? err.message : "Unknown error")
+      );
+    }
   }
 
   // ───────────────────────────────────────────────────────────
@@ -748,7 +898,7 @@ export class AgentWorkflowManager implements DurableObject {
 
     try {
       // Retrieve OpenAI key from KV vault for DALL-E 3 calls
-      const openaiKey = await this.env.SWARME_KV.get(
+      const openaiKey = await this.env.CONFIG_KV.get(
         KV_KEYS.openaiKey(projectId)
       );
 

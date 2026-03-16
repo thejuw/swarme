@@ -33,6 +33,7 @@ import {
   Workflow,
   Send,
   BookOpen,
+  PackageX,
 } from "lucide-react";
 import type { Task, TasksResponse } from "@/lib/api";
 import { queryKeys, getTasks } from "@/lib/api";
@@ -117,6 +118,13 @@ const statusConfig: Record<string, StatusVisual> = {
     badge: "destructive",
     badgeClass: "",
     label: "failed",
+  },
+  Low_Inventory: {
+    icon: PackageX,
+    iconClass: "text-orange-400",
+    badge: "outline",
+    badgeClass: "border-orange-500/40 text-orange-400 bg-orange-500/10",
+    label: "low inventory",
   },
 };
 
