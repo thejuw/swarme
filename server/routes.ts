@@ -11,6 +11,47 @@ import { createServer, type Server } from "http";
 
 // ── Mock Data (matches D1 seed data from workers/migrations/0001_init.sql) ──
 
+// ── Phase 47: Mock Domains ──
+const MOCK_DOMAINS: Array<{
+  id: string;
+  user_id: string;
+  domain_url: string;
+  platform_type: string;
+  credentials_vault_id: string;
+  label: string;
+  created_at: string;
+}> = [
+  {
+    id: "dom_001",
+    user_id: "user_001",
+    domain_url: "https://sartelle-atelier.com",
+    platform_type: "shopify",
+    credentials_vault_id: "vault_sa_001",
+    label: "Sartelle Atelier",
+    created_at: "2026-03-01T00:00:00Z",
+  },
+  {
+    id: "dom_002",
+    user_id: "user_001",
+    domain_url: "https://blog.sartelle-atelier.com",
+    platform_type: "ghost",
+    credentials_vault_id: "vault_sa_002",
+    label: "Sartelle Blog",
+    created_at: "2026-03-05T00:00:00Z",
+  },
+  {
+    id: "dom_003",
+    user_id: "user_001",
+    domain_url: "https://edgestack.dev",
+    platform_type: "wordpress",
+    credentials_vault_id: "vault_es_001",
+    label: "EdgeStack Dev Blog",
+    created_at: "2026-03-08T00:00:00Z",
+  },
+];
+
+let domainIdCounter = 4;
+
 const MOCK_PROJECTS = [
   { id: "proj_001", name: "Swarme Marketing", domain: "swarme.io", mode: "copilot", is_active: 1, visibility_score: 50.0, active_agents: 12, created_at: "2026-03-01T00:00:00", updated_at: "2026-03-13T20:00:00" },
   { id: "proj_002", name: "EdgeStack Blog", domain: "edgestack.dev", mode: "autopilot", is_active: 1, visibility_score: 72.0, active_agents: 8, created_at: "2026-03-02T00:00:00", updated_at: "2026-03-13T18:00:00" },
@@ -3617,6 +3658,74 @@ export async function registerRoutes(
       created_at: task.created_at,
       updated_at: task.updated_at,
     });
+  });
+
+  // ════════════════════════════════════════════════════════════
+  // Phase 47: Domain CRUD endpoints
+  // ════════════════════════════════════════════════════════════
+
+  // GET /api/domains — list all domains for the authenticated user
+  app.get("/api/domains", (req, res) => {
+    // In mock mode, return all domains for user_001
+    const userId = "user_001";
+    const userDomains = MOCK_DOMAINS.filter((d) => d.user_id === userId);
+    res.json({ domains: userDomains });
+  });
+
+  // POST /api/domains — create a new domain
+  app.post("/api/domains", (req, res) => {
+    const { domain_url, platform_type, label, credentials } = req.body;
+    if (!domain_url || !platform_type) {
+      return res.status(400).json({ success: false, error: "domain_url and platform_type are required" });
+    }
+    const id = `dom_${String(domainIdCounter++).padStart(3, "0")}`;
+    const vaultId = credentials ? `vault_${id}` : "";
+    const newDomain = {
+      id,
+      user_id: "user_001",
+      domain_url,
+      platform_type: platform_type || "custom",
+      credentials_vault_id: vaultId,
+      label: label || "",
+      created_at: new Date().toISOString(),
+    };
+    MOCK_DOMAINS.push(newDomain);
+    res.status(201).json({ success: true, domain: newDomain });
+  });
+
+  // PATCH /api/domains/:domainId — update a domain
+  app.patch("/api/domains/:domainId", (req, res) => {
+    const { domainId } = req.params;
+    const idx = MOCK_DOMAINS.findIndex((d) => d.id === domainId);
+    if (idx === -1) {
+      return res.status(404).json({ success: false, error: "Domain not found" });
+    }
+    const domain = MOCK_DOMAINS[idx];
+    // Ownership check
+    if (domain.user_id !== "user_001") {
+      return res.status(403).json({ success: false, error: "Access denied" });
+    }
+    const { domain_url, platform_type, label, credentials } = req.body;
+    if (domain_url) domain.domain_url = domain_url;
+    if (platform_type) domain.platform_type = platform_type;
+    if (label !== undefined) domain.label = label;
+    if (credentials) domain.credentials_vault_id = `vault_${domainId}`;
+    MOCK_DOMAINS[idx] = domain;
+    res.json({ success: true, domain });
+  });
+
+  // DELETE /api/domains/:domainId — delete a domain
+  app.delete("/api/domains/:domainId", (req, res) => {
+    const { domainId } = req.params;
+    const idx = MOCK_DOMAINS.findIndex((d) => d.id === domainId);
+    if (idx === -1) {
+      return res.status(404).json({ success: false, error: "Domain not found" });
+    }
+    if (MOCK_DOMAINS[idx].user_id !== "user_001") {
+      return res.status(403).json({ success: false, error: "Access denied" });
+    }
+    MOCK_DOMAINS.splice(idx, 1);
+    res.json({ success: true });
   });
 
   return httpServer;

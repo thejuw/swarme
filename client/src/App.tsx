@@ -37,6 +37,8 @@ import PrivacyPolicy from "@/pages/legal/privacy-policy";
 import { getIntegrationStatus, queryKeys } from "@/lib/api";
 import { useEffect } from "react";
 import { usePublicSettings } from "@/hooks/use-public-settings";
+import { DomainProvider } from "@/context/DomainContext";
+import { DomainSwitcher } from "@/components/domain-switcher";
 
 // Phase 21: Admin pages
 import { AdminLayout } from "@/pages/admin/admin-layout";
@@ -184,6 +186,7 @@ function SidebarShell() {
                 <div className="flex items-center gap-2">
                   <SidebarTrigger data-testid="button-sidebar-toggle" />
                   <HeaderLabel />
+                  <DomainSwitcher />
                 </div>
                 <div className="flex items-center gap-2">
                   <SwarmControlToggle />
@@ -302,12 +305,14 @@ function App() {
     <ThemeProvider>
       <AuthProvider>
         <QueryClientProvider client={queryClient}>
-          <TooltipProvider>
-            <Router hook={useHashLocation}>
-              <LayoutRouter />
-            </Router>
-            <Toaster />
-          </TooltipProvider>
+          <DomainProvider>
+            <TooltipProvider>
+              <Router hook={useHashLocation}>
+                <LayoutRouter />
+              </Router>
+              <Toaster />
+            </TooltipProvider>
+          </DomainProvider>
         </QueryClientProvider>
       </AuthProvider>
     </ThemeProvider>

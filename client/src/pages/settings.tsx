@@ -49,6 +49,7 @@ import {
   Terminal,
 } from "lucide-react";
 import { generateApiKey } from "@/lib/api";
+import { DomainManagementCard } from "@/components/domain-management-card";
 
 // ── Types ──
 
@@ -913,6 +914,7 @@ export default function Settings() {
           <>
             <BillingCard workspace={workspaceData.workspace} />
             <NotificationPreferencesCard />
+            <DomainManagementCard />
             <CMSConnectionCard projectId={defaultProjectId} />
             <DeveloperApiCard workspace={workspaceData.workspace} />
           </>

@@ -44,6 +44,7 @@ import { handleGa4CroTrigger } from "./cron/ga4CroTrigger";
 import { incrementAbView, incrementAbConversion } from "./middleware/abSplit";
 import { calculateSignificance, evaluateAndConclude } from "./utils/statistics";
 import { apiAuth } from "./middleware/apiAuth";
+import { domainAuth } from "./middleware/domainAuth";
 import { v1Router } from "./routes/api/v1";
 
 // Re-export the Durable Object class so Cloudflare can find it
@@ -210,6 +211,7 @@ app.get("/health", (c) => {
 // ─────────────────────────────────────────────────────────────
 app.use("/api/projects/*", protectRoute());
 app.use("/api/user/*", protectRoute());
+app.use("/api/domains/*", protectRoute());
 app.use("/api/admin/*", requireSuperadmin());
 app.use("/api/manager/*", protectRoute());
 app.use("/api/billing/*", protectRoute());
@@ -687,6 +689,137 @@ app.post("/api/user/generate-api-key", async (c) => {
     console.error("[API Key] Generation error:", err);
     return c.json({ success: false, error: "Failed to generate API key" }, 500);
   }
+});
+
+// ─────────────────────────────────────────────────────────────
+// Phase 47: Domain CRUD — /api/domains (JWT protected above)
+// ─────────────────────────────────────────────────────────────
+
+/** GET /api/domains — list all domains for the authenticated user */
+app.get("/api/domains", async (c) => {
+  const userId = c.get("userId") as string;
+  const { results } = await c.env.DB.prepare(
+    "SELECT id, user_id, domain_url, platform_type, credentials_vault_id, label, created_at FROM Domains WHERE user_id = ?1 ORDER BY created_at ASC"
+  )
+    .bind(userId)
+    .all();
+  return c.json({ domains: results ?? [] });
+});
+
+/** POST /api/domains — create a new domain */
+app.post("/api/domains", async (c) => {
+  const userId = c.get("userId") as string;
+  const body = await c.req.json<{
+    domain_url: string;
+    platform_type: string;
+    label?: string;
+    credentials?: Record<string, string>;
+  }>();
+
+  if (!body.domain_url || !body.platform_type) {
+    return c.json({ success: false, error: "domain_url and platform_type are required" }, 400);
+  }
+
+  const id = `dom_${crypto.randomUUID().split("-")[0]}`;
+  const vaultId = body.credentials ? `vault_${id}` : "";
+
+  // Store credentials in KV if provided
+  if (body.credentials && vaultId) {
+    await c.env.CONFIG_KV.put(
+      `vault:${vaultId}`,
+      JSON.stringify(body.credentials)
+    );
+  }
+
+  await c.env.DB.prepare(
+    "INSERT INTO Domains (id, user_id, domain_url, platform_type, credentials_vault_id, label) VALUES (?1, ?2, ?3, ?4, ?5, ?6)"
+  )
+    .bind(id, userId, body.domain_url, body.platform_type, vaultId, body.label ?? "")
+    .run();
+
+  const domain = await c.env.DB.prepare(
+    "SELECT id, user_id, domain_url, platform_type, credentials_vault_id, label, created_at FROM Domains WHERE id = ?1"
+  )
+    .bind(id)
+    .first();
+
+  return c.json({ success: true, domain }, 201);
+});
+
+/** PATCH /api/domains/:domainId — update a domain (with ownership check) */
+app.patch("/api/domains/:domainId", domainAuth(), async (c) => {
+  const domainId = c.get("domainId") as string;
+  const body = await c.req.json<{
+    domain_url?: string;
+    platform_type?: string;
+    label?: string;
+    credentials?: Record<string, string>;
+  }>();
+
+  const sets: string[] = [];
+  const binds: string[] = [];
+  let idx = 1;
+
+  if (body.domain_url) {
+    sets.push(`domain_url = ?${idx}`);
+    binds.push(body.domain_url);
+    idx++;
+  }
+  if (body.platform_type) {
+    sets.push(`platform_type = ?${idx}`);
+    binds.push(body.platform_type);
+    idx++;
+  }
+  if (body.label !== undefined) {
+    sets.push(`label = ?${idx}`);
+    binds.push(body.label);
+    idx++;
+  }
+  if (body.credentials) {
+    const vaultId = c.get("vaultId") as string || `vault_${domainId}`;
+    await c.env.CONFIG_KV.put(
+      `vault:${vaultId}`,
+      JSON.stringify(body.credentials)
+    );
+    if (!c.get("vaultId")) {
+      sets.push(`credentials_vault_id = ?${idx}`);
+      binds.push(vaultId);
+      idx++;
+    }
+  }
+
+  if (sets.length > 0) {
+    binds.push(domainId);
+    const stmt = c.env.DB.prepare(
+      `UPDATE Domains SET ${sets.join(", ")} WHERE id = ?${idx}`
+    );
+    await stmt.bind(...binds).run();
+  }
+
+  const domain = await c.env.DB.prepare(
+    "SELECT id, user_id, domain_url, platform_type, credentials_vault_id, label, created_at FROM Domains WHERE id = ?1"
+  )
+    .bind(domainId)
+    .first();
+
+  return c.json({ success: true, domain });
+});
+
+/** DELETE /api/domains/:domainId — delete a domain (with ownership check) */
+app.delete("/api/domains/:domainId", domainAuth(), async (c) => {
+  const domainId = c.get("domainId") as string;
+  const vaultId = c.get("vaultId") as string;
+
+  // Clean up KV vault credentials
+  if (vaultId) {
+    await c.env.CONFIG_KV.delete(`vault:${vaultId}`);
+  }
+
+  await c.env.DB.prepare("DELETE FROM Domains WHERE id = ?1")
+    .bind(domainId)
+    .run();
+
+  return c.json({ success: true });
 });
 
 // ─────────────────────────────────────────────────────────────

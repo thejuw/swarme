@@ -1230,6 +1230,9 @@ export const queryKeys = {
     ["/api/projects", projectId, "outreach-campaigns"] as const,
   internalLinks: (projectId: string) =>
     ["/api/projects", projectId, "internal-links"] as const,
+  domains: () => ["/api/domains"] as const,
+  domainDetail: (domainId: string) =>
+    ["/api/domains", domainId] as const,
 } as const;
 
 // ────────────────────────────────────────────
@@ -1584,5 +1587,79 @@ export async function patchUserSettings(
   settings: Partial<UserDigestSettings>
 ): Promise<{ success: boolean; settings: UserDigestSettings }> {
   const res = await apiRequest("PATCH", "/api/user/settings", settings);
+  return res.json();
+}
+
+// ── Phase 47: Multi-Domain Management ────────────────────────
+
+export type PlatformType =
+  | "wordpress"
+  | "shopify"
+  | "wix"
+  | "squarespace"
+  | "magento"
+  | "woocommerce"
+  | "ghost"
+  | "joomla"
+  | "drupal"
+  | "prestashop"
+  | "opencart"
+  | "easywp"
+  | "weebly"
+  | "godaddy"
+  | "custom";
+
+export interface Domain {
+  id: string;
+  user_id: string;
+  domain_url: string;
+  platform_type: PlatformType;
+  credentials_vault_id: string;
+  label: string;
+  created_at: string;
+}
+
+export interface CreateDomainPayload {
+  domain_url: string;
+  platform_type: PlatformType;
+  label: string;
+  credentials?: Record<string, string>;
+}
+
+export interface UpdateDomainPayload {
+  domain_url?: string;
+  platform_type?: PlatformType;
+  label?: string;
+  credentials?: Record<string, string>;
+}
+
+/** List all domains for the authenticated user */
+export async function getDomains(): Promise<{ domains: Domain[] }> {
+  const res = await apiRequest("GET", "/api/domains");
+  return res.json();
+}
+
+/** Create a new domain */
+export async function createDomain(
+  payload: CreateDomainPayload
+): Promise<{ success: boolean; domain: Domain }> {
+  const res = await apiRequest("POST", "/api/domains", payload);
+  return res.json();
+}
+
+/** Update an existing domain */
+export async function updateDomain(
+  domainId: string,
+  payload: UpdateDomainPayload
+): Promise<{ success: boolean; domain: Domain }> {
+  const res = await apiRequest("PATCH", `/api/domains/${domainId}`, payload);
+  return res.json();
+}
+
+/** Delete a domain */
+export async function deleteDomain(
+  domainId: string
+): Promise<{ success: boolean }> {
+  const res = await apiRequest("DELETE", `/api/domains/${domainId}`);
   return res.json();
 }
