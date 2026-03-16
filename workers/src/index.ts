@@ -35,8 +35,11 @@ import { managerRouter } from "./routes/manager";
 import { webhookRouter } from "./routes/webhooks";
 import { billingRouter } from "./routes/billing";
 import { gscRouter } from "./routes/integrations/gsc";
+import { ga4Router } from "./routes/integrations/ga4";
 import { handleRetentionCron } from "./cron/retention";
 import { handleGscSync } from "./cron/gscSync";
+import { handleGa4Sync } from "./cron/ga4Sync";
+import { handleGa4CroTrigger } from "./cron/ga4CroTrigger";
 import { incrementAbView, incrementAbConversion } from "./middleware/abSplit";
 import { calculateSignificance, evaluateAndConclude } from "./utils/statistics";
 
@@ -173,6 +176,9 @@ app.route("/api/billing", billingRouter);
 // ── GSC Integration (protected — JWT required) ──
 app.route("/api/gsc", gscRouter);
 
+// ── GA4 Integration (protected — JWT required) ──
+app.route("/api/ga4", ga4Router);
+
 // ── Public Routes (no JWT required) ──
 // /health, /api/public/*, /api/billing/webhook, /api/webhooks/* are unprotected
 
@@ -205,6 +211,7 @@ app.use("/api/admin/*", requireSuperadmin());
 app.use("/api/manager/*", protectRoute());
 app.use("/api/billing/*", protectRoute());
 app.use("/api/gsc/*", protectRoute());
+app.use("/api/ga4/*", protectRoute());
 // Note: /api/webhooks/* is intentionally unprotected — Stripe signs its own payloads
 
 // ─────────────────────────────────────────────────────────────
@@ -2866,6 +2873,50 @@ async function handleScheduled(
         }
       })();
       ctx.waitUntil(gscPromise);
+    }
+
+    // ── Phase 42: Daily GA4 Sync + CRO Trigger (06:00 UTC) ──
+    if (cronPattern === "0 6 * * *") {
+      console.log("[Swarme Cron] Starting daily GA4 sync...");
+      const ga4Promise = (async () => {
+        try {
+          const syncResult = await handleGa4Sync(env);
+          console.log(
+            `[Swarme Cron] GA4 sync complete — ${syncResult.usersProcessed} users, ` +
+            `${syncResult.rowsUpserted} rows, ${syncResult.errors.length} errors`
+          );
+
+          if (syncResult.usersProcessed > 0) {
+            await env.DB.prepare(
+              `INSERT INTO Agent_Tasks (project_id, agent_type, action, status, task_description, result_payload)
+               VALUES ('system', 'ga4_sync', 'Daily GA4 Ingestion', 'Completed', ?1, ?2)`
+            ).bind(
+              `Synced ${syncResult.usersProcessed} users, ${syncResult.rowsUpserted} metric rows`,
+              JSON.stringify(syncResult)
+            ).run();
+          }
+
+          // Run CRO trigger after GA4 data is fresh
+          const croResult = await handleGa4CroTrigger(env);
+          console.log(
+            `[Swarme Cron] CRO trigger complete — ${croResult.roadmapItemsCreated} suggestions, ` +
+            `${croResult.alertsLogged} alerts`
+          );
+
+          if (croResult.roadmapItemsCreated > 0) {
+            await env.DB.prepare(
+              `INSERT INTO Agent_Tasks (project_id, agent_type, action, status, task_description, result_payload)
+               VALUES ('system', 'cro', 'GA4 Mobile CRO Analysis', 'Completed', ?1, ?2)`
+            ).bind(
+              `Analyzed ${croResult.projectsScanned} projects, found ${croResult.highBounceUrls} high-bounce pages, created ${croResult.roadmapItemsCreated} roadmap suggestions`,
+              JSON.stringify(croResult)
+            ).run();
+          }
+        } catch (err) {
+          console.error("[Swarme Cron] GA4 sync/CRO trigger failed:", err);
+        }
+      })();
+      ctx.waitUntil(ga4Promise);
     }
 
     // ── Phase 27: Daily Retention Scan (14:00 UTC) ──────────

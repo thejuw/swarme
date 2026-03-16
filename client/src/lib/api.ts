@@ -1014,6 +1014,50 @@ export async function disconnectGsc(): Promise<{ success: boolean }> {
 }
 
 // ────────────────────────────────────────────
+// Phase 42: GA4 Integration types + wrappers
+// ────────────────────────────────────────────
+
+export interface Ga4MetricRow {
+  page_path: string;
+  device_category: string;
+  date: string;
+  sessions: number;
+  bounce_rate: number;
+  avg_session_duration: number;
+  conversions: number;
+  conversion_rate: number;
+  country: string;
+}
+
+export interface Ga4MetricsResponse {
+  success: boolean;
+  metrics: Ga4MetricRow[];
+}
+
+export interface Ga4StatusResponse {
+  success: boolean;
+  connected: boolean;
+  property_id: string | null;
+}
+
+export async function getGa4Status(): Promise<Ga4StatusResponse> {
+  const res = await apiRequest("GET", "/api/ga4/status");
+  return res.json();
+}
+
+export async function disconnectGa4(): Promise<{ success: boolean }> {
+  const res = await apiRequest("DELETE", "/api/ga4/disconnect");
+  return res.json();
+}
+
+export async function getGa4Metrics(
+  projectId: string
+): Promise<Ga4MetricsResponse> {
+  const res = await apiRequest("GET", `/api/ga4/metrics?project_id=${projectId}`);
+  return res.json();
+}
+
+// ────────────────────────────────────────────
 // Phase 37: Action History, Rollback, Mission Control
 // ────────────────────────────────────────────
 
@@ -1151,6 +1195,9 @@ export const queryKeys = {
   gscMetrics: (projectId: string) =>
     ["/api/projects", projectId, "gsc-metrics"] as const,
   gscStatus: () => ["/api/gsc", "status"] as const,
+  ga4Status: () => ["/api/ga4", "status"] as const,
+  ga4Metrics: (projectId: string) =>
+    ["/api/ga4", "metrics", projectId] as const,
   abTests: (projectId: string) =>
     ["/api/projects", projectId, "ab-tests"] as const,
   adminUsers: () => ["/api/admin/users"] as const,

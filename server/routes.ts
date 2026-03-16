@@ -31,6 +31,8 @@ const MOCK_TASKS = [
   { id: "task_011", project_id: "proj_001", agent_type: "media", action: "Media Generation", status: "Completed", task_description: '[dalle3_r2] Generated 2/2 images for "Serverless SEO Tools" — stored in R2', created_at: "2026-03-13T20:21:00", updated_at: "2026-03-13T20:21:00" },
   { id: "task_012", project_id: "proj_001", agent_type: "orchestrator", action: "Inventory Check", status: "Low_Inventory", task_description: '[circuit-breaker] Aborted pipeline for "Cashmere Wrap Coat" — inventory qty 2 < threshold 5. Flagged Low_Inventory, compute rerouted.', created_at: "2026-03-13T20:10:00", updated_at: "2026-03-13T20:10:00" },
   { id: "task_013", project_id: "proj_001", agent_type: "orchestrator", action: "Inventory Check", status: "Low_Inventory", task_description: '[circuit-breaker] Aborted pipeline for "Silk Midi Skirt" — inventory qty 0 (out of stock). Flagged Low_Inventory, compute rerouted.', created_at: "2026-03-13T20:05:00", updated_at: "2026-03-13T20:05:00" },
+  { id: "task_014", project_id: "proj_001", agent_type: "cro", action: "Mobile UX Alert", status: "Completed", task_description: '[GA4 CRO] /products/cashmere-wrap-coat has 82% mobile bounce rate (47 sessions). UI/UX improvement suggestion added to Roadmap as "High mobile bounce on /products/cashmere-wrap-coat — UX audit needed".', created_at: "2026-03-13T20:03:00", updated_at: "2026-03-13T20:03:00" },
+  { id: "task_015", project_id: "proj_001", agent_type: "cro", action: "Mobile UX Alert", status: "Completed", task_description: '[GA4 CRO] /products/silk-midi-skirt has 76% mobile bounce rate (32 sessions). UI/UX improvement suggestion added to Roadmap as "Mobile bounce rate 76% on /products/silk-midi-skirt".', created_at: "2026-03-13T20:02:00", updated_at: "2026-03-13T20:02:00" },
 ];
 
 const MOCK_VISIBILITY = [
@@ -445,6 +447,96 @@ export async function registerRoutes(
   // DELETE /api/gsc/disconnect
   app.delete("/api/gsc/disconnect", (_req, res) => {
     res.json({ success: true });
+  });
+
+  // ── Phase 42: GA4 Integration Mock Routes ─────────────────
+
+  // GET /api/ga4/auth (mock — redirects to dashboard with mock success)
+  app.get("/api/ga4/auth", (_req, res) => {
+    res.redirect("/#/settings?ga4=connected&property=412345678");
+  });
+
+  // GET /api/ga4/callback (mock — simulates OAuth callback)
+  app.get("/api/ga4/callback", (_req, res) => {
+    res.redirect("/#/settings?ga4=connected&property=412345678");
+  });
+
+  // GET /api/ga4/status
+  app.get("/api/ga4/status", (_req, res) => {
+    res.json({
+      success: true,
+      connected: true,
+      property_id: "412345678",
+    });
+  });
+
+  // DELETE /api/ga4/disconnect
+  app.delete("/api/ga4/disconnect", (_req, res) => {
+    res.json({ success: true });
+  });
+
+  // GET /api/ga4/metrics — mock GA4 analytics data
+  app.get("/api/ga4/metrics", (_req, res) => {
+    const pages = [
+      "/blog/edge-computing-2026",
+      "/blog/serverless-seo",
+      "/products/cashmere-wrap-coat",
+      "/products/silk-midi-skirt",
+      "/collections/winter-2026",
+    ];
+    const devices = ["desktop", "mobile", "tablet"];
+    const countries = ["United States", "United Kingdom", "France", "Germany", "Canada"];
+    const metrics: any[] = [];
+    const now = new Date();
+
+    for (let i = 7; i >= 1; i--) {
+      const d = new Date(now);
+      d.setDate(d.getDate() - i);
+      const dateStr = d.toISOString().split("T")[0];
+
+      for (const page of pages) {
+        for (const device of devices) {
+          const isMobile = device === "mobile";
+          const isProduct = page.startsWith("/products");
+          const baseBounce = isMobile && isProduct ? 0.74 + Math.random() * 0.12 : 0.35 + Math.random() * 0.25;
+          const sessions = isMobile ? 15 + Math.floor(Math.random() * 40) : 25 + Math.floor(Math.random() * 60);
+          const avgDuration = isMobile ? 8 + Math.random() * 25 : 30 + Math.random() * 90;
+
+          metrics.push({
+            page_path: page,
+            device_category: device,
+            date: dateStr,
+            sessions,
+            bounce_rate: parseFloat(baseBounce.toFixed(4)),
+            avg_session_duration: parseFloat(avgDuration.toFixed(1)),
+            conversions: Math.floor(sessions * (0.02 + Math.random() * 0.06)),
+            conversion_rate: parseFloat((0.02 + Math.random() * 0.06).toFixed(4)),
+            country: "",
+          });
+        }
+      }
+
+      // Geo conversion data
+      for (const page of pages.slice(0, 3)) {
+        for (const country of countries) {
+          const sessions = 10 + Math.floor(Math.random() * 30);
+          const conversions = Math.floor(sessions * (0.01 + Math.random() * 0.08));
+          metrics.push({
+            page_path: page,
+            device_category: "all",
+            date: dateStr,
+            sessions,
+            bounce_rate: 0,
+            avg_session_duration: 0,
+            conversions,
+            conversion_rate: parseFloat((conversions / sessions).toFixed(4)),
+            country,
+          });
+        }
+      }
+    }
+
+    res.json({ success: true, metrics });
   });
 
   // GET /api/projects/:projectId/gsc-metrics — mock GSC data for charts
@@ -2737,6 +2829,7 @@ export async function registerRoutes(
     const integrations = [
       { id: "int_shopify", name: "Shopify", platform: "shopify", status: "connected", last_sync: "2026-03-15T20:00:00Z", sync_errors: 0 },
       { id: "int_gsc", name: "Google Search Console", platform: "gsc", status: "connected", last_sync: "2026-03-15T19:45:00Z", sync_errors: 0 },
+      { id: "int_ga4", name: "Google Analytics 4", platform: "ga4", status: "connected", last_sync: "2026-03-15T19:50:00Z", sync_errors: 0 },
       { id: "int_stripe", name: "Stripe", platform: "stripe", status: "connected", last_sync: "2026-03-15T20:10:00Z", sync_errors: 0 },
       { id: "int_openai", name: "OpenAI", platform: "openai", status: "connected", last_sync: "2026-03-15T20:15:00Z", sync_errors: 0 },
       { id: "int_perplexity", name: "Perplexity API", platform: "perplexity", status: "degraded", last_sync: "2026-03-15T18:30:00Z", sync_errors: 3 },

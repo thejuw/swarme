@@ -5,6 +5,7 @@ import { VisibilityScore } from "@/components/visibility-score";
 import { TrendRadar } from "@/components/trend-radar";
 import { SerpChart } from "@/components/serp-chart";
 import { GscConnectCard } from "@/components/gsc-connect-card";
+import { Ga4ConnectCard } from "@/components/ga4-connect-card";
 import { CopilotApprovalSheet } from "@/components/copilot-approval-sheet";
 import { PerplexityAttribution } from "@/components/PerplexityAttribution";
 import type { Task } from "@/lib/api";
@@ -34,6 +35,7 @@ export default function Dashboard() {
         <SerpChart />
         <div className="flex flex-col gap-4">
           <GscConnectCard />
+          <Ga4ConnectCard />
           <TrendRadar />
         </div>
       </div>
