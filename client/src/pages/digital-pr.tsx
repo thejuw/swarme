@@ -16,7 +16,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Button } from "@/components/ui/button";
 import {
   Table,
   TableBody,
@@ -46,13 +45,12 @@ import {
 const PROJECT_ID = "proj_001";
 
 const statusConfig: Record<string, { color: string; icon: React.ElementType }> = {
-  draft: { color: "bg-slate-500/10 text-slate-400 border-slate-500/25", icon: FileEdit },
-  pending_approval: { color: "bg-amber-500/10 text-amber-400 border-amber-500/25", icon: Clock },
-  approved: { color: "bg-blue-500/10 text-blue-400 border-blue-500/25", icon: CheckCircle2 },
-  sent: { color: "bg-emerald-500/10 text-emerald-400 border-emerald-500/25", icon: Send },
-  replied: { color: "bg-teal-500/10 text-teal-400 border-teal-500/25", icon: Mail },
-  rejected: { color: "bg-red-500/10 text-red-400 border-red-500/25", icon: XCircle },
-  link_placed: { color: "bg-green-500/10 text-green-400 border-green-500/25", icon: ExternalLink },
+  Draft: { color: "bg-slate-500/10 text-slate-400 border-slate-500/25", icon: FileEdit },
+  Approved: { color: "bg-blue-500/10 text-blue-400 border-blue-500/25", icon: CheckCircle2 },
+  Sent: { color: "bg-emerald-500/10 text-emerald-400 border-emerald-500/25", icon: Send },
+  Replied: { color: "bg-teal-500/10 text-teal-400 border-teal-500/25", icon: Mail },
+  Bounced: { color: "bg-amber-500/10 text-amber-400 border-amber-500/25", icon: Clock },
+  Declined: { color: "bg-red-500/10 text-red-400 border-red-500/25", icon: XCircle },
 };
 
 function formatStatus(s: string): string {
@@ -75,9 +73,9 @@ export default function DigitalPR() {
     ? campaigns
     : campaigns.filter((c) => c.status === statusFilter);
 
-  const totalSent = campaigns.filter((c) => c.status === "sent" || c.status === "replied" || c.status === "link_placed").length;
-  const totalLinked = campaigns.filter((c) => c.status === "link_placed").length;
-  const totalDraft = campaigns.filter((c) => c.status === "draft" || c.status === "pending_approval").length;
+  const totalSent = campaigns.filter((c) => c.status === "Sent" || c.status === "Replied").length;
+  const totalReplied = campaigns.filter((c) => c.status === "Replied").length;
+  const totalDraft = campaigns.filter((c) => c.status === "Draft" || c.status === "Approved").length;
 
   return (
     <div className="h-full flex flex-col" data-testid="page-digital-pr">
@@ -122,16 +120,16 @@ export default function DigitalPR() {
               </CardContent>
             </Card>
 
-            <Card className="border-border/50" data-testid="card-links-placed">
+            <Card className="border-border/50" data-testid="card-replied-count">
               <CardHeader className="flex flex-row items-center justify-between pb-1 space-y-0">
                 <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                  Links Placed
+                  Replied
                 </CardTitle>
-                <ExternalLink className="h-4 w-4 text-green-400" />
+                <Mail className="h-4 w-4 text-teal-400" />
               </CardHeader>
               <CardContent>
                 {isLoading ? <Skeleton className="h-8 w-16" /> : (
-                  <p className="text-2xl font-bold tabular-nums text-green-400">{totalLinked}</p>
+                  <p className="text-2xl font-bold tabular-nums text-teal-400">{totalReplied}</p>
                 )}
               </CardContent>
             </Card>
@@ -151,12 +149,12 @@ export default function DigitalPR() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Statuses</SelectItem>
-                    <SelectItem value="draft">Draft</SelectItem>
-                    <SelectItem value="pending_approval">Pending Approval</SelectItem>
-                    <SelectItem value="approved">Approved</SelectItem>
-                    <SelectItem value="sent">Sent</SelectItem>
-                    <SelectItem value="replied">Replied</SelectItem>
-                    <SelectItem value="link_placed">Link Placed</SelectItem>
+                    <SelectItem value="Draft">Draft</SelectItem>
+                    <SelectItem value="Approved">Approved</SelectItem>
+                    <SelectItem value="Sent">Sent</SelectItem>
+                    <SelectItem value="Replied">Replied</SelectItem>
+                    <SelectItem value="Bounced">Bounced</SelectItem>
+                    <SelectItem value="Declined">Declined</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -185,7 +183,7 @@ export default function DigitalPR() {
                   </TableHeader>
                   <TableBody>
                     {filtered.map((campaign) => {
-                      const sc = statusConfig[campaign.status] || statusConfig.draft;
+                      const sc = statusConfig[campaign.status] || statusConfig.Draft;
                       const StatusIcon = sc.icon;
                       return (
                         <TableRow key={campaign.id} data-testid={`pr-row-${campaign.id}`}>
@@ -204,7 +202,7 @@ export default function DigitalPR() {
                               "—"
                             )}
                           </TableCell>
-                          <TableCell className="text-sm">{campaign.contact_email || "—"}</TableCell>
+                          <TableCell className="text-sm">{campaign.target_email || "—"}</TableCell>
                           <TableCell>
                             <Badge variant="secondary" className="text-[10px] font-mono">
                               {campaign.keyword}
