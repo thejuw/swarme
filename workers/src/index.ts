@@ -33,6 +33,7 @@ import { cors } from "hono/cors";
 import { authRouter, protectRoute, requireSuperadmin } from "./auth";
 import { managerRouter } from "./routes/manager";
 import { webhookRouter } from "./routes/webhooks";
+import { catalogWebhookRouter } from "./routes/webhooks/catalog";
 import { billingRouter } from "./routes/billing";
 import { gscRouter } from "./routes/integrations/gsc";
 import { ga4Router } from "./routes/integrations/ga4";
@@ -178,8 +179,9 @@ app.use(
 app.route("/api/auth", authRouter);
 app.route("/api/manager", managerRouter);
 
-// ── Webhooks (public — Stripe verifies its own signature) ──
+// ── Webhooks (public — Stripe verifies its own signature, catalog verifies per-platform) ──
 app.route("/api/webhooks", webhookRouter);
+app.route("/api/webhooks/catalog", catalogWebhookRouter);
 
 // ── Billing (protected — JWT required, mounted after auth middleware) ──
 // Note: protectRoute() is applied via the /api/billing/* middleware below

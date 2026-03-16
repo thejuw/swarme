@@ -3962,5 +3962,95 @@ export async function registerRoutes(
     });
   });
 
+  // ── Phase 50: UGC Campaign Ledger mock routes ──
+
+  const mockUGCLedger: any[] = [
+    {
+      id: "ugc_a1b2c3d4",
+      domain_id: "dom_001",
+      product_id: "shopify_9281740",
+      product_name: "The Artisan Tote — Regenerative Leather",
+      product_url: "https://sartelle-atelier.com/products/artisan-tote",
+      product_description: "Hand-stitched regenerative leather tote bag, chrome-free tanning, organic cotton lining, Oeko-Tex certified. Designed in Paris, crafted in Tuscany.",
+      status: "suggested",
+      estimated_budget: 150,
+      creator_brief: "",
+      external_brief_id: "",
+      created_at: "2026-03-16T08:00:00Z",
+      updated_at: "2026-03-16T08:00:00Z",
+    },
+    {
+      id: "ugc_e5f6g7h8",
+      domain_id: "dom_001",
+      product_id: "shopify_9281755",
+      product_name: "Le Petit Crossbody — Upcycled Denim",
+      product_url: "https://sartelle-atelier.com/products/petit-crossbody",
+      product_description: "Compact crossbody bag made from upcycled Japanese selvedge denim. Brass hardware, adjustable strap, GOTS-certified organic cotton interior.",
+      status: "suggested",
+      estimated_budget: 150,
+      creator_brief: "",
+      external_brief_id: "",
+      created_at: "2026-03-16T09:30:00Z",
+      updated_at: "2026-03-16T09:30:00Z",
+    },
+    {
+      id: "ugc_i9j0k1l2",
+      domain_id: "dom_001",
+      product_id: "shopify_9280100",
+      product_name: "Signature Weekender — Mushroom Leather",
+      product_url: "https://sartelle-atelier.com/products/signature-weekender",
+      product_description: "Full-size weekender crafted from Mylo mycelium leather. Water-resistant finish, internal laptop sleeve, Bluesign certified.",
+      status: "in_progress",
+      estimated_budget: 150,
+      creator_brief: JSON.stringify({ talking_points: ["Mycelium leather innovation", "Travel-ready design"], geo_facts: ["First mycelium weekender in luxury segment"] }),
+      external_brief_id: "billo_brief_4421",
+      created_at: "2026-03-10T12:00:00Z",
+      updated_at: "2026-03-12T14:00:00Z",
+    },
+  ];
+
+  app.get("/api/projects/:projectId/ugc-campaigns", (req, res) => {
+    res.json({ success: true, entries: mockUGCLedger });
+  });
+
+  app.post("/api/projects/:projectId/ugc-campaigns/:ledgerId/approve", (req, res) => {
+    const { ledgerId } = req.params;
+    const entry = mockUGCLedger.find((e) => e.id === ledgerId);
+    if (entry) {
+      entry.status = "in_progress";
+      entry.updated_at = new Date().toISOString();
+      entry.creator_brief = JSON.stringify({
+        talking_points: [
+          `Introduce ${entry.product_name} and its unique sustainable materials`,
+          "Demonstrate unboxing and first impressions",
+          "Highlight craftsmanship and certifications",
+          "Compare to mainstream alternatives",
+          "Share honest pros/cons and final recommendation",
+        ],
+        geo_facts: [
+          `${entry.product_name} uses regenerative or upcycled materials`,
+          `${entry.product_name} is handcrafted in European ateliers`,
+          `${entry.product_name} holds Oeko-Tex / GOTS / Bluesign certification`,
+        ],
+        content_format: "60-90 second product review with unboxing",
+        deliverables: "3 videos: 1 YouTube long-form, 2 TikTok shorts",
+        budget: 150,
+      });
+      console.log(`[UGC] Approved & dispatched campaign for: ${entry.product_name}`);
+    }
+    res.json({ success: true, status: "in_progress" });
+  });
+
+  app.post("/api/projects/:projectId/ugc-campaigns/:ledgerId/dismiss", (req, res) => {
+    const { ledgerId } = req.params;
+    const entry = mockUGCLedger.find((e) => e.id === ledgerId);
+    if (entry) {
+      entry.status = "rejected";
+      entry.updated_at = new Date().toISOString();
+      console.log(`[UGC] Dismissed campaign for: ${entry.product_name}`);
+    }
+    res.json({ success: true, status: "rejected" });
+  });
+
   return httpServer;
 }

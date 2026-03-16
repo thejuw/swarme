@@ -6,9 +6,13 @@ import {
   getManagerRoadmap,
   deployRoadmapItem,
   updateRoadmapStatus,
+  getUGCCampaigns,
+  approveUGCCampaign,
+  dismissUGCCampaign,
   queryKeys,
   type ManagerChatMessage,
   type AIRoadmapItem,
+  type UGCCampaignEntry,
 } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -32,6 +36,10 @@ import {
   ChevronRight,
   ImageIcon,
   Eye,
+  Video,
+  DollarSign,
+  XCircle,
+  Package,
 } from "lucide-react";
 import {
   Dialog,
@@ -346,6 +354,94 @@ function RoadmapItemCard({
 }
 
 // ─────────────────────────────────────────────────────────────
+// UGC Campaign Action Card (Phase 50)
+// ─────────────────────────────────────────────────────────────
+
+function UGCCampaignCard({
+  entry,
+  onApprove,
+  onDismiss,
+  isApproving,
+}: {
+  entry: UGCCampaignEntry;
+  onApprove: (id: string) => void;
+  onDismiss: (id: string) => void;
+  isApproving: boolean;
+}) {
+  return (
+    <div
+      className="group relative p-3 rounded-lg border border-violet-400/30 bg-violet-400/5 hover:border-violet-400/50 transition-all"
+      data-testid={`ugc-campaign-${entry.id}`}
+    >
+      {/* Top glow */}
+      <div className="absolute -top-px -left-px -right-px h-px bg-gradient-to-r from-transparent via-violet-400/60 to-transparent" />
+
+      <div className="flex items-start justify-between gap-2 mb-1.5">
+        <div className="flex items-center gap-2">
+          <div className="h-6 w-6 rounded-md bg-violet-500/15 flex items-center justify-center">
+            <Package className="h-3.5 w-3.5 text-violet-400" />
+          </div>
+          <h4 className="text-sm font-medium leading-tight">
+            New Product Detected: {entry.product_name}
+          </h4>
+        </div>
+        <Badge variant="outline" className="text-[10px] font-mono gap-1 text-violet-400 border-violet-400/30 bg-violet-400/10">
+          <Video className="h-3 w-3" />
+          UGC
+        </Badge>
+      </div>
+
+      <p className="text-xs text-muted-foreground leading-relaxed mb-2.5">
+        I noticed you added this to the catalog. Would you like me to dispatch a
+        brief to our Creator Network (Billo/Insense) to generate 3 YouTube/TikTok
+        review videos for GEO seeding? Estimated budget: ${entry.estimated_budget}.
+      </p>
+
+      {/* Budget indicator */}
+      <div className="mb-2.5 flex items-center gap-2 px-2.5 py-1.5 rounded-md bg-violet-500/5 border border-violet-400/15">
+        <DollarSign className="h-3.5 w-3.5 text-violet-400" />
+        <span className="text-[11px] font-mono text-violet-300">
+          ${entry.estimated_budget} · 3 creator videos · YouTube + TikTok
+        </span>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <Button
+          size="sm"
+          variant="default"
+          className="h-7 text-xs gap-1.5 bg-violet-600 hover:bg-violet-700"
+          onClick={() => onApprove(entry.id)}
+          disabled={isApproving}
+          data-testid={`button-ugc-approve-${entry.id}`}
+        >
+          {isApproving ? (
+            <Loader2 className="h-3 w-3 animate-spin" />
+          ) : (
+            <Rocket className="h-3 w-3" />
+          )}
+          Approve & Fund
+        </Button>
+
+        <Button
+          size="sm"
+          variant="ghost"
+          className="h-7 text-xs gap-1.5 text-muted-foreground hover:text-destructive"
+          onClick={() => onDismiss(entry.id)}
+          data-testid={`button-ugc-dismiss-${entry.id}`}
+        >
+          <XCircle className="h-3 w-3" />
+          Dismiss
+        </Button>
+
+        <span className="text-[10px] text-muted-foreground font-mono ml-auto">
+          {new Date(entry.created_at).toLocaleDateString()}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
 // Roadmap Panel
 // ─────────────────────────────────────────────────────────────
 
@@ -356,6 +452,13 @@ function RoadmapPanel() {
     queryKey: queryKeys.managerRoadmap(PROJECT_ID),
     queryFn: () => getManagerRoadmap(PROJECT_ID),
     refetchInterval: 5000, // Poll for new items from AI
+  });
+
+  // Phase 50: UGC campaign suggestions query
+  const { data: ugcData } = useQuery({
+    queryKey: queryKeys.ugcCampaigns(PROJECT_ID),
+    queryFn: () => getUGCCampaigns(PROJECT_ID),
+    refetchInterval: 10000,
   });
 
   const deployMutation = useMutation({
@@ -386,6 +489,35 @@ function RoadmapPanel() {
       });
     },
   });
+
+  // Phase 50: UGC approve + dismiss mutations
+  const ugcApproveMutation = useMutation({
+    mutationFn: (ledgerId: string) => approveUGCCampaign(PROJECT_ID, ledgerId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.ugcCampaigns(PROJECT_ID) });
+      toast({
+        title: "Creator Brief Dispatched",
+        description: "The UGC campaign is now in progress. Briefs have been sent to the Creator Network.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Dispatch failed",
+        description: "Could not send the creator brief. Try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const ugcDismissMutation = useMutation({
+    mutationFn: (ledgerId: string) => dismissUGCCampaign(PROJECT_ID, ledgerId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.ugcCampaigns(PROJECT_ID) });
+      toast({ title: "Dismissed", description: "This product will not be suggested again." });
+    },
+  });
+
+  const ugcSuggested = (ugcData?.entries ?? []).filter((e) => e.status === "suggested");
 
   const items = data?.items ?? [];
   const suggested = items.filter((i) => i.status === "Suggested");
@@ -425,6 +557,32 @@ function RoadmapPanel() {
               <p className="text-xs">
                 Chat with the AI Manager to generate your growth roadmap.
               </p>
+            </div>
+          )}
+
+          {/* Phase 50: UGC Campaign Suggestions */}
+          {ugcSuggested.length > 0 && (
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <Video className="h-3.5 w-3.5 text-violet-400" />
+                <span className="text-xs font-semibold uppercase tracking-wider text-violet-400">
+                  UGC Campaigns
+                </span>
+                <Badge variant="outline" className="text-[10px] font-mono ml-auto text-violet-400 border-violet-400/30">
+                  {ugcSuggested.length}
+                </Badge>
+              </div>
+              <div className="space-y-2">
+                {ugcSuggested.map((entry) => (
+                  <UGCCampaignCard
+                    key={entry.id}
+                    entry={entry}
+                    onApprove={(id) => ugcApproveMutation.mutate(id)}
+                    onDismiss={(id) => ugcDismissMutation.mutate(id)}
+                    isApproving={ugcApproveMutation.isPending}
+                  />
+                ))}
+              </div>
             </div>
           )}
 

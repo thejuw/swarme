@@ -1237,6 +1237,8 @@ export const queryKeys = {
     ["/api/projects", projectId, "geo-analytics"] as const,
   offDomain: (projectId: string) =>
     ["/api/projects", projectId, "off-domain"] as const,
+  ugcCampaigns: (projectId: string) =>
+    ["/api/projects", projectId, "ugc-campaigns"] as const,
 } as const;
 
 // ────────────────────────────────────────────
@@ -1790,5 +1792,52 @@ export async function getOffDomainData(
   projectId: string
 ): Promise<OffDomainResponse> {
   const res = await apiRequest("GET", `/api/projects/${projectId}/off-domain`);
+  return res.json();
+}
+
+// ────────────────────────────────────────────
+// Phase 50: UGC Campaign Ledger types + wrappers
+// ────────────────────────────────────────────
+
+export interface UGCCampaignEntry {
+  id: string;
+  domain_id: string;
+  product_id: string;
+  product_name: string;
+  product_url: string;
+  product_description: string;
+  status: "suggested" | "approved" | "rejected" | "in_progress" | "completed";
+  estimated_budget: number;
+  creator_brief: string;
+  external_brief_id: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface UGCCampaignsResponse {
+  success: boolean;
+  entries: UGCCampaignEntry[];
+}
+
+export async function getUGCCampaigns(
+  projectId: string
+): Promise<UGCCampaignsResponse> {
+  const res = await apiRequest("GET", `/api/projects/${projectId}/ugc-campaigns`);
+  return res.json();
+}
+
+export async function approveUGCCampaign(
+  projectId: string,
+  ledgerId: string
+): Promise<{ success: boolean; status: string }> {
+  const res = await apiRequest("POST", `/api/projects/${projectId}/ugc-campaigns/${ledgerId}/approve`);
+  return res.json();
+}
+
+export async function dismissUGCCampaign(
+  projectId: string,
+  ledgerId: string
+): Promise<{ success: boolean; status: string }> {
+  const res = await apiRequest("POST", `/api/projects/${projectId}/ugc-campaigns/${ledgerId}/dismiss`);
   return res.json();
 }
