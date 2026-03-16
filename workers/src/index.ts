@@ -52,6 +52,8 @@ import { v1Router } from "./routes/api/v1";
 import { walletRechargeRouter, handleWalletRecharge } from "./routes/billing/recharge";
 import { handleDataSynthesizerCron } from "./cron/dataSynthesizer";
 import { llmsTxtRouter } from "./routes/llms-txt";
+import { runApiFuzzer } from "./tests/chaos/apiFuzzer";
+import { runLlmAttacker } from "./tests/chaos/llmAttacker";
 
 // Re-export the Durable Object class so Cloudflare can find it
 export { AgentWorkflowManager } from "./durable_object";
@@ -2933,6 +2935,187 @@ app.get("/api/projects/:projectId/gsc-metrics", async (c) => {
   }
 });
 
+// ─────────────────────────────────────────────────────────────
+// Phase 54: Chaos Swarm — Automated Red Teaming & Fuzzing
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * POST /api/admin/chaos/run — Trigger a full chaos test suite.
+ * Protected by requireSuperadmin middleware (line 238).
+ */
+app.post("/api/admin/chaos/run", async (c) => {
+  try {
+    const domainId = (c.req.query("domain_id") || "dom_001");
+    const workerUrl = new URL(c.req.url).origin;
+
+    console.log(`[Chaos Swarm] Manual trigger for domain=${domainId}`);
+
+    // Run both suites
+    const [fuzzResult, llmResult] = await Promise.all([
+      runApiFuzzer(c.env, domainId, workerUrl),
+      runLlmAttacker(c.env, domainId, workerUrl),
+    ]);
+
+    const totalTests = fuzzResult.total_tests + llmResult.total_tests;
+    const totalFailed = fuzzResult.failed + llmResult.failed;
+    const criticalFailures = fuzzResult.critical_failures + llmResult.critical_failures;
+
+    // Compute System Vulnerability Score (0-100, lower is better)
+    const vulnScore = Math.min(
+      100,
+      Math.round(
+        (criticalFailures * 25 + (totalFailed - criticalFailures) * 5) /
+          Math.max(totalTests, 1) *
+          100
+      )
+    );
+
+    return c.json({
+      success: true,
+      vulnerability_score: vulnScore,
+      summary: {
+        total_tests: totalTests,
+        passed: fuzzResult.passed + llmResult.passed,
+        failed: totalFailed,
+        critical_failures: criticalFailures,
+      },
+      api_fuzz: {
+        run_id: fuzzResult.run_id,
+        total: fuzzResult.total_tests,
+        passed: fuzzResult.passed,
+        failed: fuzzResult.failed,
+        critical: fuzzResult.critical_failures,
+      },
+      llm_attack: {
+        run_id: llmResult.run_id,
+        total: llmResult.total_tests,
+        passed: llmResult.passed,
+        failed: llmResult.failed,
+        critical: llmResult.critical_failures,
+      },
+    });
+  } catch (err: any) {
+    console.error("[Chaos Swarm] Run error:", err?.message || err);
+    return c.json({ success: false, error: err?.message || "Unknown error" }, 500);
+  }
+});
+
+/**
+ * GET /api/admin/chaos/logs — Retrieve chaos test results.
+ * Supports ?run_id, ?test_type, ?severity, ?passed filters.
+ */
+app.get("/api/admin/chaos/logs", async (c) => {
+  try {
+    const domainId = c.req.query("domain_id") || "dom_001";
+    const runId = c.req.query("run_id");
+    const testType = c.req.query("test_type");
+    const severity = c.req.query("severity");
+    const passedFilter = c.req.query("passed");
+    const limit = Math.min(parseInt(c.req.query("limit") || "200"), 500);
+
+    let sql = "SELECT * FROM Chaos_Logs WHERE domain_id = ?1";
+    const bindings: any[] = [domainId];
+    let idx = 2;
+
+    if (runId) {
+      sql += ` AND run_id = ?${idx}`;
+      bindings.push(runId);
+      idx++;
+    }
+    if (testType) {
+      sql += ` AND test_type = ?${idx}`;
+      bindings.push(testType);
+      idx++;
+    }
+    if (severity) {
+      sql += ` AND severity = ?${idx}`;
+      bindings.push(severity);
+      idx++;
+    }
+    if (passedFilter !== undefined && passedFilter !== null) {
+      sql += ` AND passed = ?${idx}`;
+      bindings.push(passedFilter === "true" ? 1 : 0);
+      idx++;
+    }
+
+    sql += " ORDER BY created_at DESC";
+    sql += ` LIMIT ?${idx}`;
+    bindings.push(limit);
+
+    const stmt = c.env.DB.prepare(sql);
+    const { results } = await stmt.bind(...bindings).all();
+
+    return c.json({
+      success: true,
+      logs: results || [],
+      total: (results || []).length,
+    });
+  } catch (err: any) {
+    console.error("[Chaos Logs] Query error:", err?.message || err);
+    return c.json({ success: false, error: err?.message || "Unknown error" }, 500);
+  }
+});
+
+/**
+ * GET /api/admin/chaos/score — Current System Vulnerability Score.
+ * Computed from the most recent chaos run.
+ */
+app.get("/api/admin/chaos/score", async (c) => {
+  try {
+    const domainId = c.req.query("domain_id") || "dom_001";
+
+    // Get the latest run_id
+    const latestRun = await c.env.DB.prepare(
+      "SELECT run_id FROM Chaos_Logs WHERE domain_id = ?1 ORDER BY created_at DESC LIMIT 1"
+    ).bind(domainId).first<{ run_id: string }>();
+
+    if (!latestRun) {
+      return c.json({
+        success: true,
+        vulnerability_score: 0,
+        last_run: null,
+        message: "No chaos tests have been run yet",
+      });
+    }
+
+    // Get stats for that run
+    const stats = await c.env.DB.prepare(
+      `SELECT
+         COUNT(*) as total,
+         SUM(CASE WHEN passed = 0 THEN 1 ELSE 0 END) as failed,
+         SUM(CASE WHEN passed = 0 AND severity = 'critical' THEN 1 ELSE 0 END) as critical
+       FROM Chaos_Logs WHERE domain_id = ?1 AND run_id = ?2`
+    ).bind(domainId, latestRun.run_id).first<{
+      total: number;
+      failed: number;
+      critical: number;
+    }>();
+
+    const total = stats?.total || 0;
+    const failed = stats?.failed || 0;
+    const critical = stats?.critical || 0;
+
+    const vulnScore = Math.min(
+      100,
+      Math.round(
+        (critical * 25 + (failed - critical) * 5) / Math.max(total, 1) * 100
+      )
+    );
+
+    return c.json({
+      success: true,
+      vulnerability_score: vulnScore,
+      last_run: latestRun.run_id,
+      total_tests: total,
+      failed,
+      critical,
+    });
+  } catch (err: any) {
+    console.error("[Chaos Score] Error:", err?.message || err);
+    return c.json({ success: false, error: err?.message || "Unknown error" }, 500);
+  }
+});
+
 // ── Error Handler ──
 app.onError((err, c) => {
   console.error(`[Swarme Error] ${c.req.method} ${c.req.path}:`, err);
@@ -3339,6 +3522,50 @@ async function handleScheduled(
         }
       })();
       ctx.waitUntil(synthesizerPromise);
+    }
+
+    // ── Phase 54: Weekly Chaos Swarm (Sundays 04:00 UTC) ──
+    if (cronPattern === "0 4 * * 0") {
+      console.log("[Swarme Cron] Starting weekly chaos swarm red team...");
+      const chaosPromise = (async () => {
+        try {
+          const workerUrl = "https://swarme-worker." + (env.CF_PAGES_URL || "workers.dev");
+
+          for (const project of projects) {
+            const domainId = project.id;
+            const [fuzzResult, llmResult] = await Promise.all([
+              runApiFuzzer(env, domainId, workerUrl),
+              runLlmAttacker(env, domainId, workerUrl),
+            ]);
+
+            const criticalFailures = fuzzResult.critical_failures + llmResult.critical_failures;
+
+            console.log(
+              `[Chaos Swarm] ${project.name}: ${fuzzResult.total_tests + llmResult.total_tests} tests, ` +
+              `${criticalFailures} critical failures`
+            );
+
+            // Critical SMS alert if race condition or XSS escape detected
+            if (criticalFailures > 0) {
+              console.error(
+                `[CHAOS ALERT] CRITICAL: ${criticalFailures} vulnerability(ies) detected for ${project.name}. ` +
+                `Immediate remediation required.`
+              );
+              // SMS alert would fire here via Twilio binding when configured
+            }
+          }
+
+          await env.DB.prepare(
+            `INSERT INTO Agent_Tasks (project_id, agent_type, action, status, task_description)
+             VALUES ('system', 'chaos_swarm', 'Weekly Red Team Scan', 'Completed', ?1)`
+          ).bind(
+            `Chaos swarm completed for ${projects.length} project(s)`
+          ).run();
+        } catch (err) {
+          console.error("[Swarme Cron] Chaos swarm failed:", err);
+        }
+      })();
+      ctx.waitUntil(chaosPromise);
     }
 
     const elapsed = Date.now() - startTime;

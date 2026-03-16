@@ -54,6 +54,7 @@ import AdminUsers from "@/pages/admin/admin-users";
 import AdminVault from "@/pages/admin/admin-vault";
 import AdminEcosystem from "@/pages/admin/admin-ecosystem";
 import AdminSettings from "@/pages/admin/admin-settings";
+import ChaosReport from "@/pages/admin/chaos-report";
 
 function HeaderLabel() {
   const { t } = useTranslation();
@@ -304,6 +305,10 @@ function LayoutRouter() {
       </Route>
       <Route path="/admin/settings">
         <AdminLayout><AdminSettings /></AdminLayout>
+      </Route>
+      {/* Phase 54: Hidden chaos report — superadmin only */}
+      <Route path="/admin/chaos">
+        <AdminLayout><ChaosReport /></AdminLayout>
       </Route>
 
       {/* All other routes go through sidebar shell (protected) */}

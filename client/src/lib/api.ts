@@ -1990,3 +1990,80 @@ export type WalletTransactionEntry = CreditLedgerEntry;
 export const getWalletData = getCreditData;
 export const topUpWallet = purchaseCredits;
 export const updateWalletSettings = updateCreditSettings;
+
+// ────────────────────────────────────────────
+// Phase 54: Chaos Swarm types + wrappers
+// ────────────────────────────────────────────
+
+export interface ChaosLog {
+  id: string;
+  domain_id: string;
+  test_type: "api_fuzz" | "race_condition" | "prompt_injection" | "xss_escape";
+  severity: "critical" | "high" | "medium" | "low" | "info";
+  test_name: string;
+  payload: string | null;
+  expected: string;
+  actual: string;
+  passed: number;
+  metadata: string | null;
+  run_id: string;
+  created_at: string;
+}
+
+export interface ChaosLogsResponse {
+  success: boolean;
+  logs: ChaosLog[];
+  total: number;
+}
+
+export interface ChaosScoreResponse {
+  success: boolean;
+  vulnerability_score: number;
+  last_run: string | null;
+  total_tests?: number;
+  failed?: number;
+  critical?: number;
+  message?: string;
+}
+
+export interface ChaosRunSummary {
+  total_tests: number;
+  passed: number;
+  failed: number;
+  critical_failures: number;
+}
+
+export interface ChaosRunResponse {
+  success: boolean;
+  vulnerability_score: number;
+  summary: ChaosRunSummary;
+  api_fuzz: { run_id: string; total: number; passed: number; failed: number; critical: number };
+  llm_attack: { run_id: string; total: number; passed: number; failed: number; critical: number };
+}
+
+export async function getChaosScore(
+  domainId = "dom_001"
+): Promise<ChaosScoreResponse> {
+  const res = await apiRequest("GET", `/api/admin/chaos/score?domain_id=${domainId}`);
+  return res.json();
+}
+
+export async function getChaosLogs(
+  domainId = "dom_001",
+  filters?: { test_type?: string; severity?: string; passed?: string; limit?: number }
+): Promise<ChaosLogsResponse> {
+  const params = new URLSearchParams({ domain_id: domainId });
+  if (filters?.test_type && filters.test_type !== "all") params.set("test_type", filters.test_type);
+  if (filters?.severity && filters.severity !== "all") params.set("severity", filters.severity);
+  if (filters?.passed !== undefined) params.set("passed", filters.passed);
+  if (filters?.limit) params.set("limit", String(filters.limit));
+  const res = await apiRequest("GET", `/api/admin/chaos/logs?${params.toString()}`);
+  return res.json();
+}
+
+export async function runChaosSuite(
+  domainId = "dom_001"
+): Promise<ChaosRunResponse> {
+  const res = await apiRequest("POST", `/api/admin/chaos/run?domain_id=${domainId}`);
+  return res.json();
+}
