@@ -18,7 +18,6 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { PerplexityAttribution } from "@/components/PerplexityAttribution";
 import {
   AreaChart,
   Area,
@@ -362,7 +361,6 @@ export default function ROIDashboard() {
       {/* Top performers */}
       <TopPerformersTable assets={data.top_assets} currency={data.currency} />
 
-      <PerplexityAttribution />
     </div>
   );
 }

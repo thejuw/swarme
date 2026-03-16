@@ -648,12 +648,10 @@ export default function FreeAnalyzer() {
       {/* Footer attribution */}
       <footer className="text-center py-6 text-xs text-muted-foreground">
         <a
-          href="https://www.perplexity.ai/computer"
           target="_blank"
           rel="noopener noreferrer"
           className="hover:text-foreground transition-colors"
         >
-          Created with Perplexity Computer
         </a>
       </footer>
     </div>

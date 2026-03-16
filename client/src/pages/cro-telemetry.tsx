@@ -20,7 +20,6 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
-import { PerplexityAttribution } from "@/components/PerplexityAttribution";
 import {
   BarChart,
   Bar,
@@ -439,7 +438,6 @@ export default function CROTelemetry() {
       {/* Full asset table */}
       <AssetTable assets={assets} />
 
-      <PerplexityAttribution />
     </div>
   );
 }

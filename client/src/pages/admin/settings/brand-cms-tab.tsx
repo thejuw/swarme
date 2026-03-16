@@ -31,7 +31,7 @@ import {
 } from "@/components/ui/select";
 import { DataTable, type DataColumn } from "@/components/admin/data-table";
 import { useToast } from "@/hooks/use-toast";
-import { Save, Plus, Pencil, Trash2, Globe, FileText, HelpCircle, Sparkles } from "lucide-react";
+import { Save, Plus, Pencil, Trash2, Globe, FileText, HelpCircle, Sparkles, Link2, Building2 } from "lucide-react";
 
 interface SiteSettings {
   site_name: string;
@@ -42,6 +42,30 @@ interface SiteSettings {
   hero_subheadline: string;
   social_links: { twitter: string; linkedin: string; github: string };
   seo_metadata: { title: string; description: string; og_image: string };
+}
+
+interface FooterLink {
+  label: string;
+  href: string;
+  external: boolean;
+  visible: boolean;
+}
+
+interface FooterColumn {
+  title: string;
+  links: FooterLink[];
+}
+
+interface CompanyInfo {
+  mission: string;
+  support_email: string;
+  address: string;
+  social: { x: string; linkedin: string; discord: string };
+}
+
+interface FooterConfig {
+  columns: FooterColumn[];
+  company_info: CompanyInfo;
 }
 
 interface CmsPost {
@@ -301,6 +325,9 @@ export function BrandCmsTab() {
         )}
       </section>
 
+      {/* ── Footer Management ── */}
+      <FooterManagement />
+
       {/* ── CMS Posts ── */}
       <section className="space-y-3">
         <div className="flex items-center justify-between">
@@ -358,6 +385,239 @@ export function BrandCmsTab() {
         />
       </section>
     </div>
+  );
+}
+
+/** Footer Management sub-component */
+function FooterManagement() {
+  const { toast } = useToast();
+
+  const footerQuery = useQuery<{ success: boolean; footer: FooterConfig }>({
+    queryKey: ["/api/admin/footer"],
+  });
+
+  const footer = footerQuery.data?.footer;
+  const [companyForm, setCompanyForm] = useState<Partial<CompanyInfo>>({});
+  const [linkEdits, setLinkEdits] = useState<FooterColumn[] | null>(null);
+
+  // Merge fetched with local edits
+  const currentCompany = { ...footer?.company_info, ...companyForm } as CompanyInfo;
+  const currentColumns = linkEdits ?? footer?.columns ?? [];
+
+  const saveFooter = useMutation({
+    mutationFn: async (data: Partial<FooterConfig>) => {
+      const res = await apiRequest("POST", "/api/admin/footer", data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/footer"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/public/footer"] });
+      setCompanyForm({});
+      setLinkEdits(null);
+      toast({ title: "Footer saved" });
+    },
+  });
+
+  const isDirty = Object.keys(companyForm).length > 0 || linkEdits !== null;
+
+  const handleCompanyField = (key: string, value: string) => {
+    setCompanyForm((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handleSocialField = (key: string, value: string) => {
+    setCompanyForm((prev) => ({
+      ...prev,
+      social: { ...currentCompany.social, ...(prev.social || {}), [key]: value },
+    }));
+  };
+
+  const handleLinkField = (colIdx: number, linkIdx: number, field: keyof FooterLink, value: string | boolean) => {
+    const cols = JSON.parse(JSON.stringify(currentColumns)) as FooterColumn[];
+    (cols[colIdx].links[linkIdx] as any)[field] = value;
+    setLinkEdits(cols);
+  };
+
+  const handleColumnTitle = (colIdx: number, value: string) => {
+    const cols = JSON.parse(JSON.stringify(currentColumns)) as FooterColumn[];
+    cols[colIdx].title = value;
+    setLinkEdits(cols);
+  };
+
+  const addLink = (colIdx: number) => {
+    const cols = JSON.parse(JSON.stringify(currentColumns)) as FooterColumn[];
+    cols[colIdx].links.push({ label: "New Link", href: "/", external: false, visible: true });
+    setLinkEdits(cols);
+  };
+
+  const removeLink = (colIdx: number, linkIdx: number) => {
+    const cols = JSON.parse(JSON.stringify(currentColumns)) as FooterColumn[];
+    cols[colIdx].links.splice(linkIdx, 1);
+    setLinkEdits(cols);
+  };
+
+  const handleSave = () => {
+    saveFooter.mutate({
+      columns: currentColumns,
+      company_info: currentCompany,
+    });
+  };
+
+  if (!footer) return null;
+
+  return (
+    <section className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-sm font-semibold flex items-center gap-1.5">
+            <Link2 className="h-3.5 w-3.5" />
+            Footer Management
+          </h3>
+          <p className="text-xs text-muted-foreground mt-0.5">Footer links, company info, and social accounts</p>
+        </div>
+        <Button
+          size="sm"
+          className="h-8 text-xs gap-1.5"
+          onClick={handleSave}
+          disabled={saveFooter.isPending || !isDirty}
+          data-testid="button-save-footer"
+        >
+          <Save className="h-3 w-3" />
+          {saveFooter.isPending ? "Saving..." : "Save Footer"}
+        </Button>
+      </div>
+
+      {/* Company info */}
+      <div className="border border-border/60 rounded-lg p-4 space-y-3">
+        <div className="flex items-center gap-1.5 text-xs font-medium text-foreground">
+          <Building2 className="h-3.5 w-3.5" />
+          Company Info
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="col-span-2 space-y-1.5">
+            <Label className="text-xs">Mission Statement</Label>
+            <Input
+              value={currentCompany.mission || ""}
+              onChange={(e) => handleCompanyField("mission", e.target.value)}
+              className="h-8 text-xs"
+              data-testid="input-footer-mission"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Support Email</Label>
+            <Input
+              value={currentCompany.support_email || ""}
+              onChange={(e) => handleCompanyField("support_email", e.target.value)}
+              className="h-8 text-xs"
+              data-testid="input-footer-email"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Address</Label>
+            <Input
+              value={currentCompany.address || ""}
+              onChange={(e) => handleCompanyField("address", e.target.value)}
+              className="h-8 text-xs"
+              data-testid="input-footer-address"
+            />
+          </div>
+        </div>
+        {/* Social links */}
+        <div className="grid grid-cols-3 gap-3">
+          <div className="space-y-1.5">
+            <Label className="text-xs">X (Twitter)</Label>
+            <Input
+              value={currentCompany.social?.x || ""}
+              onChange={(e) => handleSocialField("x", e.target.value)}
+              className="h-8 text-xs"
+              placeholder="https://x.com/..."
+              data-testid="input-footer-social-x"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">LinkedIn</Label>
+            <Input
+              value={currentCompany.social?.linkedin || ""}
+              onChange={(e) => handleSocialField("linkedin", e.target.value)}
+              className="h-8 text-xs"
+              placeholder="https://linkedin.com/..."
+              data-testid="input-footer-social-linkedin"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Discord</Label>
+            <Input
+              value={currentCompany.social?.discord || ""}
+              onChange={(e) => handleSocialField("discord", e.target.value)}
+              className="h-8 text-xs"
+              placeholder="https://discord.gg/..."
+              data-testid="input-footer-social-discord"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Footer columns / links */}
+      <div className="space-y-3">
+        {currentColumns.map((col, colIdx) => (
+          <div key={colIdx} className="border border-border/60 rounded-lg p-3 space-y-2">
+            <div className="flex items-center gap-2">
+              <Input
+                value={col.title}
+                onChange={(e) => handleColumnTitle(colIdx, e.target.value)}
+                className="h-7 text-xs font-medium w-48"
+                data-testid={`input-footer-col-title-${colIdx}`}
+              />
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs gap-1 ml-auto"
+                onClick={() => addLink(colIdx)}
+                data-testid={`button-footer-add-link-${colIdx}`}
+              >
+                <Plus className="h-3 w-3" />
+                Add
+              </Button>
+            </div>
+            <div className="space-y-1.5">
+              {col.links.map((link, linkIdx) => (
+                <div key={linkIdx} className="flex items-center gap-2">
+                  <Input
+                    value={link.label}
+                    onChange={(e) => handleLinkField(colIdx, linkIdx, "label", e.target.value)}
+                    className="h-7 text-xs w-32"
+                    placeholder="Label"
+                  />
+                  <Input
+                    value={link.href}
+                    onChange={(e) => handleLinkField(colIdx, linkIdx, "href", e.target.value)}
+                    className="h-7 text-xs flex-1 font-mono"
+                    placeholder="/path or https://..."
+                  />
+                  <div className="flex items-center gap-1.5">
+                    <Switch
+                      checked={link.visible !== false}
+                      onCheckedChange={(v) => handleLinkField(colIdx, linkIdx, "visible", v)}
+                      className="scale-75"
+                    />
+                    <span className="text-[10px] text-muted-foreground w-7">
+                      {link.visible !== false ? "On" : "Off"}
+                    </span>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 w-7 p-0 text-destructive hover:text-destructive"
+                    onClick={() => removeLink(colIdx, linkIdx)}
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 

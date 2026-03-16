@@ -2506,6 +2506,55 @@ export async function registerRoutes(
     hero_subheadline: "12 AI agents operating at the edge. They crawl, audit, fix, write, and publish — autonomously.",
     social_links: { twitter: "https://x.com/swarme", linkedin: "https://linkedin.com/company/swarme", github: "" },
     seo_metadata: { title: "Swarme — Autonomous SEO Swarm", description: "12 AI agents running 24/7 on Cloudflare Workers.", og_image: "" },
+    footer_links: [
+      {
+        title: "Product",
+        links: [
+          { label: "Features", href: "/#features", external: false, visible: true },
+          { label: "Integrations", href: "/developers", external: false, visible: true },
+          { label: "Pricing", href: "/#pricing", external: false, visible: true },
+          { label: "Developer Hub", href: "/developers", external: false, visible: true },
+          { label: "Changelog", href: "/developers", external: false, visible: true },
+        ],
+      },
+      {
+        title: "Resources",
+        links: [
+          { label: "Help Center", href: "/help", external: false, visible: true },
+          { label: "Documentation", href: "/developers", external: false, visible: true },
+          { label: "System Status", href: "https://status.swarme.io", external: true, visible: true },
+          { label: "Community", href: "https://discord.gg/swarme", external: true, visible: true },
+        ],
+      },
+      {
+        title: "Company",
+        links: [
+          { label: "About Us", href: "/about", external: false, visible: true },
+          { label: "Blog", href: "/about", external: false, visible: true },
+          { label: "Contact Us", href: "/contact", external: false, visible: true },
+          { label: "Careers", href: "/about", external: false, visible: true },
+        ],
+      },
+      {
+        title: "Legal & Security",
+        links: [
+          { label: "Security & Compliance", href: "/security", external: false, visible: true },
+          { label: "Terms of Service", href: "/terms", external: false, visible: true },
+          { label: "Privacy Policy", href: "/privacy", external: false, visible: true },
+          { label: "Cookie Settings", href: "/privacy", external: false, visible: true },
+        ],
+      },
+    ],
+    company_info: {
+      mission: "The autonomous SEO platform. 12 AI agents operating at the edge, 24/7.",
+      support_email: "support@swarme.io",
+      address: "San Francisco, CA",
+      social: {
+        x: "https://x.com/swarme",
+        linkedin: "https://linkedin.com/company/swarme",
+        discord: "https://discord.gg/swarme",
+      },
+    },
   };
 
   const cmsPosts: any[] = [
@@ -2595,6 +2644,52 @@ export async function registerRoutes(
         favicon_url: siteSettings.favicon_url,
         maintenance_mode: siteSettings.maintenance_mode,
         seo_metadata: siteSettings.seo_metadata,
+      },
+    });
+  });
+
+  // GET /api/public/footer — public footer configuration (cached)
+  app.get("/api/public/footer", (_req, res) => {
+    res.json({
+      success: true,
+      footer: {
+        columns: siteSettings.footer_links || [],
+        company_info: siteSettings.company_info || {},
+      },
+    });
+  });
+
+  // GET /api/admin/footer — full footer config for admin editing
+  app.get("/api/admin/footer", (req, res) => {
+    if (!requireMockSuperadmin(req, res)) return;
+    res.json({
+      success: true,
+      footer: {
+        columns: siteSettings.footer_links || [],
+        company_info: siteSettings.company_info || {},
+      },
+    });
+  });
+
+  // POST /api/admin/footer — update footer configuration
+  app.post("/api/admin/footer", (req, res) => {
+    if (!requireMockSuperadmin(req, res)) return;
+    const body = req.body || {};
+    if (body.columns) siteSettings.footer_links = body.columns;
+    if (body.company_info) siteSettings.company_info = body.company_info;
+    auditLog.unshift({
+      id: `aud_${Date.now()}`,
+      admin_id: "usr_001",
+      action: "footer.update",
+      target: "footer_config",
+      metadata: JSON.stringify(body),
+      created_at: new Date().toISOString(),
+    });
+    res.json({
+      success: true,
+      footer: {
+        columns: siteSettings.footer_links,
+        company_info: siteSettings.company_info,
       },
     });
   });

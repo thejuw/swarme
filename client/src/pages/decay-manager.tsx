@@ -13,7 +13,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Progress } from "@/components/ui/progress";
-import { PerplexityAttribution } from "@/components/PerplexityAttribution";
 import {
   Dialog,
   DialogContent,
@@ -502,7 +501,6 @@ export default function DecayManager() {
           isPending={approveMutation.isPending || discardMutation.isPending}
         />
 
-        <PerplexityAttribution />
       </div>
     </div>
   );

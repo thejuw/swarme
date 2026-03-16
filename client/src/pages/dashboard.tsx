@@ -7,7 +7,6 @@ import { SerpChart } from "@/components/serp-chart";
 import { GscConnectCard } from "@/components/gsc-connect-card";
 import { Ga4ConnectCard } from "@/components/ga4-connect-card";
 import { CopilotApprovalSheet } from "@/components/copilot-approval-sheet";
-import { PerplexityAttribution } from "@/components/PerplexityAttribution";
 import type { Task } from "@/lib/api";
 
 export default function Dashboard() {
@@ -40,7 +39,6 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <PerplexityAttribution />
 
       {/* Copilot Approval Sheet — slides in from right */}
       <CopilotApprovalSheet

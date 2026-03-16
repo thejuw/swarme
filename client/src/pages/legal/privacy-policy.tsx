@@ -50,7 +50,7 @@ export default function PrivacyPolicy() {
             </h2>
             <p>
               We collect information that you provide directly, as well as data generated
-              through your use of the Edge-Swarm platform:
+              through your use of the Swarme platform:
             </p>
             <ul className="list-disc list-inside mt-3 space-y-1.5">
               <li>
@@ -80,7 +80,7 @@ export default function PrivacyPolicy() {
               2. How We Use Your Data
             </h2>
             <p>
-              Your data is processed to deliver, maintain, and improve the Edge-Swarm platform:
+              Your data is processed to deliver, maintain, and improve the Swarme platform:
             </p>
             <ul className="list-disc list-inside mt-3 space-y-1.5">
               <li>
@@ -111,7 +111,7 @@ export default function PrivacyPolicy() {
               3. Third-Party Subprocessors
             </h2>
             <p>
-              We use the following third-party services to operate the Edge-Swarm platform. Each
+              We use the following third-party services to operate the Swarme platform. Each
               subprocessor has been evaluated for security and compliance:
             </p>
             <div className="mt-4 overflow-x-auto">
@@ -200,7 +200,7 @@ export default function PrivacyPolicy() {
             </ul>
             <p className="mt-3">
               To exercise any of these rights, send a request to{" "}
-              <span className="text-foreground font-medium">privacy@edge-swarm.com</span>. We will
+              <span className="text-foreground font-medium">privacy@swarme.io</span>. We will
               respond within 30 days. For GDPR requests, our Data Protection Officer can be reached
               at the same email address.
             </p>
@@ -212,7 +212,7 @@ export default function PrivacyPolicy() {
               6. Cookies & Tracking
             </h2>
             <p>
-              Edge-Swarm uses essential cookies for authentication and session management. Analytics
+              Swarme uses essential cookies for authentication and session management. Analytics
               cookies are only activated after you grant consent through our cookie banner. We do not
               use third-party advertising cookies. Our telemetry script respects the{" "}
               <code className="text-xs bg-muted px-1 py-0.5 rounded">
@@ -242,7 +242,7 @@ export default function PrivacyPolicy() {
             </h2>
             <p>
               For questions or concerns about this Privacy Policy, contact us at{" "}
-              <span className="text-foreground font-medium">privacy@edge-swarm.com</span>.
+              <span className="text-foreground font-medium">privacy@swarme.io</span>.
             </p>
           </section>
         </div>
@@ -252,7 +252,7 @@ export default function PrivacyPolicy() {
       <footer className="border-t border-border/40 py-6 mt-12">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 text-center">
           <p className="text-xs text-muted-foreground">
-            &copy; {new Date().getFullYear()} Edge-Swarm. All rights reserved.
+            &copy; {new Date().getFullYear()} Swarme. All rights reserved.
           </p>
         </div>
       </footer>

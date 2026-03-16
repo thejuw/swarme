@@ -34,6 +34,11 @@ import { LoginPage, SignupPage } from "@/pages/auth";
 import MagicLogin from "@/pages/magic-login";
 import TermsOfService from "@/pages/legal/terms-of-service";
 import PrivacyPolicy from "@/pages/legal/privacy-policy";
+import AboutPage from "@/pages/public/about";
+import ContactPage from "@/pages/public/contact";
+import SecurityPage from "@/pages/public/security";
+import HelpPage from "@/pages/public/help";
+import DevelopersPage from "@/pages/public/developers";
 import { getIntegrationStatus, queryKeys } from "@/lib/api";
 import { useEffect } from "react";
 import { usePublicSettings } from "@/hooks/use-public-settings";
@@ -267,6 +272,11 @@ function LayoutRouter() {
       <Route path="/magic-login/:token?" component={MagicLogin} />
       <Route path="/terms" component={TermsOfService} />
       <Route path="/privacy" component={PrivacyPolicy} />
+      <Route path="/about" component={AboutPage} />
+      <Route path="/contact" component={ContactPage} />
+      <Route path="/security" component={SecurityPage} />
+      <Route path="/help" component={HelpPage} />
+      <Route path="/developers" component={DevelopersPage} />
 
       {/* Protected standalone (no sidebar but requires auth) */}
       <Route path="/connect-store">
