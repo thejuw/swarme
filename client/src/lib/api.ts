@@ -1546,3 +1546,20 @@ export async function restoreInternalLink(
   const res = await apiRequest("POST", `/api/projects/${projectId}/internal-links/${linkId}/restore`);
   return res.json();
 }
+
+// ── Phase 44: Alert frequency & digest preferences ─────────
+
+export type AlertFrequency = "realtime" | "daily" | "weekly" | "muted";
+
+export interface UserDigestSettings {
+  alert_frequency: AlertFrequency;
+  receive_sms: boolean;
+  receive_marketing: boolean;
+}
+
+export async function patchUserSettings(
+  settings: Partial<UserDigestSettings>
+): Promise<{ success: boolean; settings: UserDigestSettings }> {
+  const res = await apiRequest("PATCH", "/api/user/settings", settings);
+  return res.json();
+}

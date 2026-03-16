@@ -1724,8 +1724,22 @@ export async function registerRoutes(
   // ────────────────────────────────────────────
 
   // In-memory preferences store keyed by userId
-  const mockPreferences: Record<string, { phone_number: string; notify_email: boolean; notify_sms: boolean }> = {
-    usr_001: { phone_number: "", notify_email: true, notify_sms: false },
+  const mockPreferences: Record<string, {
+    phone_number: string;
+    notify_email: boolean;
+    notify_sms: boolean;
+    alert_frequency: string;
+    receive_sms: boolean;
+    receive_marketing: boolean;
+  }> = {
+    usr_001: {
+      phone_number: "",
+      notify_email: true,
+      notify_sms: false,
+      alert_frequency: "realtime",
+      receive_sms: true,
+      receive_marketing: true,
+    },
   };
 
   /** Extract userId from mock JWT token in Authorization header */
@@ -1743,7 +1757,15 @@ export async function registerRoutes(
     if (!userId) {
       return res.status(401).json({ success: false, error: "Unauthorized" });
     }
-    const prefs = mockPreferences[userId] || { phone_number: "", notify_email: true, notify_sms: false };
+    const defaults = {
+      phone_number: "",
+      notify_email: true,
+      notify_sms: false,
+      alert_frequency: "realtime",
+      receive_sms: true,
+      receive_marketing: true,
+    };
+    const prefs = mockPreferences[userId] || defaults;
     res.json({ success: true, preferences: prefs });
   });
 
@@ -1754,7 +1776,15 @@ export async function registerRoutes(
       return res.status(401).json({ success: false, error: "Unauthorized" });
     }
     const body = req.body || {};
-    const existing = mockPreferences[userId] || { phone_number: "", notify_email: true, notify_sms: false };
+    const defaults = {
+      phone_number: "",
+      notify_email: true,
+      notify_sms: false,
+      alert_frequency: "realtime",
+      receive_sms: true,
+      receive_marketing: true,
+    };
+    const existing = mockPreferences[userId] || { ...defaults };
 
     if (typeof body.phone_number === "string") existing.phone_number = body.phone_number.trim();
     if (typeof body.notify_email === "boolean") existing.notify_email = body.notify_email;
@@ -1762,6 +1792,41 @@ export async function registerRoutes(
 
     mockPreferences[userId] = existing;
     res.json({ success: true, preferences: existing });
+  });
+
+  // PATCH /api/user/settings (Phase 44)
+  app.patch("/api/user/settings", (req, res) => {
+    const userId = extractMockUserId(req);
+    if (!userId) {
+      return res.status(401).json({ success: false, error: "Unauthorized" });
+    }
+    const body = req.body || {};
+    const defaults = {
+      phone_number: "",
+      notify_email: true,
+      notify_sms: false,
+      alert_frequency: "realtime",
+      receive_sms: true,
+      receive_marketing: true,
+    };
+    const existing = mockPreferences[userId] || { ...defaults };
+    const validFreqs = ["realtime", "daily", "weekly", "muted"];
+
+    if (typeof body.alert_frequency === "string" && validFreqs.includes(body.alert_frequency)) {
+      existing.alert_frequency = body.alert_frequency;
+    }
+    if (typeof body.receive_sms === "boolean") existing.receive_sms = body.receive_sms;
+    if (typeof body.receive_marketing === "boolean") existing.receive_marketing = body.receive_marketing;
+
+    mockPreferences[userId] = existing;
+    res.json({
+      success: true,
+      settings: {
+        alert_frequency: existing.alert_frequency,
+        receive_sms: existing.receive_sms,
+        receive_marketing: existing.receive_marketing,
+      },
+    });
   });
 
   // ────────────────────────────────────────────

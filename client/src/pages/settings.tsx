@@ -1,10 +1,11 @@
 /**
- * Settings page — Phase 7 + Phase 20
+ * Settings page — Phase 7 + Phase 20 + Phase 44
  *
  * Three sections:
  *   1. Billing card: Current plan display + "Upgrade to Growth" button
  *   2. CMS Connection form: Platform dropdown + Shopify config fields
- *   3. Notification Preferences: Email/SMS toggles + phone number input
+ *   3. Notification Preferences: Alert frequency RadioGroup, email/SMS toggles,
+ *      receive_sms, receive_marketing toggles + phone number input
  */
 
 import { useState, useEffect } from "react";
@@ -16,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
   Select,
   SelectContent,
@@ -39,6 +41,8 @@ import {
   Mail,
   MessageSquare,
   Phone,
+  Megaphone,
+  Clock,
 } from "lucide-react";
 
 // ── Types ──
@@ -402,13 +406,25 @@ function isValidPhone(phone: string): boolean {
   return /^\+[1-9]\d{9,14}$/.test(phone.replace(/\s/g, ""));
 }
 
-// ── Notification Preferences Card (Phase 20) ──
+// ── Notification Preferences Card (Phase 20 + Phase 44) ──
+
+type AlertFrequency = "realtime" | "daily" | "weekly" | "muted";
 
 interface NotificationPrefs {
   phone_number: string;
   notify_email: boolean;
   notify_sms: boolean;
+  alert_frequency: AlertFrequency;
+  receive_sms: boolean;
+  receive_marketing: boolean;
 }
+
+const ALERT_FREQUENCY_OPTIONS: { value: AlertFrequency; label: string; desc: string }[] = [
+  { value: "realtime", label: "Real-time", desc: "Get notified immediately when events occur" },
+  { value: "daily", label: "Daily digest", desc: "One summary email each day at 5 PM UTC" },
+  { value: "weekly", label: "Weekly digest", desc: "One summary email each Friday at 5 PM UTC" },
+  { value: "muted", label: "Muted", desc: "No automated notifications — check the dashboard manually" },
+];
 
 function NotificationPreferencesCard() {
   const { toast } = useToast();
@@ -420,8 +436,11 @@ function NotificationPreferencesCard() {
     queryKey: ["/api/user/preferences"],
   });
 
+  const [alertFrequency, setAlertFrequency] = useState<AlertFrequency>("realtime");
   const [notifyEmail, setNotifyEmail] = useState(true);
   const [notifySms, setNotifySms] = useState(false);
+  const [receiveSms, setReceiveSms] = useState(true);
+  const [receiveMarketing, setReceiveMarketing] = useState(true);
   const [phoneNumber, setPhoneNumber] = useState("");
   const [phoneError, setPhoneError] = useState("");
   const [hasHydrated, setHasHydrated] = useState(false);
@@ -429,8 +448,11 @@ function NotificationPreferencesCard() {
   // Hydrate local state from server data once
   useEffect(() => {
     if (prefsData?.preferences && !hasHydrated) {
+      setAlertFrequency(prefsData.preferences.alert_frequency || "realtime");
       setNotifyEmail(prefsData.preferences.notify_email);
       setNotifySms(prefsData.preferences.notify_sms);
+      setReceiveSms(prefsData.preferences.receive_sms ?? true);
+      setReceiveMarketing(prefsData.preferences.receive_marketing ?? true);
       setPhoneNumber(prefsData.preferences.phone_number || "");
       setHasHydrated(true);
     }
@@ -443,12 +465,22 @@ function NotificationPreferencesCard() {
         throw new Error("Invalid phone number. Use E.164 format: +1234567890");
       }
 
+      // Save core notification prefs via existing POST route
       const res = await apiRequest("POST", "/api/user/preferences", {
         phone_number: phoneNumber,
         notify_email: notifyEmail,
         notify_sms: notifySms,
       });
-      return res.json() as Promise<{ success: boolean; preferences: NotificationPrefs }>;
+      const result = await res.json() as { success: boolean; preferences: NotificationPrefs };
+
+      // Save Phase 44 fields via PATCH /api/user/settings
+      await apiRequest("PATCH", "/api/user/settings", {
+        alert_frequency: alertFrequency,
+        receive_sms: receiveSms,
+        receive_marketing: receiveMarketing,
+      });
+
+      return result;
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/user/preferences"] });
@@ -483,10 +515,14 @@ function NotificationPreferencesCard() {
   };
 
   // Determine if Save should be enabled
-  const hasChanges = prefsData?.preferences
-    ? notifyEmail !== prefsData.preferences.notify_email ||
-      notifySms !== prefsData.preferences.notify_sms ||
-      phoneNumber !== (prefsData.preferences.phone_number || "")
+  const prefs = prefsData?.preferences;
+  const hasChanges = prefs
+    ? alertFrequency !== (prefs.alert_frequency || "realtime") ||
+      notifyEmail !== prefs.notify_email ||
+      notifySms !== prefs.notify_sms ||
+      receiveSms !== (prefs.receive_sms ?? true) ||
+      receiveMarketing !== (prefs.receive_marketing ?? true) ||
+      phoneNumber !== (prefs.phone_number || "")
     : false;
 
   const canSave = hasChanges && !saveMutation.isPending && (!notifySms || !phoneNumber || isValidPhone(phoneNumber));
@@ -509,6 +545,47 @@ function NotificationPreferencesCard() {
           </div>
         ) : (
           <>
+            {/* Alert Frequency RadioGroup (Phase 44) */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <Clock className="h-4 w-4 text-muted-foreground" />
+                <Label className="text-sm font-medium">Alert Frequency</Label>
+              </div>
+              <RadioGroup
+                value={alertFrequency}
+                onValueChange={(val) => setAlertFrequency(val as AlertFrequency)}
+                className="space-y-2"
+                data-testid="radio-alert-frequency"
+              >
+                {ALERT_FREQUENCY_OPTIONS.map((opt) => (
+                  <label
+                    key={opt.value}
+                    htmlFor={`freq-${opt.value}`}
+                    className={`flex items-start gap-3 rounded-md border p-3 cursor-pointer transition-colors ${
+                      alertFrequency === opt.value
+                        ? "border-primary bg-primary/5"
+                        : "border-border/50 bg-muted/30 hover:border-border"
+                    }`}
+                  >
+                    <RadioGroupItem
+                      value={opt.value}
+                      id={`freq-${opt.value}`}
+                      className="mt-0.5"
+                      data-testid={`radio-freq-${opt.value}`}
+                    />
+                    <div>
+                      <span className="text-sm font-medium">{opt.label}</span>
+                      <p className="text-[11px] text-muted-foreground mt-0.5 leading-relaxed">
+                        {opt.desc}
+                      </p>
+                    </div>
+                  </label>
+                ))}
+              </RadioGroup>
+            </div>
+
+            <Separator />
+
             {/* Email Toggle */}
             <div className="flex items-center justify-between rounded-md border border-border/50 bg-muted/30 p-4">
               <div className="flex items-start gap-3">
@@ -518,7 +595,7 @@ function NotificationPreferencesCard() {
                     Email Notifications
                   </Label>
                   <p className="text-[11px] text-muted-foreground mt-0.5 leading-relaxed">
-                    Receive weekly ROI reports and critical audit alerts.
+                    Receive ROI reports and critical audit alerts via email.
                   </p>
                 </div>
               </div>
@@ -530,7 +607,7 @@ function NotificationPreferencesCard() {
               />
             </div>
 
-            {/* SMS Toggle */}
+            {/* SMS Text Alerts Toggle */}
             <div className="flex items-center justify-between rounded-md border border-border/50 bg-muted/30 p-4">
               <div className="flex items-start gap-3">
                 <MessageSquare className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
@@ -576,6 +653,50 @@ function NotificationPreferencesCard() {
                 )}
               </div>
             )}
+
+            <Separator />
+
+            {/* Receive SMS Digest Toggle (Phase 44) */}
+            <div className="flex items-center justify-between rounded-md border border-border/50 bg-muted/30 p-4">
+              <div className="flex items-start gap-3">
+                <Phone className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+                <div>
+                  <Label htmlFor="toggle-receive-sms" className="text-sm font-medium cursor-pointer">
+                    SMS Digests
+                  </Label>
+                  <p className="text-[11px] text-muted-foreground mt-0.5 leading-relaxed">
+                    Receive a brief summary of your daily/weekly digest via SMS.
+                  </p>
+                </div>
+              </div>
+              <Switch
+                id="toggle-receive-sms"
+                checked={receiveSms}
+                onCheckedChange={setReceiveSms}
+                data-testid="switch-receive-sms"
+              />
+            </div>
+
+            {/* Marketing Emails Toggle (Phase 44) */}
+            <div className="flex items-center justify-between rounded-md border border-border/50 bg-muted/30 p-4">
+              <div className="flex items-start gap-3">
+                <Megaphone className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+                <div>
+                  <Label htmlFor="toggle-receive-marketing" className="text-sm font-medium cursor-pointer">
+                    Marketing Emails
+                  </Label>
+                  <p className="text-[11px] text-muted-foreground mt-0.5 leading-relaxed">
+                    Product updates, tips, and feature announcements from Swarme.
+                  </p>
+                </div>
+              </div>
+              <Switch
+                id="toggle-receive-marketing"
+                checked={receiveMarketing}
+                onCheckedChange={setReceiveMarketing}
+                data-testid="switch-receive-marketing"
+              />
+            </div>
 
             <Separator />
 

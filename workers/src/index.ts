@@ -37,6 +37,7 @@ import { billingRouter } from "./routes/billing";
 import { gscRouter } from "./routes/integrations/gsc";
 import { ga4Router } from "./routes/integrations/ga4";
 import { handleRetentionCron } from "./cron/retention";
+import { handleDailyDigest, handleWeeklyDigest } from "./cron/newsletters";
 import { handleGscSync } from "./cron/gscSync";
 import { handleGa4Sync } from "./cron/ga4Sync";
 import { handleGa4CroTrigger } from "./cron/ga4CroTrigger";
@@ -451,10 +452,19 @@ app.get("/api/user/preferences", async (c) => {
   const userId = c.get("userId") as string;
   try {
     const row = await c.env.DB.prepare(
-      "SELECT phone_number, notify_email, notify_sms FROM Users WHERE id = ?1"
+      `SELECT phone_number, notify_email, notify_sms,
+              alert_frequency, receive_sms, receive_marketing
+       FROM Users WHERE id = ?1`
     )
       .bind(userId)
-      .first<{ phone_number: string | null; notify_email: number; notify_sms: number }>();
+      .first<{
+        phone_number: string | null;
+        notify_email: number;
+        notify_sms: number;
+        alert_frequency: string | null;
+        receive_sms: number | null;
+        receive_marketing: number | null;
+      }>();
 
     if (!row) {
       return c.json({ success: false, error: "User not found" }, 404);
@@ -466,6 +476,9 @@ app.get("/api/user/preferences", async (c) => {
         phone_number: row.phone_number ?? "",
         notify_email: row.notify_email === 1,
         notify_sms: row.notify_sms === 1,
+        alert_frequency: row.alert_frequency ?? "realtime",
+        receive_sms: (row.receive_sms ?? 1) === 1,
+        receive_marketing: (row.receive_marketing ?? 1) === 1,
       },
     });
   } catch (err: any) {
@@ -537,6 +550,75 @@ app.post("/api/user/preferences", async (c) => {
   } catch (err: any) {
     console.error("[Preferences] POST error:", err);
     return c.json({ success: false, error: "Failed to update preferences" }, 500);
+  }
+});
+
+// ─────────────────────────────────────────────────────────────
+// Phase 44: PATCH /api/user/settings (alert_frequency, receive_sms, receive_marketing)
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * PATCH /api/user/settings
+ * Updates Phase 44 user settings: alert_frequency, receive_sms, receive_marketing.
+ * Body: { alert_frequency?: 'realtime'|'daily'|'weekly'|'muted', receive_sms?: boolean, receive_marketing?: boolean }
+ */
+app.patch("/api/user/settings", async (c) => {
+  const userId = c.get("userId") as string;
+  try {
+    const body = await c.req.json<{
+      alert_frequency?: string;
+      receive_sms?: boolean;
+      receive_marketing?: boolean;
+    }>();
+
+    const VALID_FREQUENCIES = ["realtime", "daily", "weekly", "muted"];
+
+    const setClauses: string[] = [];
+    const binds: (string | number)[] = [];
+    let idx = 1;
+
+    if (typeof body.alert_frequency === "string" && VALID_FREQUENCIES.includes(body.alert_frequency)) {
+      setClauses.push(`alert_frequency = ?${idx}`);
+      binds.push(body.alert_frequency);
+      idx++;
+    }
+    if (typeof body.receive_sms === "boolean") {
+      setClauses.push(`receive_sms = ?${idx}`);
+      binds.push(body.receive_sms ? 1 : 0);
+      idx++;
+    }
+    if (typeof body.receive_marketing === "boolean") {
+      setClauses.push(`receive_marketing = ?${idx}`);
+      binds.push(body.receive_marketing ? 1 : 0);
+      idx++;
+    }
+
+    if (setClauses.length === 0) {
+      return c.json({ success: false, error: "No valid fields to update" }, 400);
+    }
+
+    binds.push(userId);
+    const sql = `UPDATE Users SET ${setClauses.join(", ")} WHERE id = ?${idx}`;
+    await c.env.DB.prepare(sql).bind(...binds).run();
+
+    // Return updated settings
+    const updated = await c.env.DB.prepare(
+      `SELECT alert_frequency, receive_sms, receive_marketing FROM Users WHERE id = ?1`
+    )
+      .bind(userId)
+      .first<{ alert_frequency: string | null; receive_sms: number | null; receive_marketing: number | null }>();
+
+    return c.json({
+      success: true,
+      settings: {
+        alert_frequency: updated?.alert_frequency ?? "realtime",
+        receive_sms: (updated?.receive_sms ?? 1) === 1,
+        receive_marketing: (updated?.receive_marketing ?? 1) === 1,
+      },
+    });
+  } catch (err: any) {
+    console.error("[Settings] PATCH error:", err);
+    return c.json({ success: false, error: "Failed to update settings" }, 500);
   }
 });
 
@@ -2942,6 +3024,60 @@ async function handleScheduled(
         }
       })();
       ctx.waitUntil(retentionPromise);
+    }
+
+    // ── Phase 44: Daily Digest (17:00 UTC) ──────────
+    if (cronPattern === "0 17 * * *") {
+      console.log("[Swarme Cron] Starting daily digest dispatch...");
+      const dailyDigestPromise = (async () => {
+        try {
+          const result = await handleDailyDigest(env);
+          console.log(
+            `[Swarme Cron] Daily digest complete — ${result.emailsSent} sent, ` +
+            `${result.skipped} skipped, ${result.errors} errors`
+          );
+
+          if (result.emailsSent > 0) {
+            await env.DB.prepare(
+              `INSERT INTO Agent_Tasks (project_id, agent_type, action, status, task_description, result_payload)
+               VALUES ('system', 'newsletter', 'Daily Digest', 'Completed', ?1, ?2)`
+            ).bind(
+              `Sent ${result.emailsSent} daily digest emails to ${result.usersQueried} subscribers`,
+              JSON.stringify(result)
+            ).run();
+          }
+        } catch (err) {
+          console.error("[Swarme Cron] Daily digest failed:", err);
+        }
+      })();
+      ctx.waitUntil(dailyDigestPromise);
+    }
+
+    // ── Phase 44: Weekly Digest (17:00 UTC Friday) ──────────
+    if (cronPattern === "0 17 * * 5") {
+      console.log("[Swarme Cron] Starting weekly digest dispatch...");
+      const weeklyDigestPromise = (async () => {
+        try {
+          const result = await handleWeeklyDigest(env);
+          console.log(
+            `[Swarme Cron] Weekly digest complete — ${result.emailsSent} sent, ` +
+            `${result.skipped} skipped, ${result.errors} errors`
+          );
+
+          if (result.emailsSent > 0) {
+            await env.DB.prepare(
+              `INSERT INTO Agent_Tasks (project_id, agent_type, action, status, task_description, result_payload)
+               VALUES ('system', 'newsletter', 'Weekly Digest', 'Completed', ?1, ?2)`
+            ).bind(
+              `Sent ${result.emailsSent} weekly digest emails to ${result.usersQueried} subscribers`,
+              JSON.stringify(result)
+            ).run();
+          }
+        } catch (err) {
+          console.error("[Swarme Cron] Weekly digest failed:", err);
+        }
+      })();
+      ctx.waitUntil(weeklyDigestPromise);
     }
 
     const elapsed = Date.now() - startTime;
