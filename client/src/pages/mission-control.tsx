@@ -12,6 +12,7 @@ import {
   getInternalLinks,
   removeInternalLink,
   restoreInternalLink,
+  getGeoAnalytics,
   queryKeys,
   type ActionHistoryEntry,
   type IntegrationHealth,
@@ -22,6 +23,10 @@ import {
   type InternalLink,
   type LinkGraphNode,
   type InternalLinksResponse,
+  type GeoAnalyticsResponse,
+  type GeoSearchRealEstate,
+  type AiEngineCitation,
+  type GeoSchemaDeployment,
 } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -81,6 +86,15 @@ import {
   RefreshCw,
   ArrowRight,
   Circle,
+  Sparkles,
+  TrendingUp,
+  TrendingDown,
+  Minus,
+  FileCode2,
+  Quote,
+  Globe,
+  ShieldCheck,
+  TriangleAlert,
 } from "lucide-react";
 
 const PROJECT_ID = "proj_001";
@@ -1196,6 +1210,260 @@ function LinkGraphVisualization({
 }
 
 // ─────────────────────────────────────────────────────────────
+// GEO Analytics Panel (Phase 48)
+// ─────────────────────────────────────────────────────────────
+
+function GeoScoreBadge({ score }: { score: number }) {
+  let color = "text-emerald-400 border-emerald-400/30 bg-emerald-400/10";
+  let label = "Excellent";
+  if (score < 40) { color = "text-red-400 border-red-400/30 bg-red-400/10"; label = "Needs Work"; }
+  else if (score < 60) { color = "text-amber-400 border-amber-400/30 bg-amber-400/10"; label = "Fair"; }
+  else if (score < 80) { color = "text-blue-400 border-blue-400/30 bg-blue-400/10"; label = "Good"; }
+  return (
+    <Badge variant="outline" className={`text-[10px] font-mono ${color}`}>
+      {score}/100 — {label}
+    </Badge>
+  );
+}
+
+function TrendIcon({ trend }: { trend: "up" | "down" | "stable" }) {
+  if (trend === "up") return <TrendingUp className="h-3.5 w-3.5 text-emerald-400" />;
+  if (trend === "down") return <TrendingDown className="h-3.5 w-3.5 text-red-400" />;
+  return <Minus className="h-3.5 w-3.5 text-muted-foreground" />;
+}
+
+function engineIcon(engine: string): string {
+  const map: Record<string, string> = {
+    ChatGPT: "bg-emerald-500/10 text-emerald-400",
+    Perplexity: "bg-blue-500/10 text-blue-400",
+    "Google SGE": "bg-amber-500/10 text-amber-400",
+    "Bing Copilot": "bg-cyan-500/10 text-cyan-400",
+  };
+  return map[engine] || "bg-muted text-muted-foreground";
+}
+
+function GeoAnalyticsPanel() {
+  const { data, isLoading } = useQuery({
+    queryKey: queryKeys.geoAnalytics(PROJECT_ID),
+    queryFn: () => getGeoAnalytics(PROJECT_ID),
+    refetchInterval: 30000,
+  });
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-12 text-muted-foreground">
+        <Loader2 className="h-5 w-5 animate-spin mr-2" />
+        Loading GEO analytics...
+      </div>
+    );
+  }
+
+  if (!data) return null;
+
+  const { summary, search_real_estate, recent_citations, schema_deployments } = data;
+
+  return (
+    <div className="space-y-4" data-testid="geo-analytics-panel">
+      {/* GEO KPI Row */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3" data-testid="geo-kpi-row">
+        <Card className="p-3">
+          <div className="flex items-center gap-2 mb-1">
+            <Sparkles className="h-3.5 w-3.5 text-violet-400" />
+            <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">GEO Score</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <p className="text-xl font-semibold tabular-nums" data-testid="kpi-geo-score">{summary.geo_score}</p>
+            <GeoScoreBadge score={summary.geo_score} />
+          </div>
+        </Card>
+        <Card className="p-3">
+          <div className="flex items-center gap-2 mb-1">
+            <Quote className="h-3.5 w-3.5 text-emerald-400" />
+            <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">AI Citations</span>
+          </div>
+          <div className="flex items-baseline gap-1.5">
+            <p className="text-xl font-semibold tabular-nums" data-testid="kpi-ai-citations">{summary.total_ai_citations}</p>
+            <span className="text-xs text-emerald-400">+{summary.citation_growth_pct}%</span>
+          </div>
+        </Card>
+        <Card className="p-3">
+          <div className="flex items-center gap-2 mb-1">
+            <FileCode2 className="h-3.5 w-3.5 text-blue-400" />
+            <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">Schema Pages</span>
+          </div>
+          <p className="text-xl font-semibold tabular-nums" data-testid="kpi-schema-pages">{summary.pages_with_schema}</p>
+        </Card>
+        <Card className="p-3">
+          <div className="flex items-center gap-2 mb-1">
+            <Globe className="h-3.5 w-3.5 text-amber-400" />
+            <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">Avg Position</span>
+          </div>
+          <p className="text-xl font-semibold tabular-nums" data-testid="kpi-avg-position">#{summary.avg_snippet_position}</p>
+        </Card>
+        <Card className="p-3">
+          <div className="flex items-center gap-2 mb-1">
+            <TrendingUp className="h-3.5 w-3.5 text-emerald-400" />
+            <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">Growth</span>
+          </div>
+          <p className="text-xl font-semibold tabular-nums text-emerald-400" data-testid="kpi-citation-growth">+{summary.citation_growth_pct}%</p>
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* GEO & Search Real-Estate */}
+        <Card>
+          <CardHeader className="py-3 px-4">
+            <CardTitle className="text-sm font-semibold flex items-center gap-2">
+              <Globe className="h-4 w-4 text-violet-400" />
+              GEO &amp; Search Real-Estate
+            </CardTitle>
+            <CardDescription className="text-xs">
+              Your citation presence across AI engines
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="px-4 pb-4">
+            <div className="space-y-3" data-testid="geo-search-real-estate">
+              {search_real_estate.map((engine) => (
+                <div key={engine.engine} className="flex items-center gap-3 p-2.5 rounded-lg bg-muted/30">
+                  <div className={`h-8 w-8 rounded-md flex items-center justify-center text-xs font-bold ${engineIcon(engine.engine)}`}>
+                    {engine.engine.charAt(0)}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium">{engine.engine}</span>
+                      <TrendIcon trend={engine.trend} />
+                    </div>
+                    <div className="flex items-center gap-3 text-[10px] text-muted-foreground font-mono mt-0.5">
+                      <span>{engine.queries_tracked} tracked</span>
+                      <span>{engine.citations_found} citations</span>
+                      {engine.avg_position && <span>avg #{engine.avg_position}</span>}
+                      <span>{engine.snippet_appearances} snippets</span>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-lg font-semibold tabular-nums">{engine.citations_found}</p>
+                    <p className="text-[10px] text-muted-foreground">citations</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* AI Engine Citations */}
+        <Card>
+          <CardHeader className="py-3 px-4">
+            <CardTitle className="text-sm font-semibold flex items-center gap-2">
+              <Quote className="h-4 w-4 text-emerald-400" />
+              AI Engine Citations
+            </CardTitle>
+            <CardDescription className="text-xs">
+              Recent mentions of your content in AI search results
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="px-4 pb-4">
+            <div className="space-y-2" data-testid="geo-citations-list">
+              {recent_citations.map((citation) => (
+                <div key={citation.id} className="p-2.5 rounded-lg border border-border/50 bg-muted/20 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline" className={`text-[9px] font-mono ${engineIcon(citation.engine)}`}>
+                        {citation.engine}
+                      </Badge>
+                      <span className="text-[10px] text-muted-foreground font-mono">#{citation.position}</span>
+                    </div>
+                    <span className="text-[10px] text-muted-foreground">{timeAgo(citation.detected_at)}</span>
+                  </div>
+                  <p className="text-xs font-medium truncate" title={citation.query}>
+                    "{citation.query}"
+                  </p>
+                  <p className="text-[11px] text-muted-foreground leading-relaxed line-clamp-2">
+                    {citation.snippet_preview}
+                  </p>
+                  <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                    <FileCode2 className="h-3 w-3" />
+                    <span className="truncate">{citation.cited_page_title}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Schema Deployments Table */}
+      <Card>
+        <CardHeader className="py-3 px-4">
+          <CardTitle className="text-sm font-semibold flex items-center gap-2">
+            <FileCode2 className="h-4 w-4 text-blue-400" />
+            JSON-LD Schema Deployments
+          </CardTitle>
+          <CardDescription className="text-xs">
+            Structured data injected by the GEO rewriter across your pages
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="px-4 pb-4">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm" data-testid="geo-schema-table">
+              <thead>
+                <tr className="border-b border-border/50 text-xs text-muted-foreground">
+                  <th className="text-left py-2 font-medium">Page</th>
+                  <th className="text-left py-2 font-medium">Schema Type</th>
+                  <th className="text-left py-2 font-medium">Injected</th>
+                  <th className="text-left py-2 font-medium">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {schema_deployments.map((dep, idx) => (
+                  <tr key={idx} className="border-b border-border/30 last:border-0">
+                    <td className="py-2 font-mono text-xs truncate max-w-[200px]" title={dep.page_url}>
+                      {dep.page_url}
+                    </td>
+                    <td className="py-2">
+                      <Badge variant="outline" className="text-[10px] font-mono">
+                        {dep.schema_type}
+                      </Badge>
+                    </td>
+                    <td className="py-2 text-xs text-muted-foreground">
+                      {timeAgo(dep.injected_at)}
+                    </td>
+                    <td className="py-2">
+                      {dep.validation_status === "valid" && (
+                        <Badge variant="outline" className="text-[10px] font-mono text-emerald-400 border-emerald-400/30 bg-emerald-400/10">
+                          <ShieldCheck className="h-3 w-3 mr-1" />
+                          Valid
+                        </Badge>
+                      )}
+                      {dep.validation_status === "warning" && (
+                        <span className="flex items-center gap-1">
+                          <Badge variant="outline" className="text-[10px] font-mono text-amber-400 border-amber-400/30 bg-amber-400/10">
+                            <TriangleAlert className="h-3 w-3 mr-1" />
+                            Warning
+                          </Badge>
+                          {dep.errors && (
+                            <span className="text-[10px] text-muted-foreground">{dep.errors[0]}</span>
+                          )}
+                        </span>
+                      )}
+                      {dep.validation_status === "error" && (
+                        <Badge variant="outline" className="text-[10px] font-mono text-red-400 border-red-400/30 bg-red-400/10">
+                          <XCircle className="h-3 w-3 mr-1" />
+                          Error
+                        </Badge>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
 // Main Page
 // ─────────────────────────────────────────────────────────────
 
@@ -1236,12 +1504,13 @@ export default function MissionControl() {
 
         {/* Tabbed sections */}
         <Tabs defaultValue="overview" className="w-full">
-          <TabsList className="grid w-full grid-cols-5 max-w-2xl">
+          <TabsList className="grid w-full grid-cols-6 max-w-3xl">
             <TabsTrigger value="overview" data-testid="tab-overview">Overview</TabsTrigger>
             <TabsTrigger value="agents" data-testid="tab-agents">Agents</TabsTrigger>
             <TabsTrigger value="history" data-testid="tab-history">History</TabsTrigger>
             <TabsTrigger value="outreach" data-testid="tab-outreach">Outreach</TabsTrigger>
             <TabsTrigger value="link-graph" data-testid="tab-link-graph">Link Graph</TabsTrigger>
+            <TabsTrigger value="geo" data-testid="tab-geo">GEO</TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview" className="mt-4 space-y-4">
@@ -1265,6 +1534,10 @@ export default function MissionControl() {
 
           <TabsContent value="link-graph" className="mt-4">
             <LinkGraphPanel />
+          </TabsContent>
+
+          <TabsContent value="geo" className="mt-4">
+            <GeoAnalyticsPanel />
           </TabsContent>
         </Tabs>
       </div>

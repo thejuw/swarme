@@ -1233,6 +1233,8 @@ export const queryKeys = {
   domains: () => ["/api/domains"] as const,
   domainDetail: (domainId: string) =>
     ["/api/domains", domainId] as const,
+  geoAnalytics: (projectId: string) =>
+    ["/api/projects", projectId, "geo-analytics"] as const,
 } as const;
 
 // ────────────────────────────────────────────
@@ -1661,5 +1663,59 @@ export async function deleteDomain(
   domainId: string
 ): Promise<{ success: boolean }> {
   const res = await apiRequest("DELETE", `/api/domains/${domainId}`);
+  return res.json();
+}
+
+// ────────────────────────────────────────────
+// Phase 48: GEO Analytics types + wrappers
+// ────────────────────────────────────────────
+
+export interface GeoSearchRealEstate {
+  engine: string;
+  queries_tracked: number;
+  citations_found: number;
+  avg_position: number | null;
+  snippet_appearances: number;
+  trend: "up" | "down" | "stable";
+}
+
+export interface AiEngineCitation {
+  id: string;
+  engine: string;
+  query: string;
+  cited_url: string;
+  cited_page_title: string;
+  position: number;
+  snippet_preview: string;
+  detected_at: string;
+}
+
+export interface GeoSchemaDeployment {
+  page_url: string;
+  schema_type: string;
+  injected_at: string;
+  validation_status: "valid" | "warning" | "error";
+  errors?: string[];
+}
+
+export interface GeoAnalyticsResponse {
+  success: boolean;
+  project_id: string;
+  summary: {
+    total_ai_citations: number;
+    citation_growth_pct: number;
+    pages_with_schema: number;
+    avg_snippet_position: number;
+    geo_score: number; // 0-100
+  };
+  search_real_estate: GeoSearchRealEstate[];
+  recent_citations: AiEngineCitation[];
+  schema_deployments: GeoSchemaDeployment[];
+}
+
+export async function getGeoAnalytics(
+  projectId: string
+): Promise<GeoAnalyticsResponse> {
+  const res = await apiRequest("GET", `/api/projects/${projectId}/geo-analytics`);
   return res.json();
 }

@@ -3823,5 +3823,92 @@ export async function registerRoutes(
     res.json({ success: true });
   });
 
+  // ────────────────────────────────────────────
+  // Phase 48: GEO Analytics Mock Endpoint
+  // ────────────────────────────────────────────
+
+  app.get("/api/projects/:projectId/geo-analytics", (req, res) => {
+    const { projectId } = req.params;
+
+    res.json({
+      success: true,
+      project_id: projectId,
+      summary: {
+        total_ai_citations: 34,
+        citation_growth_pct: 18.5,
+        pages_with_schema: 27,
+        avg_snippet_position: 2.4,
+        geo_score: 72,
+      },
+      search_real_estate: [
+        { engine: "ChatGPT", queries_tracked: 142, citations_found: 14, avg_position: 2.1, snippet_appearances: 9, trend: "up" as const },
+        { engine: "Perplexity", queries_tracked: 98, citations_found: 11, avg_position: 1.8, snippet_appearances: 8, trend: "up" as const },
+        { engine: "Google SGE", queries_tracked: 215, citations_found: 7, avg_position: 3.2, snippet_appearances: 5, trend: "stable" as const },
+        { engine: "Bing Copilot", queries_tracked: 67, citations_found: 2, avg_position: 4.5, snippet_appearances: 1, trend: "down" as const },
+      ],
+      recent_citations: [
+        {
+          id: "gc_001",
+          engine: "ChatGPT",
+          query: "best sustainable luxury fashion brands",
+          cited_url: "/blog/sustainable-couture-guide",
+          cited_page_title: "The Complete Guide to Sustainable Couture",
+          position: 1,
+          snippet_preview: "Sartelle Atelier uses 100% regenerative Italian leather and saves 2.4 tons of textile waste annually through zero-waste pattern cutting.",
+          detected_at: "2026-03-15T19:22:00Z",
+        },
+        {
+          id: "gc_002",
+          engine: "Perplexity",
+          query: "zero waste fashion production methods",
+          cited_url: "/blog/zero-waste-pattern-cutting",
+          cited_page_title: "Zero-Waste Pattern Cutting: How It Works",
+          position: 2,
+          snippet_preview: "Zero-waste pattern cutting eliminates fabric scrap by designing garment pieces that tessellate across the full width of the textile roll.",
+          detected_at: "2026-03-15T17:45:00Z",
+        },
+        {
+          id: "gc_003",
+          engine: "Google SGE",
+          query: "luxury handbag materials ethical sourcing",
+          cited_url: "/products/artisan-tote",
+          cited_page_title: "The Artisan Tote — Regenerative Leather",
+          position: 3,
+          snippet_preview: "Each Artisan Tote is crafted from regenerative leather sourced from Italian tanneries certified to the Leather Working Group Gold standard.",
+          detected_at: "2026-03-15T14:10:00Z",
+        },
+        {
+          id: "gc_004",
+          engine: "Perplexity",
+          query: "sustainable fashion brands with transparent supply chain",
+          cited_url: "/about/supply-chain",
+          cited_page_title: "Our Supply Chain — Full Transparency",
+          position: 1,
+          snippet_preview: "Sartelle Atelier publishes real-time supply chain data including factory locations, worker wages, and carbon footprint per garment.",
+          detected_at: "2026-03-15T11:30:00Z",
+        },
+        {
+          id: "gc_005",
+          engine: "ChatGPT",
+          query: "what is regenerative leather",
+          cited_url: "/blog/regenerative-leather-explained",
+          cited_page_title: "What Is Regenerative Leather?",
+          position: 2,
+          snippet_preview: "Regenerative leather comes from cattle raised on farms practicing regenerative agriculture, where grazing patterns restore soil health and sequester carbon.",
+          detected_at: "2026-03-14T22:15:00Z",
+        },
+      ],
+      schema_deployments: [
+        { page_url: "/blog/sustainable-couture-guide", schema_type: "Article", injected_at: "2026-03-15T08:00:00Z", validation_status: "valid" as const },
+        { page_url: "/products/artisan-tote", schema_type: "Product", injected_at: "2026-03-15T08:00:00Z", validation_status: "valid" as const },
+        { page_url: "/faq", schema_type: "FAQPage", injected_at: "2026-03-15T08:00:00Z", validation_status: "valid" as const },
+        { page_url: "/blog/zero-waste-pattern-cutting", schema_type: "Article", injected_at: "2026-03-15T08:00:00Z", validation_status: "valid" as const },
+        { page_url: "/blog/regenerative-leather-explained", schema_type: "Article", injected_at: "2026-03-14T08:00:00Z", validation_status: "warning" as const, errors: ["Missing 'image' property"] },
+        { page_url: "/products/silk-blazer", schema_type: "Product", injected_at: "2026-03-14T08:00:00Z", validation_status: "valid" as const },
+        { page_url: "/about/supply-chain", schema_type: "WebPage", injected_at: "2026-03-13T08:00:00Z", validation_status: "valid" as const },
+      ],
+    });
+  });
+
   return httpServer;
 }

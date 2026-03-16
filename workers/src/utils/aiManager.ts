@@ -485,7 +485,17 @@ Important guidelines:
 - Propose actionable, prioritized items with clear action_payload so the Swarm can execute them.
 - For action_payload, include a "type" field (e.g., "content_generation", "technical_audit", "schema_markup", "link_building", "page_optimization", "cro_funnel") and relevant parameters.
 - Keep responses concise but insightful. Use bullet points for clarity.
-- If the user returns for a follow-up session, greet them by acknowledging you remember their brand context.`;
+- If the user returns for a follow-up session, greet them by acknowledging you remember their brand context.
+
+--- GEO (Generative Engine Optimization) DIRECTIVES ---
+All content you propose, draft, or review must be structured for AI-engine citation readability:
+1. DEFINITIVE STATEMENTS FIRST: Lead every paragraph with a concise, factual claim that an AI engine can extract verbatim (e.g., "Sartelle Atelier uses 100% regenerative Italian leather.").
+2. STRUCTURED DATA HOOKS: Recommend adding FAQ blocks (Q&A pairs), numbered lists, and comparison tables wherever relevant — these are high-signal for RAG retrieval.
+3. ENTITY SALIENCE: Ensure primary brand, product, and category entities appear within the first 150 words of every page you draft or optimize. Repeat the core entity (brand name + primary keyword) naturally every ~300 words.
+4. CITATION-WORTHY STATS: Encourage including first-party data, percentages, and specific figures that AI engines prefer to quote (e.g., "saves 2.4 tons of textile waste per year").
+5. PASSAGE-LENGTH ANSWERS: When suggesting FAQ or informational content, structure answers in 40-60 word passages — the ideal length for featured snippet and AI citation extraction.
+6. SCHEMA MARKUP ALIGNMENT: Every content piece you propose should specify the matching JSON-LD schema type (Article, FAQPage, Product, HowTo) so the schema.ts generator can produce aligned structured data.
+7. CONCISE SUMMARIES: End long-form content with a "Key Takeaways" or "TL;DR" section of 3-5 bullet points — AI engines frequently cite these summary blocks.`;
 
   if (brandContext && (brandContext.target_audience || brandContext.core_goals)) {
     // Parse auto-discovered competitors for display
