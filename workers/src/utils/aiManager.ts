@@ -38,12 +38,15 @@ interface ToolCall {
   };
 }
 
+export type BusinessModel = "e-commerce" | "lead_gen" | "affiliate" | "publisher";
+
 export interface BrandContext {
   project_id: string;
   target_audience: string;
   core_goals: string;
   tone_of_voice: string;
   competitors: string;
+  business_model: BusinessModel | "";
   last_updated: string;
 }
 
@@ -112,6 +115,12 @@ const TOOLS = [
           competitors: {
             type: "string",
             description: "Comma-separated list of competitor brands/domains",
+          },
+          business_model: {
+            type: "string",
+            enum: ["e-commerce", "lead_gen", "affiliate", "publisher"],
+            description:
+              "How the website generates value. One of: 'e-commerce' (sells products online), 'lead_gen' (generates B2B leads via forms/calendars), 'affiliate' (earns via outbound affiliate link clicks), 'publisher' (earns via ad revenue / engagement).",
           },
         },
         required: [],
@@ -206,6 +215,10 @@ async function upsertBrandContext(
       fields.push("competitors = ?");
       values.push(data.competitors);
     }
+    if ((data as any).business_model !== undefined) {
+      fields.push("business_model = ?");
+      values.push((data as any).business_model);
+    }
 
     fields.push("last_updated = datetime('now')");
     values.push(projectId);
@@ -217,15 +230,16 @@ async function upsertBrandContext(
       .run();
   } else {
     await env.DB.prepare(
-      `INSERT INTO Brand_Context (project_id, target_audience, core_goals, tone_of_voice, competitors)
-       VALUES (?, ?, ?, ?, ?)`
+      `INSERT INTO Brand_Context (project_id, target_audience, core_goals, tone_of_voice, competitors, business_model)
+       VALUES (?, ?, ?, ?, ?, ?)`
     )
       .bind(
         projectId,
         data.target_audience ?? "",
         data.core_goals ?? "",
         data.tone_of_voice ?? "",
-        data.competitors ?? ""
+        data.competitors ?? "",
+        (data as any).business_model ?? ""
       )
       .run();
   }
@@ -386,31 +400,44 @@ async function executeTool(
 // ─────────────────────────────────────────────────────────────
 
 function buildSystemPrompt(brandContext: BrandContext | null): string {
-  let prompt = `You are the Chief Strategy Officer for an e-commerce brand, embedded in the Swarme AI SEO platform. Your role is to guide the user through building a growth engine for their store.
+  let prompt = `You are the Chief Strategy Officer embedded in the Swarme AI SEO platform. Your role is to guide the user through building a growth engine for their website.
 
 Your conversation flow:
-1. FIRST: Ask for their primary storefront URL and run a site analysis to understand their current state.
-2. SECOND: Ask about their 6-month revenue and traffic goals, target audience, brand tone, and key competitors.
-3. THIRD: Based on the analysis and their goals, propose a concrete checklist of SEO/CRO actions using the propose_roadmap_items tool.
+1. FIRST: Ask for their primary website URL and run a site analysis to understand their current state.
+2. SECOND: Ask: "How does this website generate value?" and offer these options:
+   - **E-commerce Sales** — online store selling products directly
+   - **B2B Lead Generation** — capturing leads via forms, calendars, email signups
+   - **Affiliate Clicks** — earning commissions through outbound affiliate links
+   - **Ad Revenue / Publishing** — monetizing through dwell time, pageviews, and ad impressions
+   Save their answer to brand context using the business_model field (one of: "e-commerce", "lead_gen", "affiliate", "publisher").
+3. THIRD: Ask about their 6-month revenue and traffic goals, target audience, brand tone, and key competitors.
+4. FOURTH: Based on the analysis, business model, and goals, propose a concrete checklist of SEO/CRO actions using the propose_roadmap_items tool. Tailor the actions to the business model:
+   - e-commerce: Focus on product page optimization, add-to-cart funnels, checkout flow improvements, product schema
+   - lead_gen: Focus on form conversion, landing page CTAs, calendar booking flows, email capture optimization
+   - affiliate: Focus on outbound click-through rates, comparison content, affiliate link placement, trust signals
+   - publisher: Focus on dwell time, scroll depth, internal linking, bounce rate reduction, ad viewability
 
 Important guidelines:
-- Be warm, strategic, and specific. Avoid generic advice — tailor everything to their actual site data.
-- When you learn brand information (audience, goals, tone, competitors), immediately save it with update_brand_context.
+- Be warm, strategic, and specific. Avoid generic advice — tailor everything to their actual site data and business model.
+- When you learn brand information (audience, goals, tone, competitors, business_model), immediately save it with update_brand_context.
+- ALWAYS ask for the business model explicitly during onboarding — do not assume or skip this step.
 - Propose actionable, prioritized items with clear action_payload so the Swarm can execute them.
-- For action_payload, include a "type" field (e.g., "content_generation", "technical_audit", "schema_markup", "link_building", "page_optimization") and relevant parameters.
+- For action_payload, include a "type" field (e.g., "content_generation", "technical_audit", "schema_markup", "link_building", "page_optimization", "cro_funnel") and relevant parameters.
 - Keep responses concise but insightful. Use bullet points for clarity.
 - If the user returns for a follow-up session, greet them by acknowledging you remember their brand context.`;
 
   if (brandContext && (brandContext.target_audience || brandContext.core_goals)) {
     prompt += `\n\n--- PERPETUAL BRAND MEMORY ---
 You have previously stored the following context about this brand:
+- Business Model: ${brandContext.business_model || "(not set — ask during onboarding)"}
 - Target Audience: ${brandContext.target_audience || "(not set)"}
 - Core Goals: ${brandContext.core_goals || "(not set)"}
 - Tone of Voice: ${brandContext.tone_of_voice || "(not set)"}
 - Competitors: ${brandContext.competitors || "(not set)"}
 - Last Updated: ${brandContext.last_updated || "unknown"}
 
-Use this knowledge to provide continuity. Do not ask for information you already have unless the user wants to update it.`;
+Use this knowledge to provide continuity. Do not ask for information you already have unless the user wants to update it.
+If business_model is "(not set)", ask for it in your next response — it is critical for tailoring CRO/SEO strategy.`;
   }
 
   return prompt;

@@ -916,13 +916,24 @@ export interface AIRoadmapResponse {
   total: number;
 }
 
+export type BusinessModel = "e-commerce" | "lead_gen" | "affiliate" | "publisher";
+
 export interface BrandContextData {
   project_id: string;
   target_audience: string;
   core_goals: string;
   tone_of_voice: string;
   competitors: string;
+  business_model: BusinessModel | "";
   last_updated: string;
+}
+
+export interface ConversionConfig {
+  label: string;
+  events: string[];
+  primaryKpi: string;
+  secondaryKpis: string[];
+  description: string;
 }
 
 export async function sendManagerChat(
@@ -1285,6 +1296,7 @@ export interface AdminUserBrandContext {
   core_goals: string;
   tone_of_voice: string;
   competitors: string;
+  business_model: string;
 }
 
 export interface AdminUserTask {

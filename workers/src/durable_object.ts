@@ -51,9 +51,11 @@ import {
 import { pingIndexNow } from "./utils/seo";
 import {
   evaluatePagePerformance,
+  getConversionConfig,
   type CROTask,
   type TelemetryRow,
 } from "./utils/cro";
+import type { BusinessModel } from "./utils/aiManager";
 import {
   generateSocialDrafts,
   saveSocialDrafts,
@@ -2012,8 +2014,21 @@ export class AgentWorkflowManager implements DurableObject {
     const tasksExecuted: string[] = [];
 
     try {
-      // 1. Evaluate performance
-      const evaluation = evaluatePagePerformance(assetId, telemetry);
+      // 1. Fetch business model for playbook selection (Phase 43)
+      let businessModel: BusinessModel | "" = "";
+      try {
+        const brandRow = await env.DB.prepare(
+          `SELECT business_model FROM Brand_Context WHERE project_id = ?1`
+        )
+          .bind(projectId)
+          .first<{ business_model: string }>();
+        businessModel = (brandRow?.business_model as BusinessModel) || "";
+      } catch {
+        // Fallback to default playbook
+      }
+
+      // 2. Evaluate performance using business-model-aware playbook
+      const evaluation = evaluatePagePerformance(assetId, telemetry, businessModel);
 
       if (!evaluation.needs_optimization) {
         return {

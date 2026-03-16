@@ -1838,10 +1838,10 @@ export async function registerRoutes(
   // ── Phase 36: Superadmin User Override API ──────────────────────
 
   // Mock brand context data per user
-  const mockBrandContexts: Record<string, { target_audience: string; core_goals: string; tone_of_voice: string; competitors: string }> = {
-    usr_002: { target_audience: "E-commerce managers at mid-size DTC brands", core_goals: "Increase organic traffic by 40% in Q2", tone_of_voice: "Professional, data-driven, approachable", competitors: "Ahrefs, SEMrush, Surfer SEO" },
-    usr_003: { target_audience: "SaaS startup founders bootstrapping growth", core_goals: "Rank for 50 high-intent keywords by Q3", tone_of_voice: "Casual, founder-friendly, actionable", competitors: "Clearscope, MarketMuse, Frase" },
-    usr_005: { target_audience: "Enterprise marketing directors at Fortune 500", core_goals: "Dominate AI-related search verticals", tone_of_voice: "Authoritative, polished, thought-leadership", competitors: "Conductor, BrightEdge, seoClarity" },
+  const mockBrandContexts: Record<string, { target_audience: string; core_goals: string; tone_of_voice: string; competitors: string; business_model: string }> = {
+    usr_002: { target_audience: "E-commerce managers at mid-size DTC brands", core_goals: "Increase organic traffic by 40% in Q2", tone_of_voice: "Professional, data-driven, approachable", competitors: "Ahrefs, SEMrush, Surfer SEO", business_model: "e-commerce" },
+    usr_003: { target_audience: "SaaS startup founders bootstrapping growth", core_goals: "Rank for 50 high-intent keywords by Q3", tone_of_voice: "Casual, founder-friendly, actionable", competitors: "Clearscope, MarketMuse, Frase", business_model: "lead_gen" },
+    usr_005: { target_audience: "Enterprise marketing directors at Fortune 500", core_goals: "Dominate AI-related search verticals", tone_of_voice: "Authoritative, polished, thought-leadership", competitors: "Conductor, BrightEdge, seoClarity", business_model: "publisher" },
   };
 
   // Mock recent agent tasks per user
@@ -2121,7 +2121,47 @@ export async function registerRoutes(
       core_goals: "2x organic traffic in 6 months, 30% increase in revenue from SEO channel, dominate AI visibility for core keywords",
       tone_of_voice: "Authoritative but approachable. Data-driven. Avoids hype.",
       competitors: "Ahrefs, Semrush, Surfer SEO, Clearscope",
+      business_model: "e-commerce",
       last_updated: "2026-03-15T18:00:00",
+    },
+  };
+
+  // Phase 43: Conversion config mapping for mock A/B test responses
+  const CONVERSION_CONFIGS: Record<string, { label: string; events: string[]; primaryKpi: string; secondaryKpis: string[]; description: string }> = {
+    "e-commerce": {
+      label: "Add to Cart / Checkout",
+      events: ["add_to_cart", "begin_checkout", "purchase"],
+      primaryKpi: "add_to_cart_rate",
+      secondaryKpis: ["checkout_rate", "revenue_per_session", "cart_abandonment_rate"],
+      description: "Tracks product add-to-cart actions and checkout funnel progression.",
+    },
+    lead_gen: {
+      label: "Lead Capture",
+      events: ["form_submit", "calendar_click", "email_capture", "phone_click"],
+      primaryKpi: "lead_capture_rate",
+      secondaryKpis: ["form_start_rate", "form_completion_rate", "calendar_booking_rate"],
+      description: "Tracks form submissions, calendar booking clicks, and email signups.",
+    },
+    affiliate: {
+      label: "Affiliate Click-Through",
+      events: ["affiliate_click", "outbound_click", "comparison_click"],
+      primaryKpi: "affiliate_ctr",
+      secondaryKpis: ["outbound_click_rate", "comparison_engagement", "revenue_per_click"],
+      description: "Tracks outbound clicks to affiliate partner domains.",
+    },
+    publisher: {
+      label: "Engagement Depth",
+      events: ["scroll_75", "dwell_60s", "internal_click", "next_article"],
+      primaryKpi: "engagement_depth_rate",
+      secondaryKpis: ["avg_dwell_time", "scroll_depth", "pages_per_session", "bounce_rate"],
+      description: "Tracks deep engagement: 75%+ scroll depth, 60s+ dwell time, and internal navigation.",
+    },
+    default: {
+      label: "CTA Click",
+      events: ["cta_click"],
+      primaryKpi: "cta_click_rate",
+      secondaryKpis: ["scroll_depth", "dwell_time"],
+      description: "Generic CTA engagement tracking.",
     },
   };
 
@@ -2140,17 +2180,34 @@ export async function registerRoutes(
     let brandContextUpdated = false;
 
     if (userText.includes("http") || userText.includes("www.") || userText.includes(".com")) {
-      reply = `I've completed the initial analysis of your storefront. Here's what I found:\n\n**Strengths:**\n- Clean page structure with good mobile responsiveness\n- SSL certificate active, no mixed content issues\n- Product catalog well-organized\n\n**Opportunities:**\n- Missing blog content strategy — no long-form content targeting buyer keywords\n- FAQ schema markup absent on product pages (missing featured snippet opportunities)\n- Product descriptions are thin (avg 80 words) — should be 300+ with semantic keywords\n- No internal linking strategy between related products\n- Image alt text missing on 40% of product images\n\nNow, tell me about your 6-month goals. What does success look like for you — are you focused on traffic growth, revenue from organic, or AI visibility?`;
+      reply = `I've completed the initial analysis of your site. Here's what I found:\n\n**Strengths:**\n- Clean page structure with good mobile responsiveness\n- SSL certificate active, no mixed content issues\n- Well-organized content structure\n\n**Opportunities:**\n- Missing blog content strategy — no long-form content targeting buyer keywords\n- FAQ schema markup absent on key pages (missing featured snippet opportunities)\n- Product/service descriptions are thin (avg 80 words) — should be 300+ with semantic keywords\n- No internal linking strategy between related pages\n- Image alt text missing on 40% of images\n\nBefore we set goals, I need to understand your business model. **How does this website generate value?**\n\n- 💰 **E-commerce Sales** — online store selling products directly\n- 🎯 **B2B Lead Generation** — capturing leads via forms, calendars, email signups\n- 🔗 **Affiliate Clicks** — earning commissions through outbound affiliate links\n- 📰 **Ad Revenue / Publishing** — monetizing through dwell time, pageviews, and ad impressions`;
       brandContextUpdated = false;
-    } else if (userText.includes("goal") || userText.includes("revenue") || userText.includes("traffic") || userText.includes("grow")) {
-      reply = `Excellent — those are ambitious but achievable goals. I've saved this to my memory so I'll always keep them in mind.\n\nBased on your site analysis and these goals, I've generated a prioritized strategy roadmap. Check the panel on the right — you'll see action items ranked by impact.\n\n**The items marked "Suggested" need your approval.** Click "Approve & Deploy" on any item to send it to the Swarm for automatic execution.\n\nWant me to explain the rationale behind any specific item?`;
+    } else if (userText.includes("e-commerce") || userText.includes("ecommerce") || userText.includes("store") || userText.includes("products")) {
+      reply = `Got it — **E-commerce Sales**. I've saved this to my memory. This changes everything about how I'll optimize your site.\n\nFor e-commerce, the Swarm will focus on:\n- 🛒 **Add to Cart** rate optimization (CTA placement, urgency triggers, sticky cart)\n- 💳 **Checkout funnel** friction reduction (fewer form fields, trust badges, guest checkout)\n- 📊 **Product page** conversion architecture (reviews above fold, size guides, shipping info)\n- 🎯 A/B tests will measure **add-to-cart rate** as the winner metric\n\nNow tell me about your 6-month goals. What does success look like — revenue growth, traffic, or AI visibility?`;
       brandContextUpdated = true;
-      // Add some mock items
+      mockBrandContext.proj_001.business_model = "e-commerce";
+    } else if (userText.includes("lead") || userText.includes("b2b") || userText.includes("form") || userText.includes("calendar")) {
+      reply = `Got it — **B2B Lead Generation**. I've saved this to my memory. This fundamentally shapes our optimization strategy.\n\nFor lead gen, the Swarm will focus on:\n- 📝 **Form submission** rate optimization (fewer fields, multi-step forms, social proof)\n- 📅 **Calendar booking** click optimization (embedded scheduling, "Book a demo" CTAs)\n- 📧 **Email capture** conversion (lead magnets, exit-intent, newsletter signups)\n- 🎯 A/B tests will measure **lead capture rate** as the winner metric\n\nNow tell me about your 6-month goals. What does success look like — MQL volume, demo bookings, or pipeline value?`;
+      brandContextUpdated = true;
+      mockBrandContext.proj_001.business_model = "lead_gen";
+    } else if (userText.includes("affiliate") || userText.includes("commission") || userText.includes("partner")) {
+      reply = `Got it — **Affiliate Revenue**. I've saved this to my memory. This completely reframes our approach.\n\nFor affiliate sites, the Swarm will focus on:\n- 🔗 **Outbound click-through** optimization (product card CTAs, comparison tables, "Check Price" buttons)\n- 📊 **Comparison content** architecture (vs. articles, best-of roundups, buying guides)\n- ⭐ **Trust signals** (verified reviews, price history, editorial "Why we recommend")\n- 🎯 A/B tests will measure **affiliate click-through rate** as the winner metric\n\nNow tell me about your 6-month goals. What does success look like — click volume, revenue per click, or content coverage?`;
+      brandContextUpdated = true;
+      mockBrandContext.proj_001.business_model = "affiliate";
+    } else if (userText.includes("publisher") || userText.includes("ad revenue") || userText.includes("ads") || userText.includes("content") || userText.includes("media")) {
+      reply = `Got it — **Ad Revenue / Publishing**. I've saved this to my memory. Engagement depth is everything for your model.\n\nFor publishers, the Swarm will focus on:\n- ⏱️ **Dwell time** optimization (compelling intros, visual rhythm, scroll hooks)\n- 📜 **Scroll depth** maximization (section headers, inline media, progress indicators)\n- 🔄 **Internal navigation** clicks ("Related Articles" cards, contextual inline links, recirculation widgets)\n- 🎯 A/B tests will measure **engagement depth rate** as the winner metric\n\nNow tell me about your 6-month goals. What does success look like — pageviews, ad RPM, or subscriber growth?`;
+      brandContextUpdated = true;
+      mockBrandContext.proj_001.business_model = "publisher";
+    } else if (userText.includes("goal") || userText.includes("revenue") || userText.includes("traffic") || userText.includes("grow")) {
+      const model = mockBrandContext.proj_001?.business_model || "e-commerce";
+      const modelLabels: any = { "e-commerce": "E-commerce", lead_gen: "Lead Gen", affiliate: "Affiliate", publisher: "Publisher" };
+      reply = `Excellent — those are ambitious but achievable goals. I've saved this to my memory so I'll always keep them in mind.\n\nBased on your site analysis, **${modelLabels[model] || model}** business model, and these goals, I've generated a prioritized strategy roadmap tailored to your specific conversion objectives. Check the panel on the right — you'll see action items ranked by impact.\n\n**The items marked "Suggested" need your approval.** Click "Approve & Deploy" on any item to send it to the Swarm for automatic execution.\n\nWant me to explain the rationale behind any specific item?`;
+      brandContextUpdated = true;
       roadmapItemsAdded = 2;
     } else if (userText.includes("explain") || userText.includes("why") || userText.includes("rationale")) {
       reply = `Great question. Here's the strategic thinking:\n\n**Pillar Content (High Priority):** Long-form, authoritative content is the #1 driver of organic traffic for competitive keywords. A 3,000-word guide positions you as the definitive resource, earns backlinks naturally, and feeds multiple social media posts.\n\n**FAQ Schema (High Priority):** This is a quick win. FAQ markup can earn you featured snippets within 2-4 weeks, dramatically increasing click-through rates without creating new content.\n\n**Digital PR (Medium Priority):** Backlinks from authoritative publications remain the strongest ranking signal. We'll pitch data-driven stories that naturally reference your brand.\n\nShall I adjust any priorities or add more specific actions?`;
     } else {
-      reply = `I understand. Let me know how you'd like to proceed — I can:\n\n1. **Analyze a URL** — paste your storefront link and I'll run a deep audit\n2. **Refine the roadmap** — tell me which areas to focus on (content, technical SEO, backlinks, CRO)\n3. **Discuss strategy** — ask me anything about your growth plan\n\nWhat would you like to do?`;
+      reply = `I understand. Let me know how you'd like to proceed — I can:\n\n1. **Analyze a URL** — paste your website link and I'll run a deep audit\n2. **Set your business model** — tell me if you're E-commerce, Lead Gen, Affiliate, or Publisher\n3. **Refine the roadmap** — tell me which areas to focus on (content, technical SEO, backlinks, CRO)\n4. **Discuss strategy** — ask me anything about your growth plan\n\nWhat would you like to do?`;
     }
 
     res.json({

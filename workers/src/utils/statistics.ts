@@ -34,6 +34,8 @@
  */
 
 import type { Env } from "../index";
+import { getConversionConfig, type ConversionConfig } from "./cro";
+import type { BusinessModel } from "./aiManager";
 
 export interface SignificanceResult {
   /** Conversion rate for variant A (0–1) */
@@ -54,6 +56,8 @@ export interface SignificanceResult {
   winner: "A" | "B" | null;
   /** Whether the minimum view threshold has been met */
   meetsMinViews: boolean;
+  /** The conversion config used to determine the winner metric (Phase 43) */
+  conversionConfig?: ConversionConfig;
 }
 
 /**
@@ -225,6 +229,22 @@ export async function evaluateAndConclude(
     row.min_views
   );
 
+  // Fetch the brand's business model to determine the conversion metric
+  let businessModel: BusinessModel | "" = "";
+  try {
+    const brandRow = await env.DB.prepare(
+      `SELECT business_model FROM Brand_Context WHERE project_id = ?1`
+    )
+      .bind(row.project_id)
+      .first<{ business_model: string }>();
+    businessModel = (brandRow?.business_model as BusinessModel) || "";
+  } catch {
+    // Fallback to default if Brand_Context not available
+  }
+
+  const conversionConfig = getConversionConfig(businessModel || "default");
+  result.conversionConfig = conversionConfig;
+
   // Auto-conclude if significant
   if (result.isSignificant && result.winner) {
     await env.DB.prepare(
@@ -251,8 +271,10 @@ export async function evaluateAndConclude(
       .bind(
         row.project_id,
         `Test "${row.test_name}" concluded: Variant ${result.winner} wins with ` +
-          `${(winnerRate * 100).toFixed(1)}% CR vs ${(loserRate * 100).toFixed(1)}% CR ` +
-          `(+${lift}% lift, p=${result.pValue.toFixed(4)}, ${row.views_a + row.views_b} total views)`,
+          `${(winnerRate * 100).toFixed(1)}% ${conversionConfig.primaryKpi} vs ` +
+          `${(loserRate * 100).toFixed(1)}% ${conversionConfig.primaryKpi} ` +
+          `(+${lift}% lift, p=${result.pValue.toFixed(4)}, ${row.views_a + row.views_b} total views) ` +
+          `[metric: ${conversionConfig.label}]`,
         JSON.stringify({
           test_id: testId,
           asset_id: row.asset_id,
@@ -263,13 +285,17 @@ export async function evaluateAndConclude(
           confidence: result.confidence,
           totalViews: row.views_a + row.views_b,
           lift,
+          business_model: businessModel || "default",
+          conversion_metric: conversionConfig.label,
+          conversion_events: conversionConfig.events,
+          primary_kpi: conversionConfig.primaryKpi,
         })
       )
       .run();
 
     console.log(
       `[AB Test] "${row.test_name}" concluded — Variant ${result.winner} wins ` +
-        `(p=${result.pValue.toFixed(4)}, lift=${lift}%)`
+        `(p=${result.pValue.toFixed(4)}, lift=${lift}%, metric=${conversionConfig.label})`
     );
   }
 
