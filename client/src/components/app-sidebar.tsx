@@ -16,6 +16,7 @@ import {
   BrainCircuit,
   FlaskConical,
   Satellite,
+  Globe2,
 } from "lucide-react";
 import { Link } from "wouter";
 import { useHashLocation } from "wouter/use-hash-location";
@@ -60,6 +61,7 @@ const engineNav: NavItem[] = [
   { titleKey: "nav.abTests", url: "/ab-tests", icon: FlaskConical },
   { titleKey: "nav.socialQueue", url: "/social-queue", icon: Share2 },
   { titleKey: "nav.decayManager", url: "/decay-manager", icon: RefreshCw },
+  { titleKey: "nav.offDomain", url: "/off-domain", icon: Globe2 },
 ];
 
 const systemNav: NavItem[] = [

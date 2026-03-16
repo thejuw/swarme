@@ -25,7 +25,8 @@
     "settings": "Settings",
     "revenue": "Revenue",
     "aiManager": "AI Manager",
-    "missionControl": "Mission Control"
+    "missionControl": "Mission Control",
+    "offDomain": "Off-Domain Trust"
   },
   "footer": {
     "agentsActive": "{{count}} agents active"
@@ -110,8 +111,16 @@
     "dispatchError": "Failed to dispatch task to the swarm.",
     "effortLabel": "Effort",
     "impactLabel": "Impact",
-    "effort": { "low": "Low", "medium": "Medium", "high": "High" },
-    "impact": { "low": "Low", "medium": "Medium", "high": "High" },
+    "effort": {
+      "low": "Low",
+      "medium": "Medium",
+      "high": "High"
+    },
+    "impact": {
+      "low": "Low",
+      "medium": "Medium",
+      "high": "High"
+    },
     "all": "All"
   },
   "wizard": {

@@ -27,7 +27,11 @@ export const gscRouter = new Hono<{ Bindings: Env }>();
 
 const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
-const GSC_SCOPE = "https://www.googleapis.com/auth/webmasters.readonly";
+const GSC_SCOPE = [
+  "https://www.googleapis.com/auth/webmasters.readonly",
+  "https://www.googleapis.com/auth/youtube.readonly",
+  "https://www.googleapis.com/auth/content",
+].join(" ");
 
 /**
  * Build the OAuth callback URL dynamically from the request origin.

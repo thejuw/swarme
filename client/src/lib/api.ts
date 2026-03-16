@@ -1235,6 +1235,8 @@ export const queryKeys = {
     ["/api/domains", domainId] as const,
   geoAnalytics: (projectId: string) =>
     ["/api/projects", projectId, "geo-analytics"] as const,
+  offDomain: (projectId: string) =>
+    ["/api/projects", projectId, "off-domain"] as const,
 } as const;
 
 // ────────────────────────────────────────────
@@ -1717,5 +1719,76 @@ export async function getGeoAnalytics(
   projectId: string
 ): Promise<GeoAnalyticsResponse> {
   const res = await apiRequest("GET", `/api/projects/${projectId}/geo-analytics`);
+  return res.json();
+}
+
+// ────────────────────────────────────────────
+// Phase 49: Off-Domain Trust types + wrappers
+// ────────────────────────────────────────────
+
+export interface OffDomainConnection {
+  platform: string;
+  status: "connected" | "disconnected" | "expired";
+  connected_at: string | null;
+  scopes: string;
+}
+
+export interface EntityPresence {
+  platform: string;
+  score: number; // 0-100
+  label: string;
+}
+
+export interface SyndicationLogEntry {
+  id: string;
+  platform: string;
+  content_type: string;
+  title: string;
+  success: boolean;
+  external_id: string | null;
+  error: string | null;
+  created_at: string;
+}
+
+export interface BarnacleOutreachEntry {
+  id: string;
+  target_url: string;
+  target_title: string;
+  keyword: string;
+  contact_name: string;
+  contact_email: string;
+  status: "awaiting_approval" | "approved" | "sent" | "rejected";
+  created_at: string;
+}
+
+export interface ReviewRoutingEntry {
+  id: string;
+  customer_name: string;
+  order_number: string;
+  platform_routed: string;
+  sent_at: string;
+}
+
+export interface OffDomainResponse {
+  success: boolean;
+  project_id: string;
+  connections: OffDomainConnection[];
+  entity_presence: EntityPresence[];
+  syndication_log: SyndicationLogEntry[];
+  barnacle_outreach: BarnacleOutreachEntry[];
+  review_routing: ReviewRoutingEntry[];
+  summary: {
+    platforms_connected: number;
+    pins_created: number;
+    outreach_pending: number;
+    reviews_routed: number;
+    entity_score: number; // aggregate 0-100
+  };
+}
+
+export async function getOffDomainData(
+  projectId: string
+): Promise<OffDomainResponse> {
+  const res = await apiRequest("GET", `/api/projects/${projectId}/off-domain`);
   return res.json();
 }

@@ -36,6 +36,8 @@ import { webhookRouter } from "./routes/webhooks";
 import { billingRouter } from "./routes/billing";
 import { gscRouter } from "./routes/integrations/gsc";
 import { ga4Router } from "./routes/integrations/ga4";
+import { pinterestRouter } from "./routes/integrations/pinterest";
+import { redditRouter } from "./routes/integrations/reddit";
 import { handleRetentionCron } from "./cron/retention";
 import { handleDailyDigest, handleWeeklyDigest } from "./cron/newsletters";
 import { handleGscSync } from "./cron/gscSync";
@@ -120,6 +122,12 @@ export interface Env {
 
   // ── Phase 40: Media Generation ──
   R2_PUBLIC_BASE: string;
+
+  // ── Phase 49: Off-Domain OAuth ──
+  PINTEREST_APP_ID: string;
+  PINTEREST_APP_SECRET: string;
+  REDDIT_CLIENT_ID: string;
+  REDDIT_CLIENT_SECRET: string;
 }
 
 /**
@@ -182,6 +190,10 @@ app.route("/api/gsc", gscRouter);
 
 // ── GA4 Integration (protected — JWT required) ──
 app.route("/api/ga4", ga4Router);
+
+// ── Phase 49: Pinterest & Reddit OAuth (protected — JWT required) ──
+app.route("/api/pinterest", pinterestRouter);
+app.route("/api/reddit", redditRouter);
 
 // ── Public Routes (no JWT required) ──
 // /health, /api/public/*, /api/billing/webhook, /api/webhooks/* are unprotected

@@ -3910,5 +3910,57 @@ export async function registerRoutes(
     });
   });
 
+  // ────────────────────────────────────────────
+  // Phase 49: Off-Domain Trust Mock Endpoint
+  // ────────────────────────────────────────────
+
+  app.get("/api/projects/:projectId/off-domain", (req, res) => {
+    const { projectId } = req.params;
+
+    res.json({
+      success: true,
+      project_id: projectId,
+      connections: [
+        { platform: "Pinterest", status: "connected", connected_at: "2026-03-14T10:00:00Z", scopes: "boards:read, pins:read, pins:write" },
+        { platform: "Reddit", status: "disconnected", connected_at: null, scopes: "" },
+        { platform: "YouTube", status: "connected", connected_at: "2026-03-10T08:00:00Z", scopes: "youtube.readonly" },
+        { platform: "Google Merchant", status: "connected", connected_at: "2026-03-10T08:05:00Z", scopes: "content" },
+        { platform: "Trustpilot", status: "disconnected", connected_at: null, scopes: "" },
+      ],
+      entity_presence: [
+        { platform: "Google", score: 82, label: "Strong" },
+        { platform: "Pinterest", score: 65, label: "Growing" },
+        { platform: "YouTube", score: 41, label: "Moderate" },
+        { platform: "Reddit", score: 18, label: "Weak" },
+        { platform: "Trustpilot", score: 28, label: "Weak" },
+        { platform: "Bing", score: 55, label: "Moderate" },
+      ],
+      syndication_log: [
+        { id: "syn_001", platform: "pinterest", content_type: "product", title: "The Artisan Tote — Regenerative Leather", success: true, external_id: "pin_839201", error: null, created_at: "2026-03-15T14:22:00Z" },
+        { id: "syn_002", platform: "google_merchant", content_type: "product", title: "The Artisan Tote — Regenerative Leather", success: true, external_id: "gmc_1120", error: null, created_at: "2026-03-15T14:22:05Z" },
+        { id: "syn_003", platform: "pinterest", content_type: "article", title: "Zero-Waste Pattern Cutting: How It Works", success: true, external_id: "pin_839205", error: null, created_at: "2026-03-14T11:00:00Z" },
+        { id: "syn_004", platform: "pinterest", content_type: "product", title: "Silk Blazer — Ethically Sourced", success: false, external_id: null, error: "Board not found", created_at: "2026-03-13T16:45:00Z" },
+        { id: "syn_005", platform: "google_merchant", content_type: "product", title: "Silk Blazer — Ethically Sourced", success: true, external_id: "gmc_1121", error: null, created_at: "2026-03-13T16:45:10Z" },
+      ],
+      barnacle_outreach: [
+        { id: "bo_001", target_url: "https://thegoodtrade.com/best-sustainable-handbags", target_title: "15 Best Sustainable Handbag Brands", keyword: "sustainable handbags", contact_name: "Sarah Mitchell", contact_email: "sarah@thegoodtrade.com", status: "awaiting_approval" as const, created_at: "2026-03-15T16:00:00Z" },
+        { id: "bo_002", target_url: "https://ethicalconsumer.org/fashion/luxury-eco-bags", target_title: "Eco-Friendly Luxury Bags: Complete Guide", keyword: "eco luxury bags", contact_name: "James Park", contact_email: "editorial@ethicalconsumer.org", status: "sent" as const, created_at: "2026-03-14T10:30:00Z" },
+        { id: "bo_003", target_url: "https://vogue.com/sustainable-fashion-roundup", target_title: "Sustainable Fashion Brands to Watch", keyword: "sustainable fashion brands", contact_name: "Amanda Kline", contact_email: "amanda.k@vogue.com", status: "awaiting_approval" as const, created_at: "2026-03-15T17:00:00Z" },
+      ],
+      review_routing: [
+        { id: "rr_001", customer_name: "Emily Chen", order_number: "#SA-4821", platform_routed: "Trustpilot", sent_at: "2026-03-15T09:00:00Z" },
+        { id: "rr_002", customer_name: "Marcus Johnson", order_number: "#SA-4819", platform_routed: "Trustpilot", sent_at: "2026-03-14T09:00:00Z" },
+        { id: "rr_003", customer_name: "Priya Sharma", order_number: "#SA-4815", platform_routed: "Reddit", sent_at: "2026-03-13T09:00:00Z" },
+      ],
+      summary: {
+        platforms_connected: 3,
+        pins_created: 3,
+        outreach_pending: 2,
+        reviews_routed: 3,
+        entity_score: 48,
+      },
+    });
+  });
+
   return httpServer;
 }

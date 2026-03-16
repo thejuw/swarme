@@ -25,7 +25,8 @@
     "settings": "Configuración",
     "revenue": "Ingresos",
     "aiManager": "Manager IA",
-    "missionControl": "Centro de Misión"
+    "missionControl": "Centro de Misión",
+    "offDomain": "Confianza Externa"
   },
   "footer": {
     "agentsActive": "{{count}} agentes activos"
