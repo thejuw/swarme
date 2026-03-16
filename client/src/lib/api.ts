@@ -1906,6 +1906,84 @@ export async function updateCreditSettings(
   return res.json();
 }
 
+// ────────────────────────────────────────────
+// Phase 52: Proprietary Reports types + wrappers
+// ────────────────────────────────────────────
+
+export interface ProprietaryReport {
+  id: string;
+  domain_id: string;
+  title: string;
+  data_payload: string;
+  report_markdown: string;
+  status: "draft" | "published";
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProprietaryReportsResponse {
+  success: boolean;
+  project_id: string;
+  reports: ProprietaryReport[];
+  total: number;
+}
+
+export async function getProprietaryReports(
+  projectId: string
+): Promise<ProprietaryReportsResponse> {
+  const res = await apiRequest("GET", `/api/manager/reports?project_id=${projectId}`);
+  return res.json();
+}
+
+export async function getProprietaryReport(
+  projectId: string,
+  reportId: string
+): Promise<{ success: boolean; report: ProprietaryReport }> {
+  const res = await apiRequest("GET", `/api/manager/reports/${reportId}?project_id=${projectId}`);
+  return res.json();
+}
+
+export async function publishProprietaryReport(
+  projectId: string,
+  reportId: string
+): Promise<{ success: boolean; error?: string }> {
+  const res = await apiRequest("POST", `/api/manager/reports/${reportId}/publish`, {
+    project_id: projectId,
+  });
+  return res.json();
+}
+
+// ────────────────────────────────────────────
+// Phase 53: AI Telemetry Status types + wrappers
+// ────────────────────────────────────────────
+
+export interface TelemetrySubsystem {
+  active: boolean;
+  description: string;
+  last_generated?: string;
+  summaries_cached?: number;
+  total?: number;
+  schedule?: string;
+}
+
+export interface TelemetryStatusResponse {
+  success: boolean;
+  status: {
+    llms_txt: TelemetrySubsystem;
+    rag_bait: TelemetrySubsystem;
+    proprietary_reports: TelemetrySubsystem;
+    content_indexed: TelemetrySubsystem;
+    data_synthesizer: TelemetrySubsystem;
+  };
+}
+
+export async function getTelemetryStatus(
+  projectId: string
+): Promise<TelemetryStatusResponse> {
+  const res = await apiRequest("GET", `/api/manager/telemetry-status?project_id=${projectId}`);
+  return res.json();
+}
+
 // Legacy aliases for backward compatibility
 export type WalletData = CreditBalanceData;
 export type WalletTransactionEntry = CreditLedgerEntry;

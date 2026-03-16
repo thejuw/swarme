@@ -9,10 +9,16 @@ import {
   getUGCCampaigns,
   approveUGCCampaign,
   dismissUGCCampaign,
+  getProprietaryReports,
+  getProprietaryReport,
+  publishProprietaryReport,
+  getTelemetryStatus,
   queryKeys,
   type ManagerChatMessage,
   type AIRoadmapItem,
   type UGCCampaignEntry,
+  type ProprietaryReport,
+  type TelemetrySubsystem,
 } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -20,6 +26,7 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
 import {
   Bot,
@@ -40,6 +47,15 @@ import {
   DollarSign,
   XCircle,
   Package,
+  Activity,
+  FileText,
+  Globe,
+  Code2,
+  Database,
+  Zap,
+  HelpCircle,
+  BookOpen,
+  TrendingUp,
 } from "lucide-react";
 import {
   Dialog,
@@ -670,11 +686,324 @@ function RoadmapPanel() {
 }
 
 // ─────────────────────────────────────────────────────────────
+// Phase 53: Current State Telemetry Widget
+// ─────────────────────────────────────────────────────────────
+
+const TELEMETRY_ICONS: Record<string, typeof Activity> = {
+  llms_txt: Globe,
+  rag_bait: Code2,
+  proprietary_reports: FileText,
+  content_indexed: Database,
+  data_synthesizer: Zap,
+};
+
+const TELEMETRY_LABELS: Record<string, string> = {
+  llms_txt: "/llms.txt Router",
+  rag_bait: "RAG-Bait Injector",
+  proprietary_reports: "Proprietary Reports",
+  content_indexed: "Content Indexed",
+  data_synthesizer: "Data Synthesizer",
+};
+
+const EXPLAIN_TEXTS: Record<string, string> = {
+  llms_txt:
+    "I am currently translating your website's architecture into /llms.txt format. This removes the visual code and feeds pure, structured data directly to Google's Gemini and OpenAI, ensuring they understand your products without friction.",
+  rag_bait:
+    "The RAG-Bait Injector places invisible, factual summary blocks after each section heading in your HTML. AI crawlers extract these pre-digested answer blocks and are more likely to cite them verbatim when users ask about your products.",
+  proprietary_reports:
+    "When your store hits data milestones (e.g., 10,000 orders), I synthesize your anonymized first-party data into proprietary research reports. Publishing original data makes your brand a primary citation source for AI engines.",
+  content_indexed:
+    "Every published content piece on your site is indexed into the /llms.txt manifest. More indexed content means more surface area for AI engines to discover and cite your brand.",
+  data_synthesizer:
+    "The Data Synthesizer runs weekly, scanning your aggregated metrics for milestone triggers. When a threshold is crossed, it generates a draft report for your review before publishing.",
+};
+
+function TelemetryWidget() {
+  const { data, isLoading } = useQuery({
+    queryKey: ["manager", "telemetry-status", PROJECT_ID],
+    queryFn: () => getTelemetryStatus(PROJECT_ID),
+    refetchInterval: 60000,
+  });
+
+  const [explainKey, setExplainKey] = useState<string | null>(null);
+
+  if (isLoading) {
+    return (
+      <Card className="border-dashed">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm flex items-center gap-2">
+            <Activity className="h-4 w-4 text-primary" />
+            Current State
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="flex items-center justify-center py-6">
+          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const status = data?.status;
+  if (!status) return null;
+
+  return (
+    <Card className="border-dashed" data-testid="telemetry-widget">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm flex items-center gap-2">
+          <Activity className="h-4 w-4 text-primary" />
+          Current State — AI Parsing Subsystems
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-1.5 pt-0">
+        {Object.entries(status).map(([key, sub]) => {
+          const Icon = TELEMETRY_ICONS[key] ?? Activity;
+          const label = TELEMETRY_LABELS[key] ?? key;
+          const subsystem = sub as TelemetrySubsystem;
+          const isActive = subsystem.active !== false;
+
+          return (
+            <div
+              key={key}
+              className="flex items-center justify-between py-1.5 px-2 rounded-md hover:bg-muted/50 transition-colors group"
+              data-testid={`telemetry-${key}`}
+            >
+              <div className="flex items-center gap-2 min-w-0 flex-1">
+                <div className={`h-2 w-2 rounded-full flex-shrink-0 ${
+                  isActive ? "bg-emerald-500 animate-pulse" : "bg-muted-foreground/30"
+                }`} />
+                <Icon className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+                <span className="text-xs font-medium truncate">{label}</span>
+                {subsystem.total !== undefined && (
+                  <Badge variant="secondary" className="text-[10px] h-4 px-1.5">
+                    {subsystem.total}
+                  </Badge>
+                )}
+                {subsystem.summaries_cached !== undefined && subsystem.summaries_cached > 0 && (
+                  <Badge variant="secondary" className="text-[10px] h-4 px-1.5">
+                    {subsystem.summaries_cached} cached
+                  </Badge>
+                )}
+              </div>
+              <TooltipProvider delayDuration={0}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                      onClick={() => setExplainKey(explainKey === key ? null : key)}
+                      data-testid={`explain-${key}`}
+                    >
+                      <HelpCircle className="h-3.5 w-3.5" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="left">
+                    <p className="text-xs">Explain This</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </div>
+          );
+        })}
+
+        {/* Explain This expandable panel */}
+        {explainKey && EXPLAIN_TEXTS[explainKey] && (
+          <div
+            className="mt-2 p-3 rounded-md bg-primary/5 border border-primary/10 text-xs text-muted-foreground leading-relaxed"
+            data-testid="explain-panel"
+          >
+            <div className="flex items-start gap-2">
+              <BrainCircuit className="h-4 w-4 text-primary mt-0.5 flex-shrink-0" />
+              <div>
+                <p className="font-medium text-foreground mb-1">
+                  {TELEMETRY_LABELS[explainKey]}
+                </p>
+                <p>{EXPLAIN_TEXTS[explainKey]}</p>
+              </div>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// Phase 52: Proprietary Reports Panel
+// ─────────────────────────────────────────────────────────────
+
+function ProprietaryReportsPanel() {
+  const { toast } = useToast();
+  const [selectedReport, setSelectedReport] = useState<ProprietaryReport | null>(null);
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["manager", "reports", PROJECT_ID],
+    queryFn: () => getProprietaryReports(PROJECT_ID),
+  });
+
+  const publishMutation = useMutation({
+    mutationFn: (reportId: string) => publishProprietaryReport(PROJECT_ID, reportId),
+    onSuccess: () => {
+      toast({ title: "Report Published", description: "The report has been published to your CMS." });
+      queryClient.invalidateQueries({ queryKey: ["manager", "reports", PROJECT_ID] });
+      setSelectedReport(null);
+    },
+    onError: () => {
+      toast({ title: "Publish Failed", description: "Could not publish the report.", variant: "destructive" });
+    },
+  });
+
+  const viewReportMutation = useMutation({
+    mutationFn: (reportId: string) => getProprietaryReport(PROJECT_ID, reportId),
+    onSuccess: (data) => {
+      if (data.success && data.report) {
+        setSelectedReport(data.report);
+      }
+    },
+  });
+
+  const reports = data?.reports ?? [];
+  if (isLoading || reports.length === 0) return null;
+
+  const drafts = reports.filter((r) => r.status === "draft");
+  const published = reports.filter((r) => r.status === "published");
+
+  return (
+    <Card data-testid="proprietary-reports-panel">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm flex items-center gap-2">
+          <BookOpen className="h-4 w-4 text-primary" />
+          Proprietary Reports
+          <Badge variant="secondary" className="ml-auto text-[10px]">
+            {reports.length}
+          </Badge>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-2 pt-0">
+        {drafts.length > 0 && (
+          <div>
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium mb-1">
+              Awaiting Review ({drafts.length})
+            </p>
+            {drafts.map((r) => (
+              <div
+                key={r.id}
+                className="flex items-center justify-between p-2 rounded-md border border-amber-500/20 bg-amber-500/5 mb-1.5"
+                data-testid={`report-draft-${r.id}`}
+              >
+                <div className="min-w-0 flex-1 mr-2">
+                  <p className="text-xs font-medium truncate">{r.title}</p>
+                  <p className="text-[10px] text-muted-foreground">
+                    Generated {new Date(r.created_at).toLocaleDateString()}
+                  </p>
+                </div>
+                <div className="flex gap-1">
+                  <Dialog>
+                    <DialogTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 text-xs"
+                        onClick={() => viewReportMutation.mutate(r.id)}
+                        data-testid={`view-report-${r.id}`}
+                      >
+                        <Eye className="h-3 w-3 mr-1" />
+                        Review
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+                      <DialogHeader>
+                        <DialogTitle className="text-base">{selectedReport?.title ?? r.title}</DialogTitle>
+                      </DialogHeader>
+                      <div className="prose prose-sm dark:prose-invert max-w-none">
+                        <pre className="whitespace-pre-wrap text-xs bg-muted p-4 rounded-md">
+                          {selectedReport?.report_markdown ?? "Loading..."}
+                        </pre>
+                      </div>
+                      <div className="flex justify-end gap-2 mt-4">
+                        <Button
+                          onClick={() => publishMutation.mutate(r.id)}
+                          disabled={publishMutation.isPending}
+                          data-testid={`publish-report-${r.id}`}
+                        >
+                          {publishMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                          Approve & Publish to CMS
+                        </Button>
+                      </div>
+                    </DialogContent>
+                  </Dialog>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {published.length > 0 && (
+          <div>
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium mb-1">
+              Published ({published.length})
+            </p>
+            {published.map((r) => (
+              <div
+                key={r.id}
+                className="flex items-center gap-2 p-2 rounded-md bg-muted/30 mb-1"
+                data-testid={`report-published-${r.id}`}
+              >
+                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 flex-shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-medium truncate">{r.title}</p>
+                  <p className="text-[10px] text-muted-foreground">
+                    Published {new Date(r.updated_at).toLocaleDateString()}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
 // Main Page Component
 // ─────────────────────────────────────────────────────────────
 
+// Proactive companion message injected when milestone reports exist
+const PROACTIVE_MILESTONE_MESSAGE: ManagerChatMessage = {
+  role: "assistant",
+  content:
+    `\ud83c\udfaf **Milestone Alert: Data-Driven Opportunity**\n\n` +
+    `We just crossed a massive data milestone: **10,000 total orders**. ` +
+    `I have aggregated our anonymized checkout data.\n\n` +
+    `Would you like me to synthesize this into a proprietary **"2026 Consumer Buying Trends"** report?\n\n` +
+    `Publishing original data makes your brand a **primary citation source** for AI engines ` +
+    `like ChatGPT, Gemini, and Perplexity. When journalists or researchers ask these models ` +
+    `about buying trends in your industry, they'll cite *your* data \u2014 not a competitor's.\n\n` +
+    `\ud83d\udcc4 **Draft report ready.** Check the Proprietary Reports panel on the right to review it.`,
+};
+
+const PROACTIVE_TELEMETRY_MESSAGE: ManagerChatMessage = {
+  role: "assistant",
+  content:
+    `\ud83d\udd0d **AI Parsing Status Update**\n\n` +
+    `I am currently translating your website's architecture into \`/llms.txt\` format. ` +
+    `This removes the visual code and feeds pure, structured data directly to Google's ` +
+    `Gemini and OpenAI, ensuring they understand your products without friction.\n\n` +
+    `**Active subsystems:**\n` +
+    `\u2022 \`/llms.txt\` Dynamic Router \u2014 serving structured product data to AI crawlers\n` +
+    `\u2022 RAG-Bait Injector \u2014 placing hidden answer blocks in your HTML for citation extraction\n` +
+    `\u2022 Data Synthesizer \u2014 scanning weekly for report-triggering milestones\n\n` +
+    `Check the **Current State** widget on the right panel for live status. ` +
+    `Click the **?** button next to any subsystem for a detailed explanation.`,
+};
+
 export default function AiManager() {
-  const [messages, setMessages] = useState<ManagerChatMessage[]>([WELCOME_MESSAGE]);
+  const [messages, setMessages] = useState<ManagerChatMessage[]>([
+    WELCOME_MESSAGE,
+    PROACTIVE_TELEMETRY_MESSAGE,
+    PROACTIVE_MILESTONE_MESSAGE,
+  ]);
   const { toast } = useToast();
 
   const chatMutation = useMutation({
@@ -735,9 +1064,22 @@ export default function AiManager() {
       <div className="hidden sm:block w-px bg-border" />
       <Separator className="sm:hidden" />
 
-      {/* Right: Roadmap Panel */}
-      <div className="flex-1 min-w-0 sm:max-w-[45%]">
-        <RoadmapPanel />
+      {/* Right: Roadmap + Telemetry + Reports Panel */}
+      <div className="flex-1 min-w-0 sm:max-w-[45%] flex flex-col gap-0">
+        {/* Telemetry Widget (Phase 53) */}
+        <div className="p-3 pb-0">
+          <TelemetryWidget />
+        </div>
+
+        {/* Proprietary Reports (Phase 52) */}
+        <div className="p-3 pb-0">
+          <ProprietaryReportsPanel />
+        </div>
+
+        {/* Roadmap Panel */}
+        <div className="flex-1 min-h-0">
+          <RoadmapPanel />
+        </div>
       </div>
     </div>
   );

@@ -246,6 +246,135 @@ managerRouter.get("/brand-context", async (c) => {
 });
 
 // ─────────────────────────────────────────────────────────────
+// Phase 52: Proprietary Reports Endpoints
+// ─────────────────────────────────────────────────────────────
+
+// GET /reports — List proprietary reports for a project
+managerRouter.get("/reports", async (c) => {
+  const projectId = c.req.query("project_id");
+  if (!projectId) {
+    return c.json({ success: false, error: "project_id is required" }, 400);
+  }
+
+  try {
+    const result = await c.env.DB.prepare(
+      `SELECT id, domain_id, title, status, created_at, updated_at
+       FROM Proprietary_Reports WHERE domain_id = ?
+       ORDER BY created_at DESC LIMIT 20`
+    ).bind(projectId).all();
+
+    return c.json({
+      success: true,
+      project_id: projectId,
+      reports: result.results ?? [],
+      total: result.results?.length ?? 0,
+    });
+  } catch (err) {
+    console.error(`[manager/reports] Error: ${err}`);
+    return c.json({ success: false, error: "Failed to fetch reports" }, 500);
+  }
+});
+
+// GET /reports/:reportId — Get full report content
+managerRouter.get("/reports/:reportId", async (c) => {
+  const { reportId } = c.req.param();
+  const projectId = c.req.query("project_id");
+  if (!projectId) {
+    return c.json({ success: false, error: "project_id is required" }, 400);
+  }
+
+  try {
+    const report = await c.env.DB.prepare(
+      `SELECT * FROM Proprietary_Reports WHERE id = ? AND domain_id = ?`
+    ).bind(reportId, projectId).first();
+
+    if (!report) {
+      return c.json({ success: false, error: "Report not found" }, 404);
+    }
+
+    return c.json({ success: true, report });
+  } catch (err) {
+    console.error(`[manager/reports] Error: ${err}`);
+    return c.json({ success: false, error: "Failed to fetch report" }, 500);
+  }
+});
+
+// POST /reports/:reportId/publish — Human-approved publishing
+managerRouter.post("/reports/:reportId/publish", async (c) => {
+  const { reportId } = c.req.param();
+  const body = await c.req.json<{ project_id: string }>();
+  const { project_id } = body;
+
+  if (!project_id) {
+    return c.json({ success: false, error: "project_id is required" }, 400);
+  }
+
+  try {
+    const { publishReport } = await import("../cron/dataSynthesizer");
+    const result = await publishReport(reportId, project_id, c.env);
+    return c.json(result);
+  } catch (err) {
+    console.error(`[manager/reports/publish] Error: ${err}`);
+    return c.json({ success: false, error: "Publish failed" }, 500);
+  }
+});
+
+// ─────────────────────────────────────────────────────────────
+// Phase 53: AI Telemetry Status Endpoint
+// ─────────────────────────────────────────────────────────────
+
+managerRouter.get("/telemetry-status", async (c) => {
+  const projectId = c.req.query("project_id");
+  if (!projectId) {
+    return c.json({ success: false, error: "project_id is required" }, 400);
+  }
+
+  try {
+    const [ragCache, reports, contentCount] = await Promise.all([
+      c.env.CONFIG_KV.get(`rag:summaries:${projectId}`),
+      c.env.DB.prepare(
+        `SELECT COUNT(*) AS cnt FROM Proprietary_Reports WHERE domain_id = ?`
+      ).bind(projectId).first<{ cnt: number }>(),
+      c.env.DB.prepare(
+        `SELECT COUNT(*) AS cnt FROM Content_Queue WHERE domain_id = ? AND status = 'published'`
+      ).bind(projectId).first<{ cnt: number }>(),
+    ]);
+
+    return c.json({
+      success: true,
+      status: {
+        llms_txt: {
+          active: true,
+          description: "Translating website architecture into /llms.txt format for AI engines",
+          last_generated: new Date().toISOString(),
+        },
+        rag_bait: {
+          active: !!ragCache,
+          summaries_cached: ragCache ? Object.keys(JSON.parse(ragCache).summaries || {}).length : 0,
+          description: "Injecting structured answer blocks visible to AI crawlers",
+        },
+        proprietary_reports: {
+          total: reports?.cnt ?? 0,
+          description: "First-party research reports for citation authority",
+        },
+        content_indexed: {
+          total: contentCount?.cnt ?? 0,
+          description: "Published content pieces feeding /llms.txt",
+        },
+        data_synthesizer: {
+          active: true,
+          schedule: "Weekly (Sundays 03:00 UTC)",
+          description: "Scanning for data milestones to generate proprietary reports",
+        },
+      },
+    });
+  } catch (err) {
+    console.error(`[manager/telemetry-status] Error: ${err}`);
+    return c.json({ success: false, error: "Telemetry fetch failed" }, 500);
+  }
+});
+
+// ─────────────────────────────────────────────────────────────
 // Helper — map action types to audit categories
 // ─────────────────────────────────────────────────────────────
 

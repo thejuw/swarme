@@ -50,6 +50,8 @@ import { apiAuth } from "./middleware/apiAuth";
 import { domainAuth } from "./middleware/domainAuth";
 import { v1Router } from "./routes/api/v1";
 import { walletRechargeRouter, handleWalletRecharge } from "./routes/billing/recharge";
+import { handleDataSynthesizerCron } from "./cron/dataSynthesizer";
+import { llmsTxtRouter } from "./routes/llms-txt";
 
 // Re-export the Durable Object class so Cloudflare can find it
 export { AgentWorkflowManager } from "./durable_object";
@@ -200,6 +202,9 @@ app.route("/api/reddit", redditRouter);
 
 // ── Phase 51: Media Wallet recharge routes (protected — JWT required) ──
 app.route("/api/billing/wallet", walletRechargeRouter);
+
+// ── Phase 53: /llms.txt Dynamic Edge Router (public — for AI crawlers) ──
+app.route("/llms.txt", llmsTxtRouter);
 
 // ── Public Routes (no JWT required) ──
 // /health, /api/public/*, /api/billing/webhook, /api/webhooks/* are unprotected
@@ -3315,6 +3320,25 @@ async function handleScheduled(
         }
       })();
       ctx.waitUntil(walletRechargePromise);
+    }
+
+    // ── Phase 52: Weekly Data Synthesizer (Sundays 03:00 UTC) ──
+    if (cronPattern === "0 3 * * 0") {
+      console.log("[Swarme Cron] Starting weekly data synthesis scan...");
+      const synthesizerPromise = (async () => {
+        try {
+          await handleDataSynthesizerCron(env);
+          console.log("[Swarme Cron] Data synthesizer complete");
+
+          await env.DB.prepare(
+            `INSERT INTO Agent_Tasks (project_id, agent_type, action, status, task_description)
+             VALUES ('system', 'data_synthesizer', 'Weekly Data Synthesis', 'Completed', 'Scanned all active domains for milestone-triggered proprietary reports')`
+          ).run();
+        } catch (err) {
+          console.error("[Swarme Cron] Data synthesizer failed:", err);
+        }
+      })();
+      ctx.waitUntil(synthesizerPromise);
     }
 
     const elapsed = Date.now() - startTime;

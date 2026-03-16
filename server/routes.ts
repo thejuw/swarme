@@ -4191,5 +4191,121 @@ export async function registerRoutes(
     res.redirect(307, `/api/projects/${req.params.projectId}/credits/settings`);
   });
 
+  // ────────────────────────────────────────────
+  // Phase 52: Proprietary Reports mock endpoints
+  // ────────────────────────────────────────────
+
+  const mockProprietaryReports: any[] = [
+    {
+      id: "rpt_mock_001",
+      domain_id: "proj_001",
+      title: "10,000 Orders Milestone: Consumer Buying Trends Report",
+      data_payload: JSON.stringify({
+        milestone_metric: "total_orders",
+        milestone_value: 10000,
+        snapshot: {
+          total_orders: 10247,
+          avg_order_value: 127.50,
+          repeat_purchase_rate: 0.23,
+          device_split: { desktop: 58, mobile: 36, tablet: 6 },
+          top_categories: ["Premium Basics", "Outerwear", "Accessories"],
+        },
+        generated_at: "2026-03-15T03:00:00Z",
+      }),
+      report_markdown: `# 2026 Consumer Buying Trends Report\n\n## Executive Summary\n\nAfter crossing the 10,000 order milestone, our analysis of anonymized first-party checkout data reveals significant shifts in consumer purchasing behavior. This report synthesizes trends that are not available from any third-party source.\n\n## Key Findings\n\n### 1. Mobile Commerce Acceleration\n- **36% of orders** now originate from mobile devices, up from 28% six months ago\n- Mobile AOV ($112) trails desktop ($141) by 20%, indicating optimization opportunity\n- Peak mobile ordering: 7-9 PM weekdays, suggesting "couch commerce" behavior\n\n### 2. Average Order Value Trends\n- Overall AOV: **$127.50**, representing a 15% increase YoY\n- Repeat customers spend **34% more** per order than first-time buyers\n- Bundle purchases (3+ items) account for 41% of revenue\n\n### 3. Repeat Purchase Dynamics\n- **23% repeat purchase rate** within 90 days\n- Top trigger for repeat: email campaigns with personalized product recommendations\n- Customers who leave a review are **2.4x more likely** to make a second purchase\n\n### 4. Geographic Distribution\n- Top 3 markets: United States (62%), United Kingdom (18%), Canada (12%)\n- Fastest-growing region: Southeast Asia (+340% QoQ)\n\n### 5. Category Performance\n- Premium Basics: 45% of orders (highest volume)\n- Outerwear: 28% of revenue (highest per-unit value)\n- Accessories: fastest-growing at +67% QoQ\n\n## Predictive Insights\n\n1. Mobile will surpass desktop orders within 6 months at current trajectory\n2. Bundle-focused merchandising could increase AOV by an estimated 12-18%\n3. Southeast Asia expansion represents a $2.4M incremental revenue opportunity\n4. Implementing post-purchase review flows could lift repeat rate to 30%+\n\n## Methodology\n\nThis report is based on aggregated, anonymized first-party checkout data from 10,247 orders processed between September 2025 and March 2026. All data is proprietary and not available from third-party analytics platforms.`,
+      status: "draft",
+      created_at: "2026-03-15T03:00:00Z",
+      updated_at: "2026-03-15T03:00:00Z",
+    },
+    {
+      id: "rpt_mock_002",
+      domain_id: "proj_001",
+      title: "50 Content Pieces: Content Strategy Analysis",
+      data_payload: JSON.stringify({
+        milestone_metric: "total_content_pieces",
+        milestone_value: 50,
+        snapshot: { total_content_pieces: 52 },
+        generated_at: "2026-03-10T03:00:00Z",
+      }),
+      report_markdown: `# Content Strategy Analysis\n\n## Executive Summary\n\nWith 52 published content pieces, our analysis reveals which content types drive the most organic traffic and AI engine citations.\n\n## Key Findings\n\n- Long-form guides (2,000+ words) generate **4.2x more backlinks** than short posts\n- Product comparison articles receive the highest AI citation rate at **67%**\n- Content published on Tuesdays receives 23% more organic traffic in the first week\n\n## Recommendations\n\n1. Double down on comparison content — it is the most cited by AI engines\n2. Refresh the 12 articles older than 6 months with updated data\n3. Add FAQ schema to all existing guides\n\n## Methodology\n\nBased on first-party analytics across 52 published content pieces tracked over 90 days.`,
+      status: "published",
+      created_at: "2026-03-10T03:00:00Z",
+      updated_at: "2026-03-12T14:00:00Z",
+    },
+  ];
+
+  // GET /api/manager/reports
+  app.get("/api/manager/reports", (req, res) => {
+    const projectId = (req.query.project_id as string) || "proj_001";
+    const reports = mockProprietaryReports
+      .filter((r) => r.domain_id === projectId)
+      .map(({ report_markdown, data_payload, ...rest }) => rest);
+    res.json({ success: true, project_id: projectId, reports, total: reports.length });
+  });
+
+  // GET /api/manager/reports/:reportId
+  app.get("/api/manager/reports/:reportId", (req, res) => {
+    const { reportId } = req.params;
+    const projectId = (req.query.project_id as string) || "proj_001";
+    const report = mockProprietaryReports.find((r) => r.id === reportId && r.domain_id === projectId);
+    if (!report) return res.status(404).json({ success: false, error: "Report not found" });
+    res.json({ success: true, report });
+  });
+
+  // POST /api/manager/reports/:reportId/publish
+  app.post("/api/manager/reports/:reportId/publish", (req, res) => {
+    const { reportId } = req.params;
+    const report = mockProprietaryReports.find((r) => r.id === reportId);
+    if (!report) return res.status(404).json({ success: false, error: "Report not found" });
+    report.status = "published";
+    report.updated_at = new Date().toISOString();
+    console.log(`[Proprietary Reports] Published: ${report.title}`);
+    res.json({ success: true });
+  });
+
+  // ────────────────────────────────────────────
+  // Phase 53: Telemetry Status + /llms.txt mock
+  // ────────────────────────────────────────────
+
+  // GET /api/manager/telemetry-status
+  app.get("/api/manager/telemetry-status", (_req, res) => {
+    res.json({
+      success: true,
+      status: {
+        llms_txt: {
+          active: true,
+          description: "Translating website architecture into /llms.txt format for AI engines",
+          last_generated: new Date().toISOString(),
+        },
+        rag_bait: {
+          active: true,
+          summaries_cached: 8,
+          description: "Injecting structured answer blocks visible to AI crawlers",
+        },
+        proprietary_reports: {
+          active: true,
+          total: 2,
+          description: "First-party research reports for citation authority",
+        },
+        content_indexed: {
+          active: true,
+          total: 52,
+          description: "Published content pieces feeding /llms.txt",
+        },
+        data_synthesizer: {
+          active: true,
+          schedule: "Weekly (Sundays 03:00 UTC)",
+          description: "Scanning for data milestones to generate proprietary reports",
+        },
+      },
+    });
+  });
+
+  // GET /llms.txt (mock)
+  app.get("/llms.txt", (_req, res) => {
+    res.set("Content-Type", "text/markdown; charset=utf-8");
+    res.send(`# Swarme Demo Store\n\n> Last updated: ${new Date().toISOString().split("T")[0]}\n> Format: llms.txt v1.0\n\n## About\n\nSwarme Demo Store is an e-commerce brand serving E-commerce founders and marketing teams at DTC brands. The company focuses on 2x organic traffic in 6 months and dominating AI visibility for core keywords.\n\n## Products\n\n### Premium Basics Collection\nHigh-quality everyday essentials designed for longevity and style.\n- **Price:** $45-$120\n- **Category:** Apparel\n\n### Outerwear Collection\nSeasonal outerwear crafted with sustainable materials.\n- **Price:** $180-$450\n- **Category:** Outerwear\n\n## Original Research\n\n### 2026 Consumer Buying Trends Report\nAfter crossing 10,000 orders, our analysis reveals mobile commerce acceleration (36% of orders), $127.50 average order value, and 23% repeat purchase rate within 90 days.\n\n---\nThis document is auto-generated by Swarme for AI engine consumption.`);
+  });
+
   return httpServer;
 }
