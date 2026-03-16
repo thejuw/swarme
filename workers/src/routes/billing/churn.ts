@@ -25,6 +25,7 @@
  */
 
 import type { Env } from "../../index";
+import { createThrottledFetch } from "../../utils/throttle";
 
 // ── Types ────────────────────────────────────────────────────
 
@@ -279,7 +280,8 @@ export async function executeGdprOffboarding(
   // ── Step 7: Send compliance confirmation email ──────────────
   if (env.RESEND_API_KEY && user.email) {
     try {
-      const emailRes = await fetch("https://api.resend.com/emails", {
+      const throttledResend = createThrottledFetch("resend", env.CONFIG_KV);
+      const emailRes = await throttledResend("https://api.resend.com/emails", {
         method: "POST",
         headers: {
           Authorization: `Bearer ${env.RESEND_API_KEY}`,

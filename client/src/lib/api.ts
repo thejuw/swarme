@@ -1245,6 +1245,10 @@ export const queryKeys = {
     ["/api/projects", projectId, "credits"] as const,
   circuitBreakerStatus: () =>
     ["/api/circuit-breaker", "status"] as const,
+  failsafeStatus: () =>
+    ["/api/admin/failsafe", "status"] as const,
+  throttleStatus: () =>
+    ["/api/throttle", "status"] as const,
 } as const;
 
 // ────────────────────────────────────────────
@@ -2095,5 +2099,51 @@ export async function getCircuitBreakerStatus(): Promise<CircuitBreakerStatusRes
 
 export async function resetCircuitBreaker(service: string): Promise<{ success: boolean; message: string }> {
   const res = await apiRequest("POST", `/api/circuit-breaker/reset/${service}`);
+  return res.json();
+}
+
+// Phase 57: Agent Failsafe Kill-Switch
+
+export interface FailsafeStatus {
+  domain_id: string;
+  task_type: string;
+  attempt_count: number;
+  blocked: boolean;
+  blocked_reason: string | null;
+  last_attempt_at: string | null;
+  window_resets_at: string | null;
+}
+
+export interface FailsafeStatusResponse {
+  success: boolean;
+  failsafes: FailsafeStatus[];
+}
+
+export async function getFailsafeStatus(): Promise<FailsafeStatusResponse> {
+  const res = await apiRequest("GET", "/api/admin/failsafe/status");
+  return res.json();
+}
+
+export async function unblockFailsafe(taskType: string): Promise<{ success: boolean; message: string }> {
+  const res = await apiRequest("POST", "/api/admin/failsafe/unblock", { task_type: taskType });
+  return res.json();
+}
+
+// Phase 57: Throttle Queue Status
+
+export interface ThrottleServiceStatus {
+  service: string;
+  availableTokens: number;
+  maxTokens: number;
+  utilizationPct: number;
+}
+
+export interface ThrottleStatusResponse {
+  success: boolean;
+  services: ThrottleServiceStatus[];
+}
+
+export async function getThrottleStatus(): Promise<ThrottleStatusResponse> {
+  const res = await apiRequest("GET", "/api/throttle/status");
   return res.json();
 }

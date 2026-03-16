@@ -10,6 +10,8 @@
  *  6. Approved emails are dispatched via Resend API
  */
 
+import { createThrottledFetch } from "./throttle";
+
 // ─────────────────────────────────────────────────────────────
 // Types
 // ─────────────────────────────────────────────────────────────
@@ -52,7 +54,8 @@ export async function findLinkProspects(
 ): Promise<LinkProspect[]> {
   const prompt = `Find 10 high-quality blogs and resource pages that write about "${keyword}" and would be good targets for guest posts or link placement. For each result, provide the exact URL, page title, and a one-sentence summary of why it's relevant. Return ONLY valid JSON as an array of objects with keys: url, title, relevance_snippet. No markdown.`;
 
-  const res = await fetch("https://api.perplexity.ai/chat/completions", {
+  const throttledPerplexity = createThrottledFetch("perplexity", env.CONFIG_KV);
+  const res = await throttledPerplexity("https://api.perplexity.ai/chat/completions", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -173,7 +176,8 @@ Context:
 Return JSON with keys: subject, body. The body should be plain text with \\n for line breaks. No markdown.`;
 
     try {
-      const res = await fetch("https://api.openai.com/v1/chat/completions", {
+      const throttledOpenai = createThrottledFetch("openai", env.CONFIG_KV);
+      const res = await throttledOpenai("https://api.openai.com/v1/chat/completions", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -285,7 +289,8 @@ export async function sendOutreachEmail(
     body: string;
   };
 
-  const res = await fetch("https://api.resend.com/emails", {
+  const throttledResend = createThrottledFetch("resend", env.CONFIG_KV);
+  const res = await throttledResend("https://api.resend.com/emails", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

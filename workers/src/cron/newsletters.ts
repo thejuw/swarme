@@ -17,6 +17,7 @@
  */
 
 import type { Env } from "../index";
+import { createThrottledFetch } from "../utils/throttle";
 import { generateDigestEmail } from "../utils/digest";
 
 // ─────────────────────────────────────────────────────────────
@@ -53,7 +54,8 @@ async function sendDigestEmail(
   }
 
   try {
-    const res = await fetch("https://api.resend.com/emails", {
+    const throttledResend = createThrottledFetch("resend", env.CONFIG_KV);
+    const res = await throttledResend("https://api.resend.com/emails", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,

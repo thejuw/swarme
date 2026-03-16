@@ -18,6 +18,8 @@
  * ============================================================
  */
 
+import { createThrottledFetch } from "./throttle";
+
 // ─────────────────────────────────────────────────────────────
 // Shared Types & Constants
 // ─────────────────────────────────────────────────────────────
@@ -97,7 +99,8 @@ export async function fetchResearchData(
   query: string,
   apiKey: string
 ): Promise<PerplexityResearchResult> {
-  const response = await fetch("https://api.perplexity.ai/chat/completions", {
+  const throttledPerplexity = createThrottledFetch("perplexity", env.CONFIG_KV);
+  const response = await throttledPerplexity("https://api.perplexity.ai/chat/completions", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
@@ -328,7 +331,8 @@ export async function generateContent(
     "}",
   ].join("\n");
 
-  const response = await fetch("https://api.openai.com/v1/chat/completions", {
+  const throttledOpenai = createThrottledFetch("openai", env.CONFIG_KV);
+  const response = await throttledOpenai("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,

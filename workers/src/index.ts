@@ -57,6 +57,9 @@ import { runLlmAttacker } from "./tests/chaos/llmAttacker";
 import { handleLinkRotCron } from "./cron/linkRot";
 import { getAllCircuitStatuses, CircuitBreaker, CIRCUIT_SERVICES } from "./utils/circuitBreaker";
 import type { CircuitService } from "./utils/circuitBreaker";
+import { getAllThrottleStatuses, THROTTLED_SERVICES } from "./utils/throttle";
+import type { ThrottledService } from "./utils/throttle";
+import { getFailsafeStatuses, unblockTask } from "./utils/executionCap";
 
 // Re-export the Durable Object class so Cloudflare can find it
 export { AgentWorkflowManager } from "./durable_object";
@@ -246,6 +249,8 @@ app.use("/api/billing/*", protectRoute());
 app.use("/api/gsc/*", protectRoute());
 app.use("/api/ga4/*", protectRoute());
 app.use("/api/circuit-breaker/*", protectRoute());
+app.use("/api/admin/failsafe/*", protectRoute());
+app.use("/api/throttle/*", protectRoute());
 // Note: /api/webhooks/* is intentionally unprotected — Stripe signs its own payloads
 
 // ─────────────────────────────────────────────────────────────
@@ -284,6 +289,66 @@ app.post("/api/circuit-breaker/reset/:service", async (c) => {
     const breaker = new CircuitBreaker(service, c.env.CONFIG_KV);
     await breaker.reset();
     return c.json({ success: true, message: `Circuit breaker for ${service} reset to CLOSED` });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Unknown";
+    return c.json({ success: false, error: msg }, 500);
+  }
+});
+
+// ─────────────────────────────────────────────────────────────
+// Phase 57: Agent Failsafe Kill-Switch Endpoints
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * GET /api/admin/failsafe/status
+ * Returns all failsafe statuses for the authenticated domain.
+ */
+app.get("/api/admin/failsafe/status", async (c) => {
+  try {
+    const domainId = c.get("domainId" as never) || "proj_001";
+    const statuses = await getFailsafeStatuses(c.env, domainId);
+    return c.json({ success: true, failsafes: statuses });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Unknown";
+    return c.json({ success: false, error: msg }, 500);
+  }
+});
+
+/**
+ * POST /api/admin/failsafe/unblock
+ * Admin-only: Unblock a task that has been killed by the failsafe.
+ * Body: { domain_id: string, task_type: string }
+ */
+app.post("/api/admin/failsafe/unblock", async (c) => {
+  try {
+    const body = await c.req.json<{ domain_id?: string; task_type?: string }>();
+    const domainId = body.domain_id || (c.get("domainId" as never) as string) || "proj_001";
+    const taskType = body.task_type;
+
+    if (!taskType) {
+      return c.json({ success: false, error: "task_type is required" }, 400);
+    }
+
+    const result = await unblockTask(c.env, domainId, taskType);
+    return c.json({ success: result.success, message: result.success ? `Task "${taskType}" has been unblocked` : "No matching blocked task found" });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Unknown";
+    return c.json({ success: false, error: msg }, 500);
+  }
+});
+
+// ─────────────────────────────────────────────────────────────
+// Phase 57: Throttle Queue Status Endpoint
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * GET /api/throttle/status
+ * Returns current token bucket utilization for all throttled services.
+ */
+app.get("/api/throttle/status", async (c) => {
+  try {
+    const statuses = await getAllThrottleStatuses(c.env.CONFIG_KV);
+    return c.json({ success: true, services: statuses });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Unknown";
     return c.json({ success: false, error: msg }, 500);

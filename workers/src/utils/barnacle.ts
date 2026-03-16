@@ -19,6 +19,7 @@
  */
 
 import type { Env } from "../index";
+import { createThrottledFetch } from "./throttle";
 
 // ── Types ────────────────────────────────────────────────────
 
@@ -123,7 +124,8 @@ async function discoverListicles(
   const cleanDomain = domainUrl.replace(/^https?:\/\//, "").replace(/\/$/, "");
 
   try {
-    const res = await fetch("https://api.perplexity.ai/chat/completions", {
+    const throttledPerplexity = createThrottledFetch("perplexity", env.CONFIG_KV);
+    const res = await throttledPerplexity("https://api.perplexity.ai/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

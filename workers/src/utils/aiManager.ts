@@ -18,6 +18,7 @@
 
 import type { Env } from "../index";
 import { discoverActualCompetitors, type DiscoveredCompetitor } from "./researcher";
+import { createThrottledFetch } from "./throttle";
 
 // ─────────────────────────────────────────────────────────────
 // Type Definitions
@@ -576,7 +577,8 @@ export async function handleManagerChat(
   while (maxIterations > 0) {
     maxIterations--;
 
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    const throttledFetch = createThrottledFetch("openai", env.CONFIG_KV);
+    const response = await throttledFetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,

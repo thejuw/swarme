@@ -4,6 +4,7 @@
 // flowing through Cloudflare Workers edge.
 // ─────────────────────────────────────────────────────────────
 
+import { sanitizeJsonLd } from "./sanitizer";
 import {
   generateGeoSchema,
   generateOrganizationSchema,
@@ -50,9 +51,12 @@ class HeadElementHandler {
   }
 
   element(element: HTMLRewriterTypes.Element) {
-    // Inject all JSON-LD schema scripts at the end of <head>
+    // Inject all JSON-LD schema scripts at the end of <head> (sanitized)
     for (const script of this.schemaScripts) {
-      element.append(script, { html: true });
+      const safeScript = sanitizeJsonLd(script);
+      if (safeScript) {
+        element.append(safeScript, { html: true });
+      }
     }
 
     // Optional: Add meta tags for AI-engine discoverability
@@ -157,10 +161,13 @@ export function injectRawSchema(response: Response, jsonLdScript: string): Respo
     return response;
   }
 
+  const safeJsonLd = sanitizeJsonLd(jsonLdScript);
+  if (!safeJsonLd) return response;
+
   return new HTMLRewriter()
     .on("head", {
       element(element) {
-        element.append(jsonLdScript, { html: true });
+        element.append(safeJsonLd, { html: true });
       },
     })
     .transform(response);

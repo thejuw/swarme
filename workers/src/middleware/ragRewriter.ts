@@ -24,6 +24,8 @@
  */
 
 import type { Env } from "../index";
+import { createThrottledFetch } from "../utils/throttle";
+import { sanitizeHtml } from "./sanitizer";
 
 // ── Types ────────────────────────────────────────────────────
 
@@ -66,8 +68,9 @@ class H2SummaryInjector {
         if (summary) {
           // We'll inject after the h2 element via the comments handler
           // Store for the after-h2 injection
+          const safeSummary = sanitizeHtml(escapeHtml(summary));
           text.after(
-            `<div class="rag-summary" data-rag="true" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0" aria-hidden="true">${escapeHtml(summary)}</div>`,
+            `<div class="rag-summary" data-rag="true" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0" aria-hidden="true">${safeSummary}</div>`,
             { html: true }
           );
         }
@@ -250,7 +253,8 @@ async function generateLlmSummaries(
     `"our story", "sustainability", "quality", "technology", "community". ` +
     `Each summary should read like an encyclopedia entry — factual, neutral, citation-worthy.`;
 
-  const response = await fetch("https://api.openai.com/v1/chat/completions", {
+  const throttledFetch = createThrottledFetch("openai", env.CONFIG_KV);
+  const response = await throttledFetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${env.OPENAI_API_KEY}`,

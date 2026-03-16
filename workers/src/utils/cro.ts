@@ -32,6 +32,7 @@
  */
 
 import type { BusinessModel } from "./aiManager";
+import { createThrottledFetch } from "./throttle";
 import type { Env } from "../index";
 
 // ─────────────────────────────────────────────────────────────
@@ -294,7 +295,8 @@ Return ONLY the JSON object. No markdown fences, no explanation.`;
   const userPrompt = `Analyze this website's design principles:\nURL: ${northStarUrl}\n\nPage content:\n${domContent}`;
 
   try {
-    const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    const throttledOpenai = createThrottledFetch("openai", env.CONFIG_KV);
+    const res = await throttledOpenai("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,

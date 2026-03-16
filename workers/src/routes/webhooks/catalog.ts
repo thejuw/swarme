@@ -23,6 +23,7 @@
 
 import { Hono } from "hono";
 import type { Env } from "../../index";
+import { createThrottledFetch } from "../../utils/throttle";
 
 export const catalogWebhookRouter = new Hono<{ Bindings: Env }>();
 
@@ -203,7 +204,8 @@ async function processNewProduct(
 
       // Only send immediate notification if frequency is 'realtime'
       if (domainOwner?.email && frequency === "realtime") {
-        await fetch("https://api.resend.com/emails", {
+        const throttledResend = createThrottledFetch("resend", env.CONFIG_KV);
+        await throttledResend("https://api.resend.com/emails", {
           method: "POST",
           headers: {
             Authorization: `Bearer ${env.RESEND_API_KEY}`,

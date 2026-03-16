@@ -4558,5 +4558,86 @@ export async function registerRoutes(
     });
   });
 
+  // ── Phase 57: Failsafe Kill-Switch Mock Endpoints ────────────
+
+  // In-memory failsafe state for mock
+  const mockFailsafes: Record<string, {
+    domain_id: string;
+    task_type: string;
+    attempt_count: number;
+    blocked: boolean;
+    blocked_reason: string | null;
+    last_attempt_at: string | null;
+    window_resets_at: string | null;
+  }> = {};
+
+  // GET /api/admin/failsafe/status
+  app.get("/api/admin/failsafe/status", (_req, res) => {
+    const failsafes = Object.values(mockFailsafes);
+    res.json({ success: true, failsafes });
+  });
+
+  // POST /api/admin/failsafe/unblock
+  app.post("/api/admin/failsafe/unblock", (req, res) => {
+    const { task_type } = req.body || {};
+    if (!task_type) {
+      return res.status(400).json({ success: false, error: "task_type is required" });
+    }
+
+    if (mockFailsafes[task_type]) {
+      mockFailsafes[task_type].blocked = false;
+      mockFailsafes[task_type].attempt_count = 0;
+      mockFailsafes[task_type].blocked_reason = null;
+    }
+
+    res.json({ success: true, message: `Task "${task_type}" has been unblocked` });
+  });
+
+  // POST /api/admin/failsafe/trigger/:taskType (Test helper — simulates a blocked task)
+  app.post("/api/admin/failsafe/trigger/:taskType", (req, res) => {
+    const taskType = req.params.taskType;
+    const now = new Date().toISOString();
+    const windowEnd = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+
+    mockFailsafes[taskType] = {
+      domain_id: "proj_001",
+      task_type: taskType,
+      attempt_count: 3,
+      blocked: true,
+      blocked_reason: `Auto-blocked: 3 failures in 24h window`,
+      last_attempt_at: now,
+      window_resets_at: windowEnd,
+    };
+
+    res.json({ success: true, message: `Failsafe triggered for "${taskType}"` });
+  });
+
+  // ── Phase 57: Throttle Queue Status Mock Endpoint ─────────────
+
+  // GET /api/throttle/status
+  app.get("/api/throttle/status", (_req, res) => {
+    const services = [
+      {
+        service: "openai",
+        availableTokens: 8500,
+        maxTokens: 9900,
+        utilizationPct: 14,
+      },
+      {
+        service: "perplexity",
+        availableTokens: 13,
+        maxTokens: 15,
+        utilizationPct: 13,
+      },
+      {
+        service: "resend",
+        availableTokens: 3,
+        maxTokens: 3,
+        utilizationPct: 0,
+      },
+    ];
+    res.json({ success: true, services });
+  });
+
   return httpServer;
 }

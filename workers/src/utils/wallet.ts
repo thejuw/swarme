@@ -24,6 +24,7 @@
  */
 
 import type { Env } from "../index";
+import { checkExecutionCap, recordFailedAttempt } from "./executionCap";
 
 // ── Types ────────────────────────────────────────────────────
 
@@ -128,6 +129,9 @@ export async function deductCredits(
   description: string,
   referenceId: string
 ): Promise<{ new_balance: number; transaction_id: string }> {
+  // Phase 57.2: Kill-switch check before any paid action
+  await checkExecutionCap(env, domainId, "credit_deduction");
+
   // 1. Read current balance
   const balance = await env.DB.prepare(
     "SELECT id, available_credits FROM Credit_Balances WHERE domain_id = ?1"
@@ -141,6 +145,8 @@ export async function deductCredits(
 
   // 2. Verify sufficient credits
   if (balance.available_credits < amount) {
+    // Record the failure for kill-switch tracking
+    await recordFailedAttempt(env, domainId, "credit_deduction", "Insufficient credits");
     throw new InsufficientCreditsError(amount, balance.available_credits);
   }
 
@@ -149,16 +155,25 @@ export async function deductCredits(
   const now = new Date().toISOString();
   const newBalance = balance.available_credits - amount;
 
-  await env.DB.batch([
-    env.DB.prepare(
-      `INSERT INTO Credit_Ledger (id, balance_id, credit_amount, description, reference_id, created_at)
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6)`
-    ).bind(txnId, balance.id, -amount, description, referenceId, now),
+  try {
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO Credit_Ledger (id, balance_id, credit_amount, description, reference_id, created_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6)`
+      ).bind(txnId, balance.id, -amount, description, referenceId, now),
 
-    env.DB.prepare(
-      `UPDATE Credit_Balances SET available_credits = ?1, updated_at = ?2 WHERE id = ?3 AND domain_id = ?4`
-    ).bind(newBalance, now, balance.id, domainId),
-  ]);
+      env.DB.prepare(
+        `UPDATE Credit_Balances SET available_credits = ?1, updated_at = ?2 WHERE id = ?3 AND domain_id = ?4`
+      ).bind(newBalance, now, balance.id, domainId),
+    ]);
+  } catch (err) {
+    // Record the failure for kill-switch tracking
+    await recordFailedAttempt(
+      env, domainId, "credit_deduction",
+      err instanceof Error ? err.message : "D1 batch error",
+    );
+    throw err;
+  }
 
   return { new_balance: newBalance, transaction_id: txnId };
 }

@@ -18,6 +18,8 @@
  * ============================================================
  */
 
+import { createThrottledFetch } from "./throttle";
+
 // ─────────────────────────────────────────────────────────────
 // LLM Refresh Content Generation
 // ─────────────────────────────────────────────────────────────
@@ -65,7 +67,8 @@ export async function generateRefreshedContent(
 ${oldHtml.slice(0, 12000)}
 --- END ---`;
 
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    const throttledOpenai = createThrottledFetch("openai", env.CONFIG_KV);
+    const response = await throttledOpenai("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${openaiApiKey}`,

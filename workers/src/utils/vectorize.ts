@@ -17,6 +17,7 @@
  */
 
 import type { Env } from "../index";
+import { createThrottledFetch } from "./throttle";
 
 // ─────────────────────────────────────────────────────────────
 // Types
@@ -81,7 +82,8 @@ export async function generateEmbedding(
       throw new Error("No embedding model available — both Workers AI and OpenAI failed");
     }
 
-    const res = await fetch("https://api.openai.com/v1/embeddings", {
+    const throttledOpenai = createThrottledFetch("openai", env.CONFIG_KV);
+    const res = await throttledOpenai("https://api.openai.com/v1/embeddings", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

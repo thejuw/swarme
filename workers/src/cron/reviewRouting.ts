@@ -23,6 +23,7 @@
  */
 
 import type { Env } from "../index";
+import { createThrottledFetch } from "../utils/throttle";
 
 // ── Types ────────────────────────────────────────────────────
 
@@ -120,7 +121,8 @@ async function assessTrustWeakness(domainUrl: string, env: Env): Promise<TrustAs
   }
 
   try {
-    const res = await fetch("https://api.perplexity.ai/chat/completions", {
+    const throttledPerplexity = createThrottledFetch("perplexity", env.CONFIG_KV);
+    const res = await throttledPerplexity("https://api.perplexity.ai/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
