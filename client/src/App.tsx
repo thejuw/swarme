@@ -28,6 +28,12 @@ import SocialQueue from "@/pages/social-queue";
 import DecayManager from "@/pages/decay-manager";
 import AbTests from "@/pages/ab-tests";
 import AiManager from "@/pages/ai-manager";
+import AgentActivity from "@/pages/agent-activity";
+import AiVisibility from "@/pages/ai-visibility";
+import TrendRadarPage from "@/pages/trend-radar";
+import DigitalPR from "@/pages/digital-pr";
+import EdgeWorkers from "@/pages/edge-workers";
+import DomainsPage from "@/pages/domains";
 import MissionControl from "@/pages/mission-control";
 import OffDomain from "@/pages/off-domain";
 import SwarmeCredits from "@/pages/wallet";
@@ -114,6 +120,12 @@ function ShellRoutes() {
       <Route path="/social-queue" component={SocialQueue} />
       <Route path="/decay-manager" component={DecayManager} />
       <Route path="/ai-manager" component={AiManager} />
+      <Route path="/activity" component={AgentActivity} />
+      <Route path="/visibility" component={AiVisibility} />
+      <Route path="/trends" component={TrendRadarPage} />
+      <Route path="/pr" component={DigitalPR} />
+      <Route path="/workers" component={EdgeWorkers} />
+      <Route path="/domains" component={DomainsPage} />
       <Route path="/mission-control" component={MissionControl} />
       <Route path="/off-domain" component={OffDomain} />
       <Route path="/wallet" component={SwarmeCredits} />
