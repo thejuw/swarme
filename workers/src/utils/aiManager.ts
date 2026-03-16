@@ -17,6 +17,7 @@
  */
 
 import type { Env } from "../index";
+import { discoverActualCompetitors, type DiscoveredCompetitor } from "./researcher";
 
 // ─────────────────────────────────────────────────────────────
 // Type Definitions
@@ -47,6 +48,8 @@ export interface BrandContext {
   tone_of_voice: string;
   competitors: string;
   business_model: BusinessModel | "";
+  auto_discovered_competitors: string; // JSON array of DiscoveredCompetitor
+  north_star_url: string;
   last_updated: string;
 }
 
@@ -122,8 +125,35 @@ const TOOLS = [
             description:
               "How the website generates value. One of: 'e-commerce' (sells products online), 'lead_gen' (generates B2B leads via forms/calendars), 'affiliate' (earns via outbound affiliate link clicks), 'publisher' (earns via ad revenue / engagement).",
           },
+          north_star_url: {
+            type: "string",
+            description:
+              "The user's aspirational 'North Star' website URL. The CRO engine will analyze this site's DOM structure, typography, CTAs, and layout to guide optimization suggestions.",
+          },
         },
         required: [],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "discover_competitors",
+      description:
+        "Automatically discover the user's real SERP competitors by analyzing who currently ranks for their primary keyword. Call this after the user provides their URL and primary keyword during onboarding — BEFORE asking for manual competitor input.",
+      parameters: {
+        type: "object",
+        properties: {
+          url: {
+            type: "string",
+            description: "The user's website URL",
+          },
+          primary_keyword: {
+            type: "string",
+            description: "The user's primary keyword or niche (e.g., 'luxury handbags', 'SaaS project management')",
+          },
+        },
+        required: ["url", "primary_keyword"],
       },
     },
   },
@@ -219,6 +249,14 @@ async function upsertBrandContext(
       fields.push("business_model = ?");
       values.push((data as any).business_model);
     }
+    if ((data as any).auto_discovered_competitors !== undefined) {
+      fields.push("auto_discovered_competitors = ?");
+      values.push((data as any).auto_discovered_competitors);
+    }
+    if ((data as any).north_star_url !== undefined) {
+      fields.push("north_star_url = ?");
+      values.push((data as any).north_star_url);
+    }
 
     fields.push("last_updated = datetime('now')");
     values.push(projectId);
@@ -230,8 +268,8 @@ async function upsertBrandContext(
       .run();
   } else {
     await env.DB.prepare(
-      `INSERT INTO Brand_Context (project_id, target_audience, core_goals, tone_of_voice, competitors, business_model)
-       VALUES (?, ?, ?, ?, ?, ?)`
+      `INSERT INTO Brand_Context (project_id, target_audience, core_goals, tone_of_voice, competitors, business_model, auto_discovered_competitors, north_star_url)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
     )
       .bind(
         projectId,
@@ -239,7 +277,9 @@ async function upsertBrandContext(
         data.core_goals ?? "",
         data.tone_of_voice ?? "",
         data.competitors ?? "",
-        (data as any).business_model ?? ""
+        (data as any).business_model ?? "",
+        (data as any).auto_discovered_competitors ?? "",
+        (data as any).north_star_url ?? ""
       )
       .run();
   }
@@ -375,6 +415,17 @@ async function executeTool(
       });
     }
 
+    case "discover_competitors": {
+      const url = args.url as string;
+      const keyword = args.primary_keyword as string;
+      const discovered = await discoverActualCompetitors(url, keyword, projectId, env);
+      return JSON.stringify({
+        success: true,
+        competitors: discovered,
+        message: `Discovered ${discovered.length} real SERP competitors for "${keyword}". Present these to the user and ask them to confirm, edit, or add more.`,
+      });
+    }
+
     case "propose_roadmap_items": {
       const items = args.items as Array<{
         title: string;
@@ -403,15 +454,23 @@ function buildSystemPrompt(brandContext: BrandContext | null): string {
   let prompt = `You are the Chief Strategy Officer embedded in the Swarme AI SEO platform. Your role is to guide the user through building a growth engine for their website.
 
 Your conversation flow:
-1. FIRST: Ask for their primary website URL and run a site analysis to understand their current state.
-2. SECOND: Ask: "How does this website generate value?" and offer these options:
+1. STEP 1 — URL & GOALS: Ask for their primary website URL and primary keyword/niche. Run a site analysis with run_site_analysis.
+2. STEP 2 — BUSINESS MODEL: Ask: "How does this website generate value?" and offer these options:
    - **E-commerce Sales** — online store selling products directly
    - **B2B Lead Generation** — capturing leads via forms, calendars, email signups
    - **Affiliate Clicks** — earning commissions through outbound affiliate links
    - **Ad Revenue / Publishing** — monetizing through dwell time, pageviews, and ad impressions
    Save their answer to brand context using the business_model field (one of: "e-commerce", "lead_gen", "affiliate", "publisher").
-3. THIRD: Ask about their 6-month revenue and traffic goals, target audience, brand tone, and key competitors.
-4. FOURTH: Based on the analysis, business model, and goals, propose a concrete checklist of SEO/CRO actions using the propose_roadmap_items tool. Tailor the actions to the business model:
+3. STEP 3 — COMPETITOR AUTO-DISCOVERY: Once you have the URL and a primary keyword, call the discover_competitors tool. Present the results assertively:
+   "I've analyzed who's actually competing with you for organic traffic. Here's who you're up against:"
+   - List each discovered competitor with their domain, why they rank, and their estimated traffic.
+   - Frame it as intelligence: "You're currently losing traffic to these sites."
+   - Ask the user to confirm, edit, or add competitors. Save the final list to brand context.
+4. STEP 4 — NORTH STAR PROMPT: After competitors are confirmed, ask:
+   "One more question — is there a website you admire and want your site to feel like? This could be a competitor, an aspirational brand, or any site whose design and UX you consider world-class. I'll use it as a 'North Star' to guide our CRO optimization suggestions."
+   Save the north_star_url to brand context using update_brand_context.
+5. STEP 5 — Ask about their 6-month revenue and traffic goals, target audience, and brand tone.
+6. STEP 6 — ROADMAP: Based on the analysis, business model, competitors, North Star, and goals, propose a concrete checklist of SEO/CRO actions using the propose_roadmap_items tool. Tailor the actions to the business model:
    - e-commerce: Focus on product page optimization, add-to-cart funnels, checkout flow improvements, product schema
    - lead_gen: Focus on form conversion, landing page CTAs, calendar booking flows, email capture optimization
    - affiliate: Focus on outbound click-through rates, comparison content, affiliate link placement, trust signals
@@ -419,25 +478,41 @@ Your conversation flow:
 
 Important guidelines:
 - Be warm, strategic, and specific. Avoid generic advice — tailor everything to their actual site data and business model.
-- When you learn brand information (audience, goals, tone, competitors, business_model), immediately save it with update_brand_context.
+- When you learn brand information (audience, goals, tone, competitors, business_model, north_star_url), immediately save it with update_brand_context.
 - ALWAYS ask for the business model explicitly during onboarding — do not assume or skip this step.
+- ALWAYS run discover_competitors before asking users to manually list competitors. Intelligence-driven discovery is better than guessing.
+- ALWAYS ask for the North Star website after competitors are confirmed — this is critical for CRO quality.
 - Propose actionable, prioritized items with clear action_payload so the Swarm can execute them.
 - For action_payload, include a "type" field (e.g., "content_generation", "technical_audit", "schema_markup", "link_building", "page_optimization", "cro_funnel") and relevant parameters.
 - Keep responses concise but insightful. Use bullet points for clarity.
 - If the user returns for a follow-up session, greet them by acknowledging you remember their brand context.`;
 
   if (brandContext && (brandContext.target_audience || brandContext.core_goals)) {
+    // Parse auto-discovered competitors for display
+    let discoveredList = "(not yet discovered — run discovery during onboarding)";
+    if (brandContext.auto_discovered_competitors) {
+      try {
+        const parsed = JSON.parse(brandContext.auto_discovered_competitors);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          discoveredList = parsed.map((c: any) => `${c.domain} — ${c.reason}`).join("\n  ");
+        }
+      } catch { /* keep default */ }
+    }
+
     prompt += `\n\n--- PERPETUAL BRAND MEMORY ---
 You have previously stored the following context about this brand:
 - Business Model: ${brandContext.business_model || "(not set — ask during onboarding)"}
 - Target Audience: ${brandContext.target_audience || "(not set)"}
 - Core Goals: ${brandContext.core_goals || "(not set)"}
 - Tone of Voice: ${brandContext.tone_of_voice || "(not set)"}
-- Competitors: ${brandContext.competitors || "(not set)"}
+- Manual Competitors: ${brandContext.competitors || "(not set)"}
+- Auto-Discovered SERP Competitors:\n  ${discoveredList}
+- North Star (aspirational site): ${brandContext.north_star_url || "(not set — ask during onboarding)"}
 - Last Updated: ${brandContext.last_updated || "unknown"}
 
 Use this knowledge to provide continuity. Do not ask for information you already have unless the user wants to update it.
-If business_model is "(not set)", ask for it in your next response — it is critical for tailoring CRO/SEO strategy.`;
+If business_model is "(not set)", ask for it in your next response — it is critical for tailoring CRO/SEO strategy.
+If north_star_url is "(not set)", ask the user to choose an aspirational site during onboarding.`;
   }
 
   return prompt;

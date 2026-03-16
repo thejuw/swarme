@@ -2187,6 +2187,12 @@ export async function registerRoutes(
       tone_of_voice: "Authoritative but approachable. Data-driven. Avoids hype.",
       competitors: "Ahrefs, Semrush, Surfer SEO, Clearscope",
       business_model: "e-commerce",
+      auto_discovered_competitors: JSON.stringify([
+        { domain: "luxurybrands-rival.com", reason: "Ranks #1 for 'premium fashion online' with strong product page optimization and 50+ backlinks", estimated_traffic: "50K-200K" },
+        { domain: "premium-style.co", reason: "Ranks #3 for 'premium fashion online' — heavy blog content strategy with 200+ indexed articles", estimated_traffic: "10K-50K" },
+        { domain: "trendsetters.shop", reason: "Ranks #5 for 'premium fashion online' — strong social proof with 4,000+ product reviews", estimated_traffic: "10K-50K" },
+      ]),
+      north_star_url: "https://www.everlane.com",
       last_updated: "2026-03-15T18:00:00",
     },
   };
@@ -2244,7 +2250,12 @@ export async function registerRoutes(
     let roadmapItemsAdded = 0;
     let brandContextUpdated = false;
 
-    if (userText.includes("http") || userText.includes("www.") || userText.includes(".com")) {
+    if (userText.includes("north star") || userText.includes("admire") || userText.includes("aspirational") || userText.includes("everlane") || userText.includes("feel like")) {
+      const nsUrl = userText.match(/https?:\/\/[^\s]+/)?.[0] || "https://www.everlane.com";
+      mockBrandContext.proj_001.north_star_url = nsUrl;
+      reply = `Excellent choice. I've saved **${nsUrl}** as your North Star.\n\nHere's what this means for your optimization strategy:\n\n🌟 **North Star Protocol Activated**\n\nI'll analyze ${nsUrl}'s design principles — their typography hierarchy, CTA placement, layout structure, color strategy, and trust signals. Every CRO suggestion the Swarm generates for your site will now reference these patterns.\n\nInstead of generic "move the CTA above the fold" advice, you'll get recommendations like: "Your North Star uses a sticky add-to-cart bar with high-contrast buttons and urgency micro-copy — implement the same pattern on your product pages."\n\nNow, tell me about your 6-month goals. What does success look like — revenue growth, traffic, or AI visibility?`;
+      brandContextUpdated = true;
+    } else if (userText.includes("http") || userText.includes("www.") || userText.includes(".com")) {
       reply = `I've completed the initial analysis of your site. Here's what I found:\n\n**Strengths:**\n- Clean page structure with good mobile responsiveness\n- SSL certificate active, no mixed content issues\n- Well-organized content structure\n\n**Opportunities:**\n- Missing blog content strategy — no long-form content targeting buyer keywords\n- FAQ schema markup absent on key pages (missing featured snippet opportunities)\n- Product/service descriptions are thin (avg 80 words) — should be 300+ with semantic keywords\n- No internal linking strategy between related pages\n- Image alt text missing on 40% of images\n\nBefore we set goals, I need to understand your business model. **How does this website generate value?**\n\n- 💰 **E-commerce Sales** — online store selling products directly\n- 🎯 **B2B Lead Generation** — capturing leads via forms, calendars, email signups\n- 🔗 **Affiliate Clicks** — earning commissions through outbound affiliate links\n- 📰 **Ad Revenue / Publishing** — monetizing through dwell time, pageviews, and ad impressions`;
       brandContextUpdated = false;
     } else if (userText.includes("e-commerce") || userText.includes("ecommerce") || userText.includes("store") || userText.includes("products")) {
@@ -2263,6 +2274,11 @@ export async function registerRoutes(
       reply = `Got it — **Ad Revenue / Publishing**. I've saved this to my memory. Engagement depth is everything for your model.\n\nFor publishers, the Swarm will focus on:\n- ⏱️ **Dwell time** optimization (compelling intros, visual rhythm, scroll hooks)\n- 📜 **Scroll depth** maximization (section headers, inline media, progress indicators)\n- 🔄 **Internal navigation** clicks ("Related Articles" cards, contextual inline links, recirculation widgets)\n- 🎯 A/B tests will measure **engagement depth rate** as the winner metric\n\nNow tell me about your 6-month goals. What does success look like — pageviews, ad RPM, or subscriber growth?`;
       brandContextUpdated = true;
       mockBrandContext.proj_001.business_model = "publisher";
+    } else if (userText.includes("discover") || userText.includes("competitor") && (userText.includes("find") || userText.includes("who"))) {
+      reply = `I've analyzed who's actually competing with you for organic traffic. Here's who you're up against:\n\n**🚨 Your SERP Competitors:**\n\n1. **luxurybrands-rival.com** — Ranks #1 for your primary keyword with strong product page optimization and 50+ backlinks to their category pages. Est. traffic: 50K-200K/mo.\n\n2. **premium-style.co** — Ranks #3 with a heavy blog content strategy (200+ indexed articles targeting long-tail variations). Est. traffic: 10K-50K/mo.\n\n3. **trendsetters.shop** — Ranks #5 with strong social proof (4,000+ product reviews and active Instagram commerce). Est. traffic: 10K-50K/mo.\n\nYou're currently losing traffic to these sites. They're eating into your keyword share.\n\nDo these look right? Want to add or remove any competitors? Once confirmed, I have one more question before we build your strategy.`;
+      brandContextUpdated = true;
+    } else if (userText.includes("confirm") || userText.includes("look right") || userText.includes("looks good") || userText.includes("yes") && userText.length < 20) {
+      reply = `Great, competitors confirmed and saved.\n\nOne more question — **is there a website you admire and want your site to feel like?**\n\nThis could be a competitor, an aspirational brand, or any site whose design and UX you consider world-class. I'll use it as a "North Star" to guide our CRO optimization suggestions.\n\nFor example: *"I want my site to feel like Everlane"* or *"https://www.glossier.com is the gold standard."*\n\nWhat's your North Star?`;
     } else if (userText.includes("goal") || userText.includes("revenue") || userText.includes("traffic") || userText.includes("grow")) {
       const model = mockBrandContext.proj_001?.business_model || "e-commerce";
       const modelLabels: any = { "e-commerce": "E-commerce", lead_gen: "Lead Gen", affiliate: "Affiliate", publisher: "Publisher" };

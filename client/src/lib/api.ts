@@ -918,6 +918,12 @@ export interface AIRoadmapResponse {
 
 export type BusinessModel = "e-commerce" | "lead_gen" | "affiliate" | "publisher";
 
+export interface DiscoveredCompetitor {
+  domain: string;
+  reason: string;
+  estimated_traffic?: string;
+}
+
 export interface BrandContextData {
   project_id: string;
   target_audience: string;
@@ -925,6 +931,8 @@ export interface BrandContextData {
   tone_of_voice: string;
   competitors: string;
   business_model: BusinessModel | "";
+  auto_discovered_competitors: string; // JSON stringified DiscoveredCompetitor[]
+  north_star_url: string;
   last_updated: string;
 }
 
@@ -1297,6 +1305,8 @@ export interface AdminUserBrandContext {
   tone_of_voice: string;
   competitors: string;
   business_model: string;
+  auto_discovered_competitors: string;
+  north_star_url: string;
 }
 
 export interface AdminUserTask {

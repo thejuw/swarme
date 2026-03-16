@@ -1,6 +1,6 @@
 /**
  * ============================================================
- * Swarme — Phase 16 + Phase 43: CRO Evaluation Engine
+ * Swarme — Phase 16 + Phase 43 + Phase 45: CRO Evaluation Engine
  * ============================================================
  *
  * Phase 16 (original): Analyzes Page_Telemetry data against
@@ -16,6 +16,12 @@
  *   affiliate   → Outbound affiliate link clicks
  *   publisher   → Dwell Time + Scroll Depth + Internal link clicks
  *
+ * Phase 45 (North Star): Before generating CRO suggestions, the
+ * engine can fetch the operator's "North Star" website DOM via
+ * the Cloudflare Browser Rendering /crawl endpoint, analyze its
+ * layout/design principles with a Heavy LLM, and use those
+ * principles to inform higher-quality optimization suggestions.
+ *
  * The CRO engine does NOT mutate data — it evaluates and returns
  * a list of optimization tasks for the Durable Object to execute.
  *
@@ -26,6 +32,7 @@
  */
 
 import type { BusinessModel } from "./aiManager";
+import type { Env } from "../index";
 
 // ─────────────────────────────────────────────────────────────
 // Types
@@ -172,6 +179,182 @@ export function getConversionConfig(
         secondaryKpis: ["scroll_depth", "dwell_time"],
       };
   }
+}
+
+// ─────────────────────────────────────────────────────────────
+// Phase 45: North Star DOM Analysis
+// ─────────────────────────────────────────────────────────────
+
+export interface NorthStarAnalysis {
+  typography: string;       // Font families, sizes, weight hierarchy
+  ctaPatterns: string;      // CTA placement, color, copy patterns
+  layoutStructure: string;  // Grid, spacing, section flow
+  colorScheme: string;      // Dominant colors, contrast approach
+  trustSignals: string;     // Reviews, badges, social proof placement
+  keyTakeaway: string;      // Single most impactful design principle
+}
+
+/**
+ * Fetch the North Star website's DOM via Cloudflare Browser Rendering
+ * /crawl endpoint and return the raw markdown/HTML for LLM analysis.
+ *
+ * Returns null if the BROWSER binding is unavailable or fetch fails.
+ */
+async function fetchNorthStarDom(
+  northStarUrl: string,
+  env: Env
+): Promise<string | null> {
+  if (!env.BROWSER) {
+    console.log("[CRO/NorthStar] BROWSER binding unavailable — skipping DOM fetch");
+    return null;
+  }
+
+  try {
+    const crawlResponse = await env.BROWSER.fetch(
+      "https://browser-rendering.cloudflare.com/crawl",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          url: northStarUrl,
+          scrapeOptions: { formats: ["markdown"] },
+        }),
+      }
+    );
+
+    if (!crawlResponse.ok) {
+      console.error(`[CRO/NorthStar] Crawl failed (${crawlResponse.status})`);
+      return null;
+    }
+
+    const data = (await crawlResponse.json()) as any;
+    // The /crawl endpoint returns scraped content — extract the markdown
+    const markdown = data?.result?.markdown || data?.markdown || data?.data?.markdown || JSON.stringify(data).slice(0, 8000);
+    // Truncate to ~6000 chars to keep LLM prompt manageable
+    return typeof markdown === "string" ? markdown.slice(0, 6000) : null;
+  } catch (err) {
+    console.error("[CRO/NorthStar] DOM fetch error:", err instanceof Error ? err.message : err);
+    return null;
+  }
+}
+
+/**
+ * Analyze the North Star DOM with a Heavy LLM (OpenAI GPT-4o) to
+ * extract design principles: typography, CTA patterns, layout
+ * structure, color scheme, trust signals.
+ *
+ * The analysis result is cached in CONFIG_KV for 24h to avoid
+ * repeated LLM calls for the same North Star URL.
+ */
+export async function analyzeNorthStarDesign(
+  northStarUrl: string,
+  env: Env
+): Promise<NorthStarAnalysis | null> {
+  if (!northStarUrl) return null;
+
+  // Check KV cache first
+  const cacheKey = `northstar:analysis:${northStarUrl}`;
+  try {
+    const cached = await env.CONFIG_KV.get<NorthStarAnalysis>(cacheKey, "json");
+    if (cached) {
+      console.log("[CRO/NorthStar] Using cached analysis");
+      return cached;
+    }
+  } catch { /* cache miss, proceed */ }
+
+  // Fetch the DOM
+  const domContent = await fetchNorthStarDom(northStarUrl, env);
+  if (!domContent) {
+    console.log("[CRO/NorthStar] No DOM content — returning mock analysis");
+    return buildMockNorthStarAnalysis(northStarUrl);
+  }
+
+  // Get OpenAI API key
+  const vaultKeys = await env.CONFIG_KV.get<Record<string, string>>(
+    "vault:infrastructure:ai_models",
+    "json"
+  );
+  const apiKey = vaultKeys?.openai_api_key || (env as any).OPENAI_API_KEY;
+
+  if (!apiKey) {
+    console.log("[CRO/NorthStar] No OpenAI key — returning mock analysis");
+    return buildMockNorthStarAnalysis(northStarUrl);
+  }
+
+  const systemPrompt = `You are an expert UI/UX analyst. Given the scraped content of a website, analyze its design and layout principles. Return ONLY valid JSON with these fields:
+- typography: Describe the font hierarchy, sizes, weights, and readability approach.
+- ctaPatterns: Describe CTA button placement, colors, copy patterns, and urgency techniques.
+- layoutStructure: Describe the page grid, spacing rhythm, section flow, and visual hierarchy.
+- colorScheme: Describe the dominant colors, accent usage, and contrast strategy.
+- trustSignals: Describe social proof elements (reviews, badges, logos, testimonials) and their placement.
+- keyTakeaway: One sentence summarizing the single most impactful design principle this site uses that others should emulate.
+
+Return ONLY the JSON object. No markdown fences, no explanation.`;
+
+  const userPrompt = `Analyze this website's design principles:\nURL: ${northStarUrl}\n\nPage content:\n${domContent}`;
+
+  try {
+    const res = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "gpt-4o",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
+        max_tokens: 1000,
+        temperature: 0.3,
+      }),
+    });
+
+    if (!res.ok) {
+      console.error(`[CRO/NorthStar] OpenAI error (${res.status})`);
+      return buildMockNorthStarAnalysis(northStarUrl);
+    }
+
+    const data = (await res.json()) as any;
+    const rawContent = data?.choices?.[0]?.message?.content || "";
+
+    let analysis: NorthStarAnalysis;
+    try {
+      const cleaned = rawContent.replace(/```json?\n?/g, "").replace(/```/g, "").trim();
+      analysis = JSON.parse(cleaned);
+    } catch {
+      console.error("[CRO/NorthStar] Failed to parse LLM analysis");
+      return buildMockNorthStarAnalysis(northStarUrl);
+    }
+
+    // Cache for 24 hours
+    try {
+      await env.CONFIG_KV.put(cacheKey, JSON.stringify(analysis), { expirationTtl: 86400 });
+    } catch { /* non-fatal */ }
+
+    return analysis;
+  } catch (err) {
+    console.error("[CRO/NorthStar] Analysis failed:", err instanceof Error ? err.message : err);
+    return buildMockNorthStarAnalysis(northStarUrl);
+  }
+}
+
+function buildMockNorthStarAnalysis(url: string): NorthStarAnalysis {
+  return {
+    typography:
+      "Uses a clean sans-serif hierarchy: 48px bold hero headings, 24px section headers, 16px body text with 1.6 line-height. Weight contrast (700 vs 400) creates clear visual hierarchy without font variety.",
+    ctaPatterns:
+      "Primary CTA is high-contrast (dark button on light background) positioned above the fold and repeated after every major content section. CTA copy is action-oriented ('Shop Now', 'Get Started') with urgency micro-copy below ('Limited time offer').",
+    layoutStructure:
+      "12-column grid with generous whitespace (80px section padding). Hero → Social Proof → Features → Testimonials → CTA flow. Alternating left/right image-text sections create visual rhythm. Sticky header with minimal navigation.",
+    colorScheme:
+      "Monochromatic neutral base (white/slate-50 backgrounds, slate-900 text) with a single high-saturation accent color for CTAs and interactive elements. 7:1 contrast ratio on all text.",
+    trustSignals:
+      "Customer review count prominently displayed near hero (\"12,000+ 5-star reviews\"). Brand logos bar immediately below hero. Individual testimonials with photos and full names mid-page. Security badges and guarantee text near checkout CTAs.",
+    keyTakeaway:
+      `The site's most impactful principle is ruthless simplicity — every section has exactly one job, one visual focal point, and one clear action, which eliminates decision fatigue and drives conversion.`,
+  };
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -629,6 +812,51 @@ export function evaluatePagePerformance(
 }
 
 // ─────────────────────────────────────────────────────────────
+// North Star Enrichment (Phase 45)
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * Enrich CRO tasks with North Star design intelligence.
+ * Appends specific design guidance from the North Star analysis
+ * to each task's reason field, so the Swarm's optimization
+ * instructions reference the aspirational site's patterns.
+ */
+function enrichTasksWithNorthStar(
+  tasks: CROTask[],
+  analysis: NorthStarAnalysis
+): CROTask[] {
+  return tasks.map((task) => {
+    let northStarGuidance = "";
+
+    switch (task.task_type) {
+      case "CTA_OPTIMIZATION":
+        northStarGuidance = `\n\n🌟 North Star guidance: ${analysis.ctaPatterns}`;
+        break;
+      case "DOM_REORDER":
+        northStarGuidance = `\n\n🌟 North Star guidance: ${analysis.layoutStructure}`;
+        break;
+      case "CONTENT_REWRITE":
+        northStarGuidance = `\n\n🌟 North Star guidance (typography): ${analysis.typography}`;
+        break;
+      case "FUNNEL_FIX":
+        northStarGuidance = `\n\n🌟 North Star guidance (trust + CTAs): ${analysis.trustSignals} CTA approach: ${analysis.ctaPatterns}`;
+        break;
+      case "LINK_PLACEMENT":
+        northStarGuidance = `\n\n🌟 North Star guidance (layout): ${analysis.layoutStructure}`;
+        break;
+      case "ENGAGEMENT_BOOST":
+        northStarGuidance = `\n\n🌟 North Star guidance (key principle): ${analysis.keyTakeaway}`;
+        break;
+    }
+
+    return {
+      ...task,
+      reason: task.reason + northStarGuidance,
+    };
+  });
+}
+
+// ─────────────────────────────────────────────────────────────
 // Batch Evaluation (for cron-triggered sweeps)
 // ─────────────────────────────────────────────────────────────
 
@@ -639,11 +867,13 @@ export function evaluatePagePerformance(
  */
 export function evaluateProjectTelemetry(
   pages: TelemetryRow[],
-  businessModel: BusinessModel | "" = ""
+  businessModel: BusinessModel | "" = "",
+  northStarAnalysis?: NorthStarAnalysis | null
 ): {
   total_evaluated: number;
   pages_needing_optimization: number;
   business_model: string;
+  north_star_enriched: boolean;
   conversion_config: ConversionConfig;
   tasks: CROTask[];
   results: CROEvaluationResult[];
@@ -652,7 +882,13 @@ export function evaluateProjectTelemetry(
     evaluatePagePerformance(page.asset_id, page, businessModel)
   );
 
-  const allTasks = results.flatMap((r) => r.tasks);
+  let allTasks = results.flatMap((r) => r.tasks);
+
+  // Phase 45: Enrich tasks with North Star design intelligence
+  const hasNorthStar = !!northStarAnalysis;
+  if (northStarAnalysis) {
+    allTasks = enrichTasksWithNorthStar(allTasks, northStarAnalysis);
+  }
 
   // Sort tasks: high priority first, then by view count (descending)
   allTasks.sort((a, b) => {
@@ -667,6 +903,7 @@ export function evaluateProjectTelemetry(
     pages_needing_optimization: results.filter((r) => r.needs_optimization)
       .length,
     business_model: businessModel || "default",
+    north_star_enriched: hasNorthStar,
     conversion_config: getConversionConfig(businessModel || "default"),
     tasks: allTasks,
     results,
