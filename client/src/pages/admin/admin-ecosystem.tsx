@@ -31,7 +31,7 @@ interface Integration {
 }
 
 const integrations: Integration[] = [
-  { name: "OpenAI", description: "GPT-4o content drafting", icon: Brain, status: "connected", version: "v4" },
+  { name: "Perplexity", description: "Sonar Pro content drafting", icon: Brain, status: "connected", version: "v2" },
   { name: "Perplexity", description: "AI visibility monitoring", icon: Globe, status: "connected", version: "v1" },
   { name: "Anthropic", description: "Claude editorial review", icon: Brain, status: "disconnected" },
   { name: "Stripe", description: "Billing & subscription management", icon: CreditCard, status: "disconnected" },

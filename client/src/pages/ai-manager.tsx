@@ -704,7 +704,7 @@ const TELEMETRY_LABELS: Record<string, string> = {
 
 const EXPLAIN_TEXTS: Record<string, string> = {
   llms_txt:
-    "I am currently translating your website's architecture into /llms.txt format. This removes the visual code and feeds pure, structured data directly to Google's Gemini and OpenAI, ensuring they understand your products without friction.",
+    "I am currently translating your website's architecture into /llms.txt format. This removes the visual code and feeds pure, structured data directly to Google's Gemini and Perplexity, ensuring they understand your products without friction.",
   rag_bait:
     "The RAG-Bait Injector places invisible, factual summary blocks after each section heading in your HTML. AI crawlers extract these pre-digested answer blocks and are more likely to cite them verbatim when users ask about your products.",
   proprietary_reports:
@@ -986,7 +986,7 @@ const PROACTIVE_TELEMETRY_MESSAGE: ManagerChatMessage = {
     `\ud83d\udd0d **AI Parsing Status Update**\n\n` +
     `I am currently translating your website's architecture into \`/llms.txt\` format. ` +
     `This removes the visual code and feeds pure, structured data directly to Google's ` +
-    `Gemini and OpenAI, ensuring they understand your products without friction.\n\n` +
+    `Gemini and Perplexity, ensuring they understand your products without friction.\n\n` +
     `**Active subsystems:**\n` +
     `\u2022 \`/llms.txt\` Dynamic Router \u2014 serving structured product data to AI crawlers\n` +
     `\u2022 RAG-Bait Injector \u2014 placing hidden answer blocks in your HTML for citation extraction\n` +

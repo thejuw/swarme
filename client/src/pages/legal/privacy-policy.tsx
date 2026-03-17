@@ -130,7 +130,7 @@ export default function PrivacyPolicy() {
                     <td className="py-2.5">All platform data (processed at edge)</td>
                   </tr>
                   <tr>
-                    <td className="py-2.5 pr-4 text-foreground font-medium">OpenAI</td>
+                    <td className="py-2.5 pr-4 text-foreground font-medium">Perplexity</td>
                     <td className="py-2.5 pr-4">AI content generation, analysis</td>
                     <td className="py-2.5">Store content, SEO metrics (anonymized)</td>
                   </tr>

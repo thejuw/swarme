@@ -4,12 +4,12 @@
  * ============================================================
  *
  * Generates an updated/modernized version of an aging article
- * via OpenAI and stages it for human review. The refresh draft
+ * via Perplexity and stages it for human review. The refresh draft
  * is NEVER published automatically — strict copilot constraint.
  *
  * Pipeline:
  *   1. Receive old HTML + target keyword from the DO
- *   2. Call OpenAI GPT-4o-mini to rewrite the content
+ *   2. Call Perplexity Sonar to rewrite the content
  *   3. Save the refresh draft payload to Content_Assets
  *   4. Set refresh_status = AWAITING_APPROVAL
  *
@@ -40,23 +40,23 @@ Guidelines:
 - Output the completely rewritten HTML content (article body only, no <html>/<head>/<body> wrappers)`;
 
 /**
- * Calls OpenAI to generate refreshed/modernized content for
+ * Calls Perplexity to generate refreshed/modernized content for
  * an aging article. Falls back to a simple mock if no API key
  * is available.
  *
  * @param oldHtml          The existing published HTML content
  * @param targetKeyword    The primary keyword the article targets
- * @param openaiApiKey     OpenAI API key (from KV vault or env)
+ * @param perplexityApiKey     Perplexity API key (from KV vault or env)
  * @returns                The refreshed HTML content string
  */
 export async function generateRefreshedContent(
   oldHtml: string,
   targetKeyword: string,
-  openaiApiKey: string
+  perplexityApiKey: string
 ): Promise<string> {
   // If no API key, return a structured mock
-  if (!openaiApiKey) {
-    console.log("[Refresh Agent] No OpenAI key — generating mock refresh");
+  if (!perplexityApiKey) {
+    console.log("[Refresh Agent] No Perplexity key — generating mock refresh");
     return generateMockRefresh(oldHtml, targetKeyword);
   }
 
@@ -67,15 +67,15 @@ export async function generateRefreshedContent(
 ${oldHtml.slice(0, 12000)}
 --- END ---`;
 
-    const throttledOpenai = createThrottledFetch("openai", env.CONFIG_KV);
-    const response = await throttledOpenai("https://api.openai.com/v1/chat/completions", {
+    const throttledPplx = createThrottledFetch("perplexity_chat", env.CONFIG_KV);
+    const response = await throttledPplx("https://api.perplexity.ai/chat/completions", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${openaiApiKey}`,
+        Authorization: `Bearer ${perplexityApiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "gpt-4o-mini",
+        model: "sonar",
         messages: [
           { role: "system", content: REFRESH_SYSTEM_PROMPT },
           { role: "user", content: userPrompt },
@@ -88,10 +88,10 @@ ${oldHtml.slice(0, 12000)}
     if (!response.ok) {
       const errorText = await response.text();
       console.error(
-        `[Refresh Agent] OpenAI error ${response.status}:`,
+        `[Refresh Agent] Perplexity error ${response.status}:`,
         errorText
       );
-      throw new Error(`OpenAI API error: ${response.status}`);
+      throw new Error(`Perplexity API error: ${response.status}`);
     }
 
     const data = (await response.json()) as {
@@ -101,7 +101,7 @@ ${oldHtml.slice(0, 12000)}
     const refreshedContent = data.choices?.[0]?.message?.content?.trim();
 
     if (!refreshedContent) {
-      throw new Error("Empty response from OpenAI");
+      throw new Error("Empty response from Perplexity");
     }
 
     console.log(

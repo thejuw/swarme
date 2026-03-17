@@ -78,7 +78,7 @@ binding = "AI"
 #   wrangler secret put <NAME> --env production
 #
 # Required for core pipeline:
-#   OPENAI_API_KEY        — GPT-4o content generation (drafting)
+#   GEMINI_API_KEY        — Gemini Imagen image generation
 #   PERPLEXITY_API_KEY    — Sonar research API (SERP + citations)
 #
 # Monetization (Phase 7):
@@ -134,7 +134,7 @@ R2_PUBLIC_BASE = "https://media.swarme.io"
 #
 # Set secrets:
 #   npx wrangler secret put JWT_SECRET --env staging
-#   npx wrangler secret put OPENAI_API_KEY --env staging
+#   npx wrangler secret put GEMINI_API_KEY --env staging
 #   (etc.)
 #
 # ════════════════════════════════════════════════════════════
@@ -178,7 +178,7 @@ crons = []
 #
 # Set secrets:
 #   npx wrangler secret put JWT_SECRET --env production
-#   npx wrangler secret put OPENAI_API_KEY --env production
+#   npx wrangler secret put GEMINI_API_KEY --env production
 #   (etc.)
 #
 # ════════════════════════════════════════════════════════════

@@ -3,7 +3,7 @@
  * Phase 56.2: Upstream API Circuit Breakers
  * ============================================================
  *
- * Wraps upstream API calls (OpenAI, Perplexity, Resend) with
+ * Wraps upstream API calls (Perplexity, Resend) with
  * circuit-breaker logic to prevent cascade failures.
  *
  * States:
@@ -21,8 +21,8 @@
  * Worker isolate restarts and be read by the frontend.
  *
  * Usage:
- *   const breaker = new CircuitBreaker("openai", env.CONFIG_KV);
- *   const result = await breaker.call(() => fetchOpenAI(...));
+ *   const breaker = new CircuitBreaker("perplexity_chat", env.CONFIG_KV);
+ *   const result = await breaker.call(() => fetchPerplexity(...));
  * ============================================================
  */
 
@@ -64,7 +64,7 @@ const DEFAULT_CONFIG: CircuitBreakerConfig = {
 
 // ── Services Registry ────────────────────────────────────────
 
-export const CIRCUIT_SERVICES = ["openai", "perplexity", "resend"] as const;
+export const CIRCUIT_SERVICES = ["perplexity_chat", "perplexity", "gemini", "resend"] as const;
 export type CircuitService = (typeof CIRCUIT_SERVICES)[number];
 
 // ── Circuit Breaker Class ────────────────────────────────────

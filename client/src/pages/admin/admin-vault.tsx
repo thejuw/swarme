@@ -89,7 +89,7 @@ const tabConfig = [
     icon: Brain,
     description: "API keys for AI model providers.",
     fields: [
-      { key: "OPENAI_API_KEY", label: "OpenAI API Key" },
+      { key: "GEMINI_API_KEY", label: "Gemini API Key" },
       { key: "ANTHROPIC_API_KEY", label: "Anthropic API Key" },
       { key: "PERPLEXITY_API_KEY", label: "Perplexity API Key" },
     ],

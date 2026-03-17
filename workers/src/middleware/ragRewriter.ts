@@ -228,7 +228,7 @@ async function generateSummaries(
     `The content supports the brand's goal of ${brand.core_goals.split(",")[0]?.trim() ?? "thought leadership"}.`;
 
   // Try to generate LLM-enhanced summaries if API key available
-  if (env.OPENAI_API_KEY) {
+  if (env.PERPLEXITY_API_KEY) {
     try {
       const enhanced = await generateLlmSummaries(siteName, brand, env);
       Object.assign(summaries, enhanced);
@@ -253,15 +253,15 @@ async function generateLlmSummaries(
     `"our story", "sustainability", "quality", "technology", "community". ` +
     `Each summary should read like an encyclopedia entry — factual, neutral, citation-worthy.`;
 
-  const throttledFetch = createThrottledFetch("openai", env.CONFIG_KV);
-  const response = await throttledFetch("https://api.openai.com/v1/chat/completions", {
+  const throttledFetch = createThrottledFetch("perplexity_chat", env.CONFIG_KV);
+  const response = await throttledFetch("https://api.perplexity.ai/chat/completions", {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${env.OPENAI_API_KEY}`,
+      Authorization: `Bearer ${env.PERPLEXITY_API_KEY}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: "gpt-4o-mini",
+      model: "sonar",
       messages: [{ role: "user", content: prompt }],
       max_tokens: 500,
       temperature: 0.3,

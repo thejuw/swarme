@@ -5,7 +5,7 @@
  *
  * Handles all outbound network requests from the swarm:
  *   1. fetchResearchData()  — Perplexity API (SERP research)
- *   2. generateContent()    — OpenAI API (content drafting)
+ *   2. generateContent()    — Perplexity API (content drafting)
  *   3. pushToCMS()          — Generic webhook (CMS publishing)
  *   4. pushToShopify()      — Shopify Admin API (blog article)
  *
@@ -197,7 +197,7 @@ export async function fetchResearchData(
 
 
 // ─────────────────────────────────────────────────────────────
-// 2. OpenAI API — Content Generation
+// 2. Perplexity API — Content Generation
 // ─────────────────────────────────────────────────────────────
 
 /**
@@ -250,7 +250,7 @@ const LANGUAGE_NAMES: Record<string, string> = {
 };
 
 /**
- * Calls the OpenAI Chat Completions API to produce a full
+ * Calls the Perplexity Chat Completions API to produce a full
  * SEO-optimized article draft. The system prompt dynamically
  * injects brand guidelines so output requires zero human editing.
  *
@@ -260,7 +260,7 @@ const LANGUAGE_NAMES: Record<string, string> = {
  *
  * @param context         — Research context (competitor analysis, gaps, entities)
  * @param brandGuidelines — Project's brand voice and style rules
- * @param apiKey          — OpenAI API bearer token
+ * @param apiKey          — Perplexity API bearer token
  * @param keyword         — Target keyword for SEO optimization
  * @param targetLanguage  — ISO 639-1 code (default: "en")
  * @returns Parsed content generation result
@@ -331,15 +331,15 @@ export async function generateContent(
     "}",
   ].join("\n");
 
-  const throttledOpenai = createThrottledFetch("openai", env.CONFIG_KV);
-  const response = await throttledOpenai("https://api.openai.com/v1/chat/completions", {
+  const throttledPplx = createThrottledFetch("perplexity_chat", env.CONFIG_KV);
+  const response = await throttledPplx("https://api.perplexity.ai/chat/completions", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: "gpt-4o",
+      model: "sonar-pro",
       messages: [
         { role: "system", content: systemPrompt },
         {
@@ -365,7 +365,7 @@ export async function generateContent(
   if (!response.ok) {
     const body = await response.text().catch(() => "No response body");
     throw new ExternalAPIError(
-      "OpenAI",
+      "Perplexity",
       response.status,
       body.slice(0, 500),
       RETRYABLE_STATUS_CODES.has(response.status)

@@ -240,7 +240,7 @@ async function fetchNorthStarDom(
 }
 
 /**
- * Analyze the North Star DOM with a Heavy LLM (OpenAI GPT-4o) to
+ * Analyze the North Star DOM with a Heavy LLM (Perplexity Sonar Pro) to
  * extract design principles: typography, CTA patterns, layout
  * structure, color scheme, trust signals.
  *
@@ -270,15 +270,15 @@ export async function analyzeNorthStarDesign(
     return buildMockNorthStarAnalysis(northStarUrl);
   }
 
-  // Get OpenAI API key
+  // Get Perplexity API key
   const vaultKeys = await env.CONFIG_KV.get<Record<string, string>>(
     "vault:infrastructure:ai_models",
     "json"
   );
-  const apiKey = vaultKeys?.openai_api_key || (env as any).OPENAI_API_KEY;
+  const apiKey = vaultKeys?.perplexity_api_key || (env as any).PERPLEXITY_API_KEY;
 
   if (!apiKey) {
-    console.log("[CRO/NorthStar] No OpenAI key — returning mock analysis");
+    console.log("[CRO/NorthStar] No Perplexity key — returning mock analysis");
     return buildMockNorthStarAnalysis(northStarUrl);
   }
 
@@ -295,15 +295,15 @@ Return ONLY the JSON object. No markdown fences, no explanation.`;
   const userPrompt = `Analyze this website's design principles:\nURL: ${northStarUrl}\n\nPage content:\n${domContent}`;
 
   try {
-    const throttledOpenai = createThrottledFetch("openai", env.CONFIG_KV);
-    const res = await throttledOpenai("https://api.openai.com/v1/chat/completions", {
+    const throttledPplx = createThrottledFetch("perplexity_chat", env.CONFIG_KV);
+    const res = await throttledPplx("https://api.perplexity.ai/chat/completions", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "gpt-4o",
+        model: "sonar-pro",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
@@ -314,7 +314,7 @@ Return ONLY the JSON object. No markdown fences, no explanation.`;
     });
 
     if (!res.ok) {
-      console.error(`[CRO/NorthStar] OpenAI error (${res.status})`);
+      console.error(`[CRO/NorthStar] Perplexity error (${res.status})`);
       return buildMockNorthStarAnalysis(northStarUrl);
     }
 

@@ -15,8 +15,9 @@
  *   - State is stored in KV for cross-isolate coordination
  *
  * Services wrapped:
- *   - OpenAI   (9,900 TPM limit of 10,000 enterprise)
- *   - Perplexity (900 RPM → ~15 RPS)
+ *   - Perplexity Chat (Sonar Pro — ~900 RPM)
+ *   - Perplexity Search (900 RPM → ~15 RPS)
+ *   - Gemini   (Imagen — ~60 RPM)
  *   - Resend    (90 RPM → ~1.5 RPS)
  *
  * Security:
@@ -28,7 +29,7 @@
 
 // ── Types ────────────────────────────────────────────────────
 
-export type ThrottledService = "openai" | "perplexity" | "resend";
+export type ThrottledService = "perplexity_chat" | "perplexity" | "gemini" | "resend";
 
 interface BucketState {
   tokens: number;
@@ -49,10 +50,10 @@ interface ThrottleConfig {
 // ── Default Configurations ───────────────────────────────────
 
 const SERVICE_CONFIGS: Record<ThrottledService, ThrottleConfig> = {
-  openai: {
-    maxTokens: 9900,        // 9,900 of 10,000 TPM enterprise limit
-    refillRate: 165,         // 9,900 / 60 = 165 tokens per second
-    tokensPerRequest: 500,   // Average tokens per completion request
+  perplexity_chat: {
+    maxTokens: 15,           // Perplexity Sonar: ~900 RPM → 15 RPS burst
+    refillRate: 15,          // 15 tokens per second refill
+    tokensPerRequest: 1,     // 1 token per request (request-based limiter)
     maxWaitMs: 30_000,       // 30 second max queue wait
   },
   perplexity: {
@@ -66,6 +67,12 @@ const SERVICE_CONFIGS: Record<ThrottledService, ThrottleConfig> = {
     refillRate: 1.5,         // 1.5 tokens per second
     tokensPerRequest: 1,     // 1 token per request
     maxWaitMs: 15_000,       // 15 second max queue wait
+  },
+  gemini: {
+    maxTokens: 10,           // Gemini Imagen: ~60 RPM → 1 RPS sustained, burst of 10
+    refillRate: 1,           // 1 token per second
+    tokensPerRequest: 1,     // 1 token per request
+    maxWaitMs: 30_000,       // 30 second max queue wait
   },
 };
 
@@ -237,8 +244,8 @@ export class ThrottleTimeoutError extends Error {
  * the global rate limit for the specified service.
  *
  * Usage:
- *   const throttledFetch = createThrottledFetch("openai", env.CONFIG_KV);
- *   const response = await throttledFetch("https://api.openai.com/v1/...", { ... });
+ *   const throttledFetch = createThrottledFetch("perplexity_chat", env.CONFIG_KV);
+ *   const response = await throttledFetch("https://api.perplexity.ai/chat/completions", { ... });
  */
 export function createThrottledFetch(
   service: ThrottledService,
@@ -252,8 +259,9 @@ export function createThrottledFetch(
 // ── Helper: Get all throttle statuses ────────────────────────
 
 export const THROTTLED_SERVICES: ThrottledService[] = [
-  "openai",
+  "perplexity_chat",
   "perplexity",
+  "gemini",
   "resend",
 ];
 

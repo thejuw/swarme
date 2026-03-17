@@ -9,7 +9,7 @@
  *  3. Inject <a> tags into the new HTML pointing to those articles
  *
  * Embedding model: @cf/baai/bge-base-en-v1.5 (768 dimensions)
- * Fallback: OpenAI text-embedding-3-small (1536 dims, truncated)
+ * Fallback: Perplexity pplx-embed-v1-4b (1536 dims, truncated)
  *
  * The link injector scans for natural anchor phrases from the
  * matched articles' titles/keywords and wraps the first occurrence
@@ -53,7 +53,7 @@ export interface LinkInjectionResult {
 
 /**
  * Generate a vector embedding for the given text using Cloudflare
- * Workers AI (BGE-base-en-v1.5, 768 dims). Falls back to OpenAI
+ * Workers AI (BGE-base-en-v1.5, 768 dims). Falls back to Perplexity
  * text-embedding-3-small if Workers AI is unavailable.
  */
 export async function generateEmbedding(
@@ -75,22 +75,22 @@ export async function generateEmbedding(
     }
     throw new Error("Empty embedding returned from Workers AI");
   } catch (err) {
-    console.warn(`[Vectorize] Workers AI embedding failed, trying OpenAI: ${err instanceof Error ? err.message : err}`);
+    console.warn(`[Vectorize] Workers AI embedding failed, trying Perplexity: ${err instanceof Error ? err.message : err}`);
 
-    // Fallback: OpenAI text-embedding-3-small
-    if (!env.OPENAI_API_KEY) {
-      throw new Error("No embedding model available — both Workers AI and OpenAI failed");
+    // Fallback: Perplexity Embeddings API
+    if (!env.PERPLEXITY_API_KEY) {
+      throw new Error("No embedding model available — both Workers AI and Perplexity failed");
     }
 
-    const throttledOpenai = createThrottledFetch("openai", env.CONFIG_KV);
-    const res = await throttledOpenai("https://api.openai.com/v1/embeddings", {
+    const throttledPplx = createThrottledFetch("perplexity_chat", env.CONFIG_KV);
+    const res = await throttledPplx("https://api.perplexity.ai/v1/embeddings", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${env.OPENAI_API_KEY}`,
+        Authorization: `Bearer ${env.PERPLEXITY_API_KEY}`,
       },
       body: JSON.stringify({
-        model: "text-embedding-3-small",
+        model: "pplx-embed-v1-4b",
         input: truncated,
         dimensions: 768, // Match Vectorize index dimensions
       }),
@@ -98,7 +98,7 @@ export async function generateEmbedding(
 
     if (!res.ok) {
       const errText = await res.text();
-      throw new Error(`OpenAI embedding error ${res.status}: ${errText}`);
+      throw new Error(`Perplexity embedding error ${res.status}: ${errText}`);
     }
 
     const data = (await res.json()) as {

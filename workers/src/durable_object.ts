@@ -14,7 +14,7 @@
  *
  * Phase 4 upgrades:
  *   - stepResearch() calls Perplexity API via fetchResearchData()
- *   - stepDraft() calls OpenAI API via generateContent()
+ *   - stepDraft() calls Perplexity API via generateContent()
  *   - evaluatePublishRouting() calls CMS webhook via pushToCMS()
  *   - All external calls wrapped in try/catch with fail-safe
  *     state reversion — the DO never advances past a failed step
@@ -168,7 +168,7 @@ export interface DraftOutput {
   model: string;
   tokensUsed: number;
   completedAt: string;
-  source: "openai_api" | "mock_fallback";
+  source: "perplexity_api" | "mock_fallback";
 }
 
 /** Phase 40: Media generation output from DALL-E pipeline. */
@@ -221,7 +221,7 @@ export interface PublishOutput {
 const KV_KEYS = {
   settings: (projectId: string) => `config:project:${projectId}:settings`,
   perplexityKey: (projectId: string) => `vault:project:${projectId}:perplexity_api_key`,
-  openaiKey: (projectId: string) => `vault:project:${projectId}:openai_api_key`,
+  perplexityKey: (projectId: string) => `vault:project:${projectId}:perplexity_api_key`,
   brandGuidelines: (projectId: string) => `vault:project:${projectId}:brand_guidelines`,
   cmsWebhookUrl: (projectId: string) => `vault:project:${projectId}:cms_webhook_url`,
   cmsApiKey: (projectId: string) => `vault:project:${projectId}:cms_api_key`,
@@ -746,11 +746,11 @@ export class AgentWorkflowManager implements DurableObject {
   }
 
   // ───────────────────────────────────────────────────────────
-  // Pipeline Step 2: Draft (OpenAI API)
+  // Pipeline Step 2: Draft (Perplexity API)
   // ───────────────────────────────────────────────────────────
 
   /**
-   * Generates content via the OpenAI API with dynamic brand
+   * Generates content via the Perplexity API with dynamic brand
    * guideline injection. Falls back to mock if no key available.
    *
    * Error handling: same pattern as stepResearch.
@@ -764,8 +764,8 @@ export class AgentWorkflowManager implements DurableObject {
     const research = this.workflow.pipeline.research;
 
     // Retrieve keys and config from KV vault
-    const projectApiKey = await this.env.CONFIG_KV.get(KV_KEYS.openaiKey(projectId));
-    const apiKey = projectApiKey || this.env.OPENAI_API_KEY;
+    const projectApiKey = await this.env.CONFIG_KV.get(KV_KEYS.perplexityKey(projectId));
+    const apiKey = projectApiKey || this.env.PERPLEXITY_API_KEY;
 
     const brandGuidelinesJson = await this.env.CONFIG_KV.get(KV_KEYS.brandGuidelines(projectId));
     const brandGuidelines: BrandGuidelines = brandGuidelinesJson
@@ -789,7 +789,7 @@ export class AgentWorkflowManager implements DurableObject {
     let draftOutput: DraftOutput;
 
     if (apiKey) {
-      // ── LIVE: Call OpenAI API ──
+      // ── LIVE: Call Perplexity API ──
       // Build the research context string for the LLM
       const researchContext = [
         `Top competitors: ${research.topCompetitors.join(", ")}`,
@@ -822,11 +822,11 @@ export class AgentWorkflowManager implements DurableObject {
         model: result.model,
         tokensUsed: result.tokensUsed,
         completedAt: new Date().toISOString(),
-        source: "openai_api",
+        source: "perplexity_api",
       };
     } else {
       // ── FALLBACK: Deterministic mock ──
-      console.log(`[DO] No OpenAI API key for ${projectId} — using mock draft`);
+      console.log(`[DO] No Perplexity API key for ${projectId} — using mock draft`);
       const hash = this.hashString(keyword + "draft");
 
       draftOutput = {
@@ -899,12 +899,12 @@ export class AgentWorkflowManager implements DurableObject {
     );
 
     try {
-      // Retrieve OpenAI key from KV vault for DALL-E 3 calls
-      const openaiKey = await this.env.CONFIG_KV.get(
-        KV_KEYS.openaiKey(projectId)
+      // Retrieve Gemini key from KV vault for image generation
+      const geminiKey = await this.env.CONFIG_KV.get(
+        `vault:project:${projectId}:gemini_api_key`
       );
 
-      if (!openaiKey) {
+      if (!geminiKey && !this.env.GEMINI_API_KEY) {
         // No API key — skip media generation gracefully
         const skipOutput: MediaGenerationOutput = {
           totalPlaceholders: 0,
@@ -922,7 +922,7 @@ export class AgentWorkflowManager implements DurableObject {
           "media",
           "Media Generation",
           "Completed",
-          `[skipped] No OpenAI API key — media generation bypassed`
+          `[skipped] No Gemini API key — media generation bypassed`
         );
         return;
       }
@@ -930,13 +930,9 @@ export class AgentWorkflowManager implements DurableObject {
       // Run the full media pipeline from media.ts
       const result: MediaGenerationResult = await processMediaPlaceholders(
         draft.htmlContent,
-        {
-          openaiApiKey: openaiKey,
-          r2Bucket: this.env.MEDIA_BUCKET,
-          r2PublicBase: this.env.R2_PUBLIC_BASE,
-          projectId,
-          articleContext: `Article about "${keyword}" — ${draft.title}`,
-        }
+        keyword,
+        projectId,
+        this.env,
       );
 
       // Update the draft HTML with media-enriched version
@@ -946,9 +942,9 @@ export class AgentWorkflowManager implements DurableObject {
         totalPlaceholders: result.totalPlaceholders,
         imagesGenerated: result.imagesGenerated,
         imagesSkipped: result.imagesSkipped,
-        r2Keys: result.r2Keys,
+        r2Keys: result.details.filter(d => d.image).map(d => d.image!.r2Key),
         completedAt: new Date().toISOString(),
-        source: "dalle3_r2",
+        source: "gemini_r2",
       };
 
       this.workflow.pipeline.mediaGeneration = mediaOutput;
@@ -1997,7 +1993,7 @@ export class AgentWorkflowManager implements DurableObject {
    *   2. Run evaluatePagePerformance() from the CRO engine
    *   3. For each triggered task:
    *      - DOM_REORDER: Use HTMLRewriter to move the CTA above the fold
-   *      - CONTENT_REWRITE: Use OpenAI to rewrite the intro paragraph
+   *      - CONTENT_REWRITE: Use Perplexity to rewrite the intro paragraph
    *   4. Push optimized HTML back via CMS webhooks
    *   5. Update last_optimized_at timestamp
    */
@@ -2211,11 +2207,11 @@ export class AgentWorkflowManager implements DurableObject {
   }
 
   /**
-   * CONTENT_REWRITE: Uses OpenAI to rewrite the first paragraph
+   * CONTENT_REWRITE: Uses Perplexity to rewrite the first paragraph
    * (intro) of the article to be more engaging and reduce bounce.
    *
    * Falls back to a simple HTMLRewriter hook-enhancement if
-   * OpenAI key is not configured.
+   * Perplexity key is not configured.
    */
   private async executeContentRewrite(
     html: string,
@@ -2234,19 +2230,19 @@ export class AgentWorkflowManager implements DurableObject {
 
     let rewrittenIntro = "";
 
-    // Try OpenAI for an intelligent rewrite
-    if (env.OPENAI_API_KEY) {
+    // Try Perplexity for an intelligent rewrite
+    if (env.PERPLEXITY_API_KEY) {
       try {
         const response = await fetch(
-          "https://api.openai.com/v1/chat/completions",
+          "https://api.perplexity.ai/chat/completions",
           {
             method: "POST",
             headers: {
-              Authorization: `Bearer ${env.OPENAI_API_KEY}`,
+              Authorization: `Bearer ${env.PERPLEXITY_API_KEY}`,
               "Content-Type": "application/json",
             },
             body: JSON.stringify({
-              model: "gpt-4o-mini",
+              model: "sonar",
               messages: [
                 {
                   role: "system",
@@ -2276,7 +2272,7 @@ export class AgentWorkflowManager implements DurableObject {
           rewrittenIntro = data.choices?.[0]?.message?.content?.trim() || "";
         }
       } catch (apiErr) {
-        console.error("[DO CRO] OpenAI rewrite failed:", apiErr);
+        console.error("[DO CRO] Perplexity rewrite failed:", apiErr);
       }
     }
 
@@ -2328,24 +2324,24 @@ export class AgentWorkflowManager implements DurableObject {
         `[DO Refresh] Generating refresh for asset ${assetId} (keyword: "${keyword}")`
       );
 
-      // Get the OpenAI key from KV or env
+      // Get the Perplexity key from KV or env
       const projectId = this.workflow?.projectId || "";
-      let openaiKey = "";
+      let pplxKey = "";
       if (projectId) {
-        openaiKey =
+        pplxKey =
           (await this.env.CONFIG_KV.get(
-            `vault:project:${projectId}:openai_api_key`
+            `vault:project:${projectId}:perplexity_api_key`
           )) || "";
       }
-      if (!openaiKey) {
-        openaiKey = this.env.OPENAI_API_KEY || "";
+      if (!pplxKey) {
+        pplxKey = this.env.PERPLEXITY_API_KEY || "";
       }
 
       // Generate refreshed content via LLM
       const refreshedHtml = await generateRefreshedContent(
         existingHtml,
         keyword,
-        openaiKey
+        pplxKey
       );
 
       // Save the draft to D1 (status = AWAITING_APPROVAL)

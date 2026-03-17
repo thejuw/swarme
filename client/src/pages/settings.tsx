@@ -131,7 +131,7 @@ function BillingCard({ workspace }: { workspace: Workspace }) {
     "Unlimited AI visibility checks",
     "Shopify, WordPress & Webflow CMS push",
     "Autopilot mode (autonomous publishing)",
-    "Priority Perplexity & OpenAI API routing",
+    "Priority Perplexity API routing",
     "Dedicated Durable Object per project",
     "Slack & email notifications",
   ];

@@ -58,7 +58,7 @@ Output STRICTLY as JSON with no markdown, no code fences, no explanation:
 // ─────────────────────────────────────────────────────────────
 
 /**
- * Generates social media drafts from an article using OpenAI.
+ * Generates social media drafts from an article using Perplexity.
  * Falls back to template-based drafts if no API key is configured.
  */
 export async function generateSocialDrafts(
@@ -72,19 +72,19 @@ export async function generateSocialDrafts(
     ? articleText.slice(0, 3000) + "..."
     : articleText;
 
-  // Try OpenAI
-  if (env.OPENAI_API_KEY) {
+  // Try Perplexity
+  if (env.PERPLEXITY_API_KEY) {
     try {
       const response = await fetch(
-        "https://api.openai.com/v1/chat/completions",
+        "https://api.perplexity.ai/chat/completions",
         {
           method: "POST",
           headers: {
-            Authorization: `Bearer ${env.OPENAI_API_KEY}`,
+            Authorization: `Bearer ${env.PERPLEXITY_API_KEY}`,
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            model: "gpt-4o-mini",
+            model: "sonar",
             messages: [
               { role: "system", content: SOCIAL_SYSTEM_PROMPT },
               {
@@ -119,7 +119,7 @@ export async function generateSocialDrafts(
         }
       }
     } catch (err) {
-      console.error("[Social Agent] OpenAI call failed:", err);
+      console.error("[Social Agent] Perplexity call failed:", err);
     }
   }
 
@@ -128,7 +128,7 @@ export async function generateSocialDrafts(
 }
 
 /**
- * Template-based fallback when OpenAI is not available.
+ * Template-based fallback when Perplexity is not available.
  */
 function generateFallbackDrafts(
   articleUrl: string,

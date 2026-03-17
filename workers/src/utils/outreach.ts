@@ -4,7 +4,7 @@
  * Pipeline:
  *  1. findLinkProspects(keyword, env) → Perplexity API discovers relevant blogs
  *  2. Hunter.io /v2/domain-search extracts contact emails
- *  3. Heavy LLM (OpenAI) drafts personalized outreach emails
+ *  3. Heavy LLM (Perplexity) drafts personalized outreach emails
  *  4. Drafts are saved to D1 as "Draft" — NEVER sent autonomously
  *  5. Human operator reviews/edits/approves in Mission Control → Outreach tab
  *  6. Approved emails are dispatched via Resend API
@@ -39,7 +39,7 @@ interface Env {
   DB: D1Database;
   KV: KVNamespace;
   PERPLEXITY_API_KEY: string;
-  OPENAI_API_KEY: string;
+  PERPLEXITY_API_KEY: string;
   HUNTER_API_KEY: string;
   RESEND_API_KEY: string;
 }
@@ -148,7 +148,7 @@ export async function enrichWithHunter(
 }
 
 // ─────────────────────────────────────────────────────────────
-// Step 3: Draft personalized outreach emails via OpenAI
+// Step 3: Draft personalized outreach emails via Perplexity
 // ─────────────────────────────────────────────────────────────
 
 export async function draftOutreachEmails(
@@ -176,15 +176,15 @@ Context:
 Return JSON with keys: subject, body. The body should be plain text with \\n for line breaks. No markdown.`;
 
     try {
-      const throttledOpenai = createThrottledFetch("openai", env.CONFIG_KV);
-      const res = await throttledOpenai("https://api.openai.com/v1/chat/completions", {
+      const throttledPplx = createThrottledFetch("perplexity_chat", env.CONFIG_KV);
+      const res = await throttledPplx("https://api.perplexity.ai/chat/completions", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${env.OPENAI_API_KEY}`,
+          Authorization: `Bearer ${env.PERPLEXITY_API_KEY}`,
         },
         body: JSON.stringify({
-          model: "gpt-4o",
+          model: "sonar-pro",
           messages: [
             { role: "system", content: systemPrompt },
             { role: "user", content: userPrompt },

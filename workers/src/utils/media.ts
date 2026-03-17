@@ -3,15 +3,14 @@
  * Swarme — Phase 40: Autonomous Multimedia Generation
  * ============================================================
  *
- * Image generation pipeline using OpenAI DALL-E 3, with
- * permanent storage in Cloudflare R2 to prevent hotlinking
- * reliance on OpenAI's temporary URLs.
+ * Image generation pipeline using Google Gemini (Imagen), with
+ * permanent storage in Cloudflare R2 to prevent hotlinking.
  *
  * Pipeline:
  *   1. Parse `<media-placeholder>` tags from drafted HTML
- *   2. For each placeholder, call DALL-E 3 with an optimized
- *      prompt derived from the description and article context
- *   3. Fetch the generated image bytes from the temporary URL
+ *   2. For each placeholder, call Gemini's image generation
+ *      endpoint with an optimized prompt
+ *   3. Decode the base64 image data from the response
  *   4. Upload to Cloudflare R2 with a UUID filename
  *   5. Replace the placeholder with an ADA-compliant <img> tag
  *      pointing at the permanent R2 public URL
@@ -31,23 +30,18 @@ import type { Env } from "../index";
 // Constants
 // ─────────────────────────────────────────────────────────────
 
-/** DALL-E 3 API endpoint. */
-const DALLE_API_URL = "https://api.openai.com/v1/images/generations";
+/** Gemini image generation endpoint (Imagen via Gemini API). */
+const GEMINI_IMAGE_URL =
+  "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent";
 
-/** Timeout for the DALL-E generation request (60 seconds). */
-const DALLE_TIMEOUT_MS = 60_000;
-
-/** Timeout for fetching the generated image from OpenAI's temp URL. */
-const IMAGE_FETCH_TIMEOUT_MS = 30_000;
+/** Timeout for the Gemini generation request (90 seconds). */
+const GEMINI_TIMEOUT_MS = 90_000;
 
 /** Maximum number of placeholders to process per article. */
 const MAX_PLACEHOLDERS_PER_ARTICLE = 5;
 
-/** Default DALL-E image size. */
-const DEFAULT_IMAGE_SIZE = "1792x1024" as const;
-
-/** Default DALL-E quality. */
-const DEFAULT_IMAGE_QUALITY = "standard" as const;
+/** Default image aspect ratio for Gemini. */
+const DEFAULT_ASPECT_RATIO = "16:9" as const;
 
 /**
  * Regex to match `<media-placeholder>` tags in generated HTML.
@@ -75,8 +69,8 @@ export interface GeneratedImage {
   altText: string;
   /** The original placeholder description. */
   description: string;
-  /** DALL-E revised prompt (may differ from input). */
-  revisedPrompt: string;
+  /** Final prompt sent to the model. */
+  generationPrompt: string;
   /** Image size in bytes. */
   sizeBytes: number;
 }
@@ -109,12 +103,12 @@ export interface MediaGenerationResult {
 // ─────────────────────────────────────────────────────────────
 
 /**
- * Generates an image via DALL-E 3 and stores it in Cloudflare R2.
+ * Generates an image via Gemini (Imagen) and stores it in Cloudflare R2.
  *
  * Steps:
- *   1. Build an optimized DALL-E prompt from the description
- *   2. Call the OpenAI Images API (dall-e-3)
- *   3. Fetch the image bytes from the temporary URL
+ *   1. Build an optimized image generation prompt
+ *   2. Call the Gemini generateContent API with IMAGE response modality
+ *   3. Decode the base64 image data from the response
  *   4. Upload to R2 with a UUID key under `media/{projectId}/`
  *   5. Return the permanent public URL and metadata
  *
@@ -131,32 +125,36 @@ export async function generateAndStoreImage(
   env: Env,
 ): Promise<GeneratedImage> {
   // ── Step 1: Build an optimized prompt ──
-  const dallePrompt = buildDallePrompt(description);
+  const imagePrompt = buildImagePrompt(description);
 
-  // ── Step 2: Call DALL-E 3 ──
-  const apiKey = await resolveOpenAIKey(projectId, env);
+  // ── Step 2: Call Gemini Image Generation ──
+  const apiKey = await resolveGeminiKey(projectId, env);
   if (!apiKey) {
-    throw new Error("No OpenAI API key available for image generation");
+    throw new Error("No Gemini API key available for image generation");
   }
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), DALLE_TIMEOUT_MS);
+  const timeout = setTimeout(() => controller.abort(), GEMINI_TIMEOUT_MS);
 
-  let dalleResponse: Response;
+  let geminiResponse: Response;
   try {
-    dalleResponse = await fetch(DALLE_API_URL, {
+    geminiResponse = await fetch(`${GEMINI_IMAGE_URL}?key=${apiKey}`, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "dall-e-3",
-        prompt: dallePrompt,
-        n: 1,
-        size: DEFAULT_IMAGE_SIZE,
-        quality: DEFAULT_IMAGE_QUALITY,
-        response_format: "url",
+        contents: [
+          {
+            parts: [{ text: imagePrompt }],
+          },
+        ],
+        generationConfig: {
+          responseModalities: ["IMAGE"],
+          imageConfig: {
+            aspectRatio: DEFAULT_ASPECT_RATIO,
+          },
+        },
       }),
       signal: controller.signal,
     });
@@ -164,35 +162,57 @@ export async function generateAndStoreImage(
     clearTimeout(timeout);
   }
 
-  if (!dalleResponse.ok) {
-    const errorBody = await dalleResponse.text().catch(() => "");
+  if (!geminiResponse.ok) {
+    const errorBody = await geminiResponse.text().catch(() => "");
     throw new Error(
-      `DALL-E 3 API error ${dalleResponse.status}: ${errorBody.slice(0, 200)}`
+      `Gemini Image API error ${geminiResponse.status}: ${errorBody.slice(0, 200)}`
     );
   }
 
-  const dalleJson = (await dalleResponse.json()) as {
-    data: Array<{ url: string; revised_prompt?: string }>;
+  const geminiJson = (await geminiResponse.json()) as {
+    candidates?: Array<{
+      content?: {
+        parts?: Array<{
+          text?: string;
+          inlineData?: { mimeType: string; data: string };
+        }>;
+      };
+    }>;
   };
 
-  const imageData = dalleJson.data?.[0];
-  if (!imageData?.url) {
-    throw new Error("DALL-E 3 returned no image URL");
+  // Extract the base64 image data from the response
+  const parts = geminiJson.candidates?.[0]?.content?.parts;
+  const imagePart = parts?.find((p) => p.inlineData);
+
+  if (!imagePart?.inlineData?.data) {
+    throw new Error("Gemini returned no image data");
   }
 
-  const temporaryUrl = imageData.url;
-  const revisedPrompt = imageData.revised_prompt ?? dallePrompt;
+  const mimeType = imagePart.inlineData.mimeType || "image/png";
+  const extension = mimeType.includes("jpeg") ? "jpg" : "png";
 
-  // ── Step 3: Fetch the image bytes ──
-  const imageBytes = await fetchImageBytes(temporaryUrl);
+  // ── Step 3: Decode the base64 image ──
+  const binaryString = atob(imagePart.inlineData.data);
+  const bytes = new Uint8Array(binaryString.length);
+  for (let i = 0; i < binaryString.length; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  const imageBytes = bytes.buffer;
+
+  // Guard against unexpectedly large images (20 MB max)
+  if (imageBytes.byteLength > 20 * 1024 * 1024) {
+    throw new Error(
+      `Image too large: ${(imageBytes.byteLength / (1024 * 1024)).toFixed(1)} MB`
+    );
+  }
 
   // ── Step 4: Upload to R2 ──
   const uuid = crypto.randomUUID();
-  const r2Key = `media/${projectId}/${uuid}.png`;
+  const r2Key = `media/${projectId}/${uuid}.${extension}`;
 
   await env.MEDIA_BUCKET.put(r2Key, imageBytes, {
     httpMetadata: {
-      contentType: "image/png",
+      contentType: mimeType,
       cacheControl: "public, max-age=31536000, immutable",
     },
     customMetadata: {
@@ -200,13 +220,10 @@ export async function generateAndStoreImage(
       altText,
       projectId,
       generatedAt: new Date().toISOString(),
-      model: "dall-e-3",
+      model: "gemini-imagen",
     },
   });
 
-  // Construct the public URL from the R2 bucket's custom domain
-  // or Cloudflare's default R2 public URL pattern.
-  // The operator configures R2_PUBLIC_BASE in wrangler.toml vars.
   const publicBase = env.R2_PUBLIC_BASE ?? `https://media.swarme.io`;
   const publicUrl = `${publicBase}/${r2Key}`;
 
@@ -215,7 +232,7 @@ export async function generateAndStoreImage(
     publicUrl,
     altText,
     description,
-    revisedPrompt,
+    generationPrompt: imagePrompt,
     sizeBytes: imageBytes.byteLength,
   };
 }
@@ -302,7 +319,7 @@ export function buildImgTag(publicUrl: string, altText: string): string {
   return [
     `<figure class="swarme-media" role="img" aria-label="${escapedAlt}">`,
     `  <img src="${publicUrl}" alt="${escapedAlt}" loading="lazy" decoding="async"`,
-    `    width="1792" height="1024" style="max-width:100%;height:auto;" />`,
+    `    style="max-width:100%;height:auto;" />`,
     `</figure>`,
   ].join("\n");
 }
@@ -399,12 +416,12 @@ export async function processMediaPlaceholders(
 // ─────────────────────────────────────────────────────────────
 
 /**
- * Builds an optimized DALL-E 3 prompt from a placeholder description.
+ * Builds an optimized image generation prompt from a placeholder description.
  *
  * Adds style guidance to produce professional, editorial-quality
  * images that match the Swarme brand aesthetic.
  */
-function buildDallePrompt(description: string): string {
+function buildImagePrompt(description: string): string {
   return [
     description,
     "",
@@ -412,48 +429,20 @@ function buildDallePrompt(description: string): string {
     "The image should be suitable for a premium blog article.",
     "Use modern, vibrant colors with clean composition.",
     "No text overlays, watermarks, or logos.",
-    "16:9 aspect ratio, high resolution.",
   ].join("\n");
 }
 
 /**
- * Resolves the OpenAI API key, checking per-project KV first,
+ * Resolves the Gemini API key, checking per-project KV first,
  * then falling back to the Worker secret.
  */
-async function resolveOpenAIKey(
+async function resolveGeminiKey(
   projectId: string,
   env: Env,
 ): Promise<string | null> {
-  const KV_KEY = `config:project:${projectId}:openai_api_key`;
+  const KV_KEY = `config:project:${projectId}:gemini_api_key`;
   const projectKey = await env.CONFIG_KV.get(KV_KEY);
-  return projectKey || env.OPENAI_API_KEY || null;
+  return projectKey || env.GEMINI_API_KEY || null;
 }
 
-/**
- * Fetches image bytes from a URL with timeout and size guards.
- */
-async function fetchImageBytes(url: string): Promise<ArrayBuffer> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), IMAGE_FETCH_TIMEOUT_MS);
 
-  try {
-    const response = await fetch(url, { signal: controller.signal });
-
-    if (!response.ok) {
-      throw new Error(`Image fetch failed: HTTP ${response.status}`);
-    }
-
-    const buffer = await response.arrayBuffer();
-
-    // Guard against unexpectedly large images (20 MB max)
-    if (buffer.byteLength > 20 * 1024 * 1024) {
-      throw new Error(
-        `Image too large: ${(buffer.byteLength / (1024 * 1024)).toFixed(1)} MB`
-      );
-    }
-
-    return buffer;
-  } finally {
-    clearTimeout(timeout);
-  }
-}

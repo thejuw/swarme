@@ -13,7 +13,7 @@
  * routing for the AgentWorkflowManager state machine.
  *
  * Phase 4: Pipeline steps now call real external APIs:
- *   - Perplexity API (research), OpenAI API (drafting),
+ *   - Perplexity API (research + drafting),
  *   - CMS webhooks (publishing)
  *   with graceful fallback to mocks when keys are not configured.
  *
@@ -97,7 +97,7 @@ export interface Env {
   BOUNCE_RATE_THRESHOLD: string;
 
   // ── Secrets (set via wrangler secret put) ──
-  OPENAI_API_KEY: string;
+  GEMINI_API_KEY: string;
   ANTHROPIC_API_KEY: string;
   HUNTER_API_KEY: string;
   RESEND_API_KEY: string;
@@ -445,7 +445,7 @@ app.get("/api/admin/infrastructure/keys", async (c) => {
   try {
     const raw = await c.env.CONFIG_KV.get("global:config:keys");
     const keys = raw ? JSON.parse(raw) : {
-      ai_models: { OPENAI_API_KEY: "", ANTHROPIC_API_KEY: "", PERPLEXITY_API_KEY: "" },
+      ai_models: { PERPLEXITY_API_KEY: "", GEMINI_API_KEY: "", ANTHROPIC_API_KEY: "" },
       communications: { RESEND_API_KEY: "", TWILIO_ACCOUNT_SID: "", TWILIO_AUTH_TOKEN: "", TWILIO_FROM_NUMBER: "" },
       billing: { STRIPE_SECRET_KEY: "", STRIPE_WEBHOOK_SECRET: "" },
       security: { TURNSTILE_SECRET_KEY: "", SENTRY_DSN: "" },

@@ -4,8 +4,9 @@
  * ============================================================
  *
  * Conversational state machine that acts as a "Chief Strategy
- * Officer" for an e-commerce brand. Uses OpenAI Function Calling
- * to orchestrate three internal tools:
+ * Officer" for an e-commerce brand. Uses Perplexity Sonar Pro
+ * with structured JSON action parsing to orchestrate three
+ * internal tools:
  *
  *   1. run_site_analysis(url) — triggers /crawl site audit
  *   2. update_brand_context(contextData) — persists brand memory
@@ -73,7 +74,7 @@ interface ManagerResult {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Tool Definitions (OpenAI Function Calling schema)
+// Tool Definitions (used for JSON action parsing)
 // ─────────────────────────────────────────────────────────────
 
 const TOOLS = [
@@ -530,6 +531,40 @@ If north_star_url is "(not set)", ask the user to choose an aspirational site du
 }
 
 // ─────────────────────────────────────────────────────────────
+// Tool Instruction Block (embedded in system prompt for Perplexity)
+// ─────────────────────────────────────────────────────────────
+
+const TOOL_INSTRUCTION_BLOCK = `
+
+--- AVAILABLE ACTIONS ---
+You can execute actions by including <<ACTION>> blocks in your response. Each block must contain valid JSON with "name" and "args" fields. You may include multiple action blocks in a single response. Any text outside the action blocks will be shown to the user.
+
+Available actions:
+
+1. run_site_analysis
+   Analyzes a website URL for SEO health, page structure, and technical setup.
+   Args: { "url": "https://example.com" }
+   Example: <<ACTION>>{"name": "run_site_analysis", "args": {"url": "https://example.com"}}<<\/ACTION>>
+
+2. update_brand_context
+   Saves brand information (audience, goals, tone, competitors, business_model, north_star_url) for perpetual memory.
+   Args: Any subset of { "target_audience", "core_goals", "tone_of_voice", "competitors", "business_model", "auto_discovered_competitors", "north_star_url" }
+   Example: <<ACTION>>{"name": "update_brand_context", "args": {"target_audience": "Women 25-45 who love sustainable fashion", "business_model": "e-commerce"}}<<\/ACTION>>
+
+3. discover_competitors
+   Discovers real SERP competitors for a URL and keyword.
+   Args: { "url": "https://example.com", "primary_keyword": "sustainable leather bags" }
+   Example: <<ACTION>>{"name": "discover_competitors", "args": {"url": "https://example.com", "primary_keyword": "sustainable fashion"}}<<\/ACTION>>
+
+4. propose_roadmap_items
+   Adds strategic action items to the user's roadmap.
+   Args: { "items": [{ "title": "...", "description": "...", "priority": "High|Medium|Low", "action_payload": {...} }] }
+   Example: <<ACTION>>{"name": "propose_roadmap_items", "args": {"items": [{"title": "Add FAQ Schema", "description": "Implement FAQ schema markup on top 10 product pages", "priority": "High", "action_payload": {"type": "schema_markup"}}]}}<<\/ACTION>>
+
+IMPORTANT: Always include your conversational text OUTSIDE the action blocks. The user will see your text but not the action blocks themselves.
+`;
+
+// ─────────────────────────────────────────────────────────────
 // Main Chat Handler
 // ─────────────────────────────────────────────────────────────
 
@@ -541,27 +576,26 @@ export async function handleManagerChat(
   // Fetch brand context for perpetual memory
   const brandContext = await fetchBrandContext(projectId, env);
 
-  // Build the system message with brand context injected
+  // Build the system message with brand context and tool instructions injected
   const systemMessage: ChatMessage = {
     role: "system",
-    content: buildSystemPrompt(brandContext),
+    content: buildSystemPrompt(brandContext) + TOOL_INSTRUCTION_BLOCK,
   };
 
-  // Prepare the full message array for OpenAI
+  // Prepare the full message array for Perplexity
   const messages = [systemMessage, ...messageHistory];
 
-  // Retrieve OpenAI API key from KV vault
+  // Retrieve Perplexity API key from KV vault
   const vaultKeys = await env.CONFIG_KV.get<Record<string, string>>(
     "vault:infrastructure:ai_models",
     "json"
   );
-  const apiKey = vaultKeys?.openai_api_key || env.OPENAI_API_KEY;
+  const apiKey = vaultKeys?.perplexity_api_key || env.PERPLEXITY_API_KEY;
 
   if (!apiKey) {
-    // Return a graceful fallback when no API key is configured
     return {
       reply:
-        "I'm ready to help strategize your growth, but the OpenAI API key hasn't been configured yet. Please add it in the Admin Vault under AI Models to enable the AI Manager.",
+        "I'm ready to help strategize your growth, but the Perplexity API key hasn't been configured yet. Please add it in the Admin Vault under AI Models to enable the AI Manager.",
       brandContextUpdated: false,
       roadmapItemsAdded: 0,
     };
@@ -569,7 +603,7 @@ export async function handleManagerChat(
 
   let brandContextUpdated = false;
   let roadmapItemsAdded = 0;
-  let maxIterations = 5; // Safety limit for tool-call loops
+  let maxIterations = 3; // Safety limit for action-processing loops
 
   // Mutable working copy of messages for the loop
   const workingMessages = [...messages];
@@ -577,26 +611,24 @@ export async function handleManagerChat(
   while (maxIterations > 0) {
     maxIterations--;
 
-    const throttledFetch = createThrottledFetch("openai", env.CONFIG_KV);
-    const response = await throttledFetch("https://api.openai.com/v1/chat/completions", {
+    const throttledFetch = createThrottledFetch("perplexity_chat", env.CONFIG_KV);
+    const response = await throttledFetch("https://api.perplexity.ai/chat/completions", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "gpt-4o",
+        model: "sonar-pro",
         messages: workingMessages,
-        tools: TOOLS,
-        tool_choice: "auto",
         temperature: 0.7,
-        max_tokens: 1500,
+        max_tokens: 2000,
       }),
     });
 
     if (!response.ok) {
       const errText = await response.text();
-      console.error(`[aiManager] OpenAI error: ${errText}`);
+      console.error(`[aiManager] Perplexity error: ${errText}`);
       return {
         reply:
           "I encountered an issue connecting to the AI service. Please try again in a moment.",
@@ -610,55 +642,71 @@ export async function handleManagerChat(
         message: {
           role: string;
           content: string | null;
-          tool_calls?: ToolCall[];
         };
         finish_reason: string;
       }>;
     };
 
     const choice = data.choices[0];
-    const assistantMsg = choice.message;
+    const content = choice.message.content ?? "";
 
-    // If no tool calls, return the text response
-    if (!assistantMsg.tool_calls || assistantMsg.tool_calls.length === 0) {
+    // Parse any <<ACTION>> blocks from the response
+    const actionRegex = /<<ACTION>>([\s\S]*?)<<\/ACTION>>/g;
+    const actions: Array<{ name: string; args: Record<string, unknown> }> = [];
+    let match: RegExpExecArray | null;
+
+    while ((match = actionRegex.exec(content)) !== null) {
+      try {
+        const parsed = JSON.parse(match[1].trim());
+        if (parsed.name && typeof parsed.name === "string") {
+          actions.push({ name: parsed.name, args: parsed.args ?? {} });
+        }
+      } catch {
+        console.warn(`[aiManager] Failed to parse action block: ${match[1].slice(0, 100)}`);
+      }
+    }
+
+    // If no actions found, return the text response (strip any residual markers)
+    if (actions.length === 0) {
       return {
-        reply: assistantMsg.content ?? "",
+        reply: content.replace(/<<ACTION>>[\s\S]*?<<\/ACTION>>/g, "").trim(),
         brandContextUpdated,
         roadmapItemsAdded,
       };
     }
 
-    // Process tool calls
-    workingMessages.push({
-      role: "assistant",
-      content: assistantMsg.content ?? "",
-      tool_calls: assistantMsg.tool_calls,
-    });
+    // Execute each action and collect results
+    const actionResults: string[] = [];
+    for (const action of actions) {
+      const toolResult = await executeTool(action.name, action.args, projectId, env);
 
-    for (const toolCall of assistantMsg.tool_calls) {
-      const fnName = toolCall.function.name;
-      const fnArgs = JSON.parse(toolCall.function.arguments);
-
-      const toolResult = await executeTool(fnName, fnArgs, projectId, env);
-
-      // Track side effects
-      if (fnName === "update_brand_context") {
+      if (action.name === "update_brand_context") {
         brandContextUpdated = true;
       }
-      if (fnName === "propose_roadmap_items") {
-        const parsed = JSON.parse(toolResult);
-        roadmapItemsAdded += parsed.items_added ?? 0;
+      if (action.name === "propose_roadmap_items") {
+        try {
+          const parsed = JSON.parse(toolResult);
+          roadmapItemsAdded += parsed.items_added ?? 0;
+        } catch { /* ignore */ }
       }
 
-      workingMessages.push({
-        role: "tool",
-        content: toolResult,
-        tool_call_id: toolCall.id,
-      });
+      actionResults.push(`[${action.name}] ${toolResult}`);
     }
 
-    // Loop continues — the model will process tool results and either
-    // call more tools or produce a final text response
+    // Clean the assistant message of action blocks for display
+    const cleanedContent = content.replace(/<<ACTION>>[\s\S]*?<<\/ACTION>>/g, "").trim();
+
+    // Add the assistant message and action results back to the conversation
+    workingMessages.push({
+      role: "assistant",
+      content: cleanedContent,
+    });
+    workingMessages.push({
+      role: "user",
+      content: `[SYSTEM] The following actions were executed automatically:\n${actionResults.join("\n")}\nContinue your response to the user based on these results.`,
+    });
+
+    // Loop continues — next iteration will generate the follow-up response
   }
 
   // Safety: if we exhausted iterations, return last known state

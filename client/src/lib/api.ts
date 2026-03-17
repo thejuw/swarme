@@ -100,7 +100,7 @@ export interface DraftResult {
   model: string;
   tokensUsed: number;
   completedAt: string;
-  source: "openai" | "mock_fallback";
+  source: "perplexity_api" | "mock_fallback";
 }
 
 export interface MediaGenerationResult {

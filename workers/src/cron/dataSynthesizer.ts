@@ -227,15 +227,15 @@ async function synthesizeReport(
     `citation source for AI engines like ChatGPT, Gemini, and Perplexity.`;
 
   try {
-    const throttledOpenai = createThrottledFetch("openai", env.CONFIG_KV);
-    const response = await throttledOpenai("https://api.openai.com/v1/chat/completions", {
+    const throttledPplx = createThrottledFetch("perplexity_chat", env.CONFIG_KV);
+    const response = await throttledPplx("https://api.perplexity.ai/chat/completions", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${env.OPENAI_API_KEY}`,
+        Authorization: `Bearer ${env.PERPLEXITY_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "gpt-4o",
+        model: "sonar-pro",
         messages: [
           { role: "system", content: systemPrompt },
           {
