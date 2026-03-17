@@ -69,9 +69,9 @@ function AuthForm({ mode }: { mode: "login" | "signup" }) {
     },
     onSuccess: (data) => {
       login(data.token!, data.user!);
-      // On signup, go to connect-store (integration wizard / free trial);
+      // On signup, go to onboarding context-setup (Phase 59 PLO);
       // on login, go to dashboard.
-      navigate(mode === "signup" ? "/connect-store" : "/");
+      navigate(mode === "signup" ? "/onboarding/context-setup" : "/");
     },
     onError: (err: Error) => {
       setError(err.message);

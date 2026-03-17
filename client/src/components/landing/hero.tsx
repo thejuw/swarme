@@ -1,15 +1,17 @@
 /**
- * hero.tsx — Phase 30: GitHub-aesthetic dynamic hero
+ * hero.tsx — Phase 30 + Phase 59: GitHub-aesthetic dynamic hero
  *
  * Two-column layout:
- *   Left: Gradient headline + subheadline + glowing CTA
+ *   Left: Gradient headline + subheadline + URL input + glowing CTA
  *   Right: Animated mock terminal with typing effect
+ *
+ * Phase 59: Added prominent URL input that routes to /#/scanner?url=...
  */
 
 import { useState, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
 import { useLocation } from "wouter";
-import { ArrowRight, Terminal } from "lucide-react";
+import { ArrowRight, Terminal, Search } from "lucide-react";
 
 // ── Terminal typing commands ────────────────────────
 const COMMANDS = [
@@ -72,6 +74,50 @@ function useTypingAnimation() {
   return { lines, currentText, currentColor: COMMANDS[cmdIndex % COMMANDS.length]?.color ?? "text-gh-text" };
 }
 
+/** Phase 59: URL input that routes to the scanner page */
+function HeroUrlInput() {
+  const [, navigate] = useLocation();
+  const [url, setUrl] = useState("");
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmed = url.trim();
+    if (!trimmed) return;
+    const encoded = encodeURIComponent(trimmed);
+    // Navigate to scanner with the URL as a path segment
+    // (wouter hash routing doesn't support query strings)
+    window.location.hash = `/scanner/${encoded}`;
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="mt-8 max-w-lg" data-testid="hero-url-form">
+      <div className="relative flex items-center">
+        <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gh-muted pointer-events-none" />
+        <input
+          type="text"
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          placeholder="Enter your site URL to scan..."
+          className="w-full h-12 pl-10 pr-28 rounded-lg border border-gh-border bg-gh-surface/60 text-gh-text font-mono text-sm placeholder:text-gh-muted/60 focus:outline-none focus:border-neon-cyan/50 focus:ring-1 focus:ring-neon-cyan/20 transition-all"
+          data-testid="input-hero-url"
+        />
+        <button
+          type="submit"
+          disabled={!url.trim()}
+          className="absolute right-1.5 top-1/2 -translate-y-1/2 h-9 px-4 rounded-md bg-neon-emerald text-white text-sm font-semibold hover:bg-neon-emerald/90 disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center gap-1.5"
+          data-testid="button-hero-scan"
+        >
+          Scan
+          <ArrowRight className="h-3.5 w-3.5" />
+        </button>
+      </div>
+      <p className="text-xs text-gh-muted mt-2">
+        Free instant analysis — no account required.
+      </p>
+    </form>
+  );
+}
+
 export function Hero() {
   const [, navigate] = useLocation();
   const { lines, currentText, currentColor } = useTypingAnimation();
@@ -128,7 +174,10 @@ export function Hero() {
               content at the edge. Zero manual intervention.
             </p>
 
-            <div className="mt-8 flex flex-col sm:flex-row items-start gap-3">
+            {/* Phase 59: URL input bar */}
+            <HeroUrlInput />
+
+            <div className="mt-5 flex flex-col sm:flex-row items-start gap-3">
               <button
                 onClick={() => navigate("/signup")}
                 className="group relative inline-flex items-center gap-2 px-7 py-3.5 rounded-lg bg-neon-emerald text-white font-semibold text-base animate-glow-pulse hover:bg-neon-emerald/90 transition-colors"

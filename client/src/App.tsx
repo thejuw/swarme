@@ -41,6 +41,9 @@ import CommsPage from "@/pages/comms";
 import LandingPage from "@/pages/landing";
 import { LoginPage, SignupPage } from "@/pages/auth";
 import MagicLogin from "@/pages/magic-login";
+import ScannerPage from "@/pages/scanner";
+import ContextSetup from "@/pages/onboarding/context-setup";
+import Provisioning from "@/pages/onboarding/provisioning";
 import TermsOfService from "@/pages/legal/terms-of-service";
 import PrivacyPolicy from "@/pages/legal/privacy-policy";
 import AboutPage from "@/pages/public/about";
@@ -288,6 +291,7 @@ function LayoutRouter() {
       <Route path="/login" component={LoginPage} />
       <Route path="/signup" component={SignupPage} />
       <Route path="/free-analyzer" component={FreeAnalyzer} />
+      <Route path="/scanner/:url?" component={ScannerPage} />
       <Route path="/magic-login/:token?" component={MagicLogin} />
       <Route path="/terms" component={TermsOfService} />
       <Route path="/privacy" component={PrivacyPolicy} />
@@ -301,6 +305,16 @@ function LayoutRouter() {
       <Route path="/connect-store">
         <ProtectedRoute>
           <ConnectStore />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/onboarding/context-setup">
+        <ProtectedRoute>
+          <ContextSetup />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/onboarding/provisioning">
+        <ProtectedRoute>
+          <Provisioning />
         </ProtectedRoute>
       </Route>
 

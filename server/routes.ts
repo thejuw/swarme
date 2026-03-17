@@ -4930,5 +4930,72 @@ export async function registerRoutes(
     res.json({ success: true, message: newMessage });
   });
 
+  // ────────────────────────────────────────────
+  // Phase 59 — Product-Led Onboarding (PLO) Engine
+  // ────────────────────────────────────────────
+
+  // Public scanner endpoint (no auth required)
+  app.post("/api/public/scanner", (req: Request, res: Response) => {
+    const { url } = req.body;
+    if (!url) {
+      return res.status(400).json({ success: false, error: "URL is required" });
+    }
+    // Mock head data analysis
+    const domain = url.replace(/^https?:\/\//, "").replace(/\/.*$/, "");
+    const mockResult = {
+      url,
+      headData: {
+        title: `${domain} — Official Website`,
+        description: `${domain} offers premium products and services. Shop our latest collection and discover what makes us different.`,
+        canonical: url,
+        ogImage: `${url}/og-image.jpg`,
+        generator: "WordPress 6.4.2",
+        schemaOrg: Math.random() > 0.4,
+        robots: "index, follow",
+        viewport: "width=device-width, initial-scale=1",
+        charset: "UTF-8",
+        hreflang: Math.random() > 0.5 ? ["en", "es"] : [],
+        twitterCard: Math.random() > 0.3 ? "summary_large_image" : "",
+        favicon: `${url}/favicon.ico`,
+      },
+      seoScore: Math.floor(Math.random() * 35) + 55, // 55-90
+      issues: [
+        "Missing hreflang tags for multi-language support",
+        "Open Graph description exceeds 200 characters",
+        "No structured data (JSON-LD) detected on homepage",
+        "Canonical URL does not match page URL",
+        "Missing Twitter Card meta tags",
+        "Title tag length exceeds 60 characters",
+      ].slice(0, Math.floor(Math.random() * 4) + 2),
+    };
+    res.json({ success: true, result: mockResult });
+  });
+
+  // In-memory onboarding context store
+  const onboardingContextStore: Record<string, any> = {};
+
+  app.post("/api/projects/:projectId/onboarding/context", (req: Request, res: Response) => {
+    const { projectId } = req.params;
+    const { cmsProvider, siteUrl, competitorUrls, northStarUrl } = req.body;
+    onboardingContextStore[projectId] = {
+      projectId,
+      cmsProvider,
+      siteUrl,
+      competitorUrls: competitorUrls || [],
+      northStarUrl: northStarUrl || "",
+      savedAt: new Date().toISOString(),
+    };
+    res.json({ success: true });
+  });
+
+  app.get("/api/projects/:projectId/onboarding/context", (req: Request, res: Response) => {
+    const { projectId } = req.params;
+    const ctx = onboardingContextStore[projectId];
+    if (!ctx) {
+      return res.json({ success: true, context: null });
+    }
+    res.json({ success: true, context: ctx });
+  });
+
   return httpServer;
 }

@@ -2280,3 +2280,82 @@ export async function replyToCommsThread(projectId: string, threadId: string, bo
   const res = await apiRequest("POST", `/api/projects/${projectId}/comms/threads/${threadId}/reply`, { body });
   return res.json();
 }
+
+// ────────────────────────────────────────────
+// Phase 59 — Product-Led Onboarding (PLO) Engine
+// ────────────────────────────────────────────
+
+export interface ScannerHeadData {
+  title: string;
+  description: string;
+  canonical: string;
+  ogImage: string;
+  generator: string;
+  schemaOrg: boolean;
+  robots: string;
+  viewport: string;
+  charset: string;
+  hreflang: string[];
+  twitterCard: string;
+  favicon: string;
+}
+
+export interface ScannerResult {
+  url: string;
+  headData: ScannerHeadData;
+  seoScore: number;
+  issues: string[];
+}
+
+export async function runScannerAnalysis(url: string): Promise<{ success: boolean; result?: ScannerResult; error?: string }> {
+  const res = await apiRequest("POST", "/api/public/scanner", { url });
+  return res.json();
+}
+
+export interface OnboardingContextPayload {
+  projectId: string;
+  cmsProvider: string;
+  siteUrl: string;
+  competitorUrls: string[];
+  northStarUrl: string;
+}
+
+export async function saveOnboardingContext(payload: OnboardingContextPayload): Promise<{ success: boolean }> {
+  const res = await apiRequest("POST", `/api/projects/${payload.projectId}/onboarding/context`, payload);
+  return res.json();
+}
+
+export async function getOnboardingContext(projectId: string): Promise<{ success: boolean; context?: OnboardingContextPayload }> {
+  const res = await apiRequest("GET", `/api/projects/${projectId}/onboarding/context`);
+  return res.json();
+}
+
+export interface WelcomePromptData {
+  brandName: string;
+  cmsProvider: string;
+  competitors: string[];
+  northStar: string;
+  siteUrl: string;
+}
+
+export function buildWelcomeMessage(data: WelcomePromptData): string {
+  const competitorList = data.competitors.length > 0
+    ? data.competitors.map(u => `  • ${u}`).join("\n")
+    : "  • None provided yet";
+
+  return `Welcome to the Swarm, ${data.brandName || "operator"}. I'm your Chief Strategy Officer — let's build your growth engine.
+
+Here's what I know so far:
+
+**Your Stack**
+  Platform: ${data.cmsProvider || "Not connected"}
+  Primary URL: ${data.siteUrl || "Not set"}
+
+**Competitive Landscape**
+${competitorList}
+
+**North Star**
+  ${data.northStar || "Not defined"}
+
+I'll begin running a deep baseline audit of your site. In the meantime — what's the single most important growth goal you'd like to tackle first?`;
+}
