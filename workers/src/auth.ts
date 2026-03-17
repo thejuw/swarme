@@ -226,7 +226,7 @@ authRouter.post("/register", async (c) => {
     return c.json({
       success: true,
       token,
-      user: { id: userId, email: email.toLowerCase().trim() },
+      user: { id: userId, email: email.toLowerCase().trim(), role: "user" },
     });
   } catch (error: any) {
     console.error("[Auth] Register error:", error);
@@ -258,12 +258,12 @@ authRouter.post("/login", async (c) => {
       return c.json({ success: false, error: "Bot verification failed" }, 403);
     }
 
-    // Look up user
+    // Look up user (include role for frontend admin panel access)
     const user = await c.env.DB.prepare(
-      "SELECT id, email, password_hash FROM Users WHERE email = ?1"
+      "SELECT id, email, password_hash, role FROM Users WHERE email = ?1"
     )
       .bind(email.toLowerCase().trim())
-      .first<{ id: string; email: string; password_hash: string }>();
+      .first<{ id: string; email: string; password_hash: string; role: string }>();
 
     if (!user) {
       return c.json({ success: false, error: "Invalid email or password" }, 401);
@@ -291,7 +291,7 @@ authRouter.post("/login", async (c) => {
     return c.json({
       success: true,
       token,
-      user: { id: user.id, email: user.email },
+      user: { id: user.id, email: user.email, role: user.role || "user" },
     });
   } catch (error: any) {
     console.error("[Auth] Login error:", error);
