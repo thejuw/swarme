@@ -37,6 +37,7 @@ import DomainsPage from "@/pages/domains";
 import MissionControl from "@/pages/mission-control";
 import OffDomain from "@/pages/off-domain";
 import SwarmeCredits from "@/pages/wallet";
+import CommsPage from "@/pages/comms";
 import LandingPage from "@/pages/landing";
 import { LoginPage, SignupPage } from "@/pages/auth";
 import MagicLogin from "@/pages/magic-login";
@@ -129,6 +130,7 @@ function ShellRoutes() {
       <Route path="/mission-control" component={MissionControl} />
       <Route path="/off-domain" component={OffDomain} />
       <Route path="/wallet" component={SwarmeCredits} />
+      <Route path="/comms" component={CommsPage} />
       <Route path="/settings" component={Settings} />
       <Route component={NotFound} />
     </Switch>

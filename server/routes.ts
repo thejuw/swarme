@@ -4639,5 +4639,296 @@ export async function registerRoutes(
     res.json({ success: true, services });
   });
 
+  // ────────────────────────────────────────────
+  // Phase 58: Dual-Engine Communications Bridge
+  // ────────────────────────────────────────────
+
+  // In-memory stores for email integrations
+  const EMAIL_INTEGRATIONS: Record<string, {
+    provider: "google" | "microsoft";
+    email: string;
+    status: "connected" | "disconnected" | "expired";
+    scopes: string[];
+    connected_at: string;
+    token_expires_at: string;
+  }> = {
+    "proj_001": {
+      provider: "google",
+      email: "studio@sartelle-atelier.com",
+      status: "connected",
+      scopes: ["https://www.googleapis.com/auth/gmail.send", "https://www.googleapis.com/auth/gmail.readonly"],
+      connected_at: "2026-03-10T09:00:00Z",
+      token_expires_at: "2026-04-10T09:00:00Z",
+    },
+  };
+
+  const DOMAIN_VERIFICATIONS: Record<string, {
+    id: string;
+    domain: string;
+    status: "pending" | "verified" | "failed";
+    dns_records: { type: string; name: string; value: string; ttl: number; priority?: number }[];
+    verified_at: string | null;
+    created_at: string;
+  }[]> = {
+    "proj_001": [
+      {
+        id: "dv_001",
+        domain: "sartelle-atelier.com",
+        status: "verified",
+        dns_records: [
+          { type: "TXT", name: "resend._domainkey.sartelle-atelier.com", value: "p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBi...truncated", ttl: 3600 },
+          { type: "TXT", name: "_dmarc.sartelle-atelier.com", value: "v=DMARC1; p=none; rua=mailto:dmarc@sartelle-atelier.com", ttl: 3600 },
+          { type: "MX", name: "send.sartelle-atelier.com", value: "feedback-smtp.us-east-1.amazonses.com", ttl: 3600, priority: 10 },
+          { type: "TXT", name: "send.sartelle-atelier.com", value: "v=spf1 include:amazonses.com ~all", ttl: 3600 },
+        ],
+        verified_at: "2026-03-11T14:22:00Z",
+        created_at: "2026-03-10T12:00:00Z",
+      },
+    ],
+  };
+
+  const MOCK_COMMS_THREADS = [
+    {
+      id: "thread_001",
+      project_id: "proj_001",
+      subject: "Re: Collaboration opportunity — Sustainable Luxury Feature",
+      participants: ["studio@sartelle-atelier.com", "editors@thegoodtrade.com"],
+      initiated_by: "swarme",
+      campaign_id: "oc_001",
+      status: "needs_reply" as const,
+      last_message_at: "2026-03-16T10:30:00Z",
+      messages: [
+        {
+          id: "msg_001",
+          from: "studio@sartelle-atelier.com",
+          to: "editors@thegoodtrade.com",
+          body: "Hi Sarah,\n\nI came across your excellent roundup of sustainable luxury brands and thought Sartelle Atelier would be a perfect addition. We're a premium fashion house committed to zero-waste production and ethically sourced materials.\n\nWould you be open to featuring us in an updated version of the article or a dedicated piece?\n\nBest regards,\nSartelle Atelier Team",
+          sent_at: "2026-03-15T14:00:00Z",
+          direction: "outbound" as const,
+        },
+        {
+          id: "msg_002",
+          from: "editors@thegoodtrade.com",
+          to: "studio@sartelle-atelier.com",
+          body: "Hi there!\n\nThanks so much for reaching out. We're actually updating that roundup next month and would love to include Sartelle Atelier. Could you send over:\n\n1. High-res brand images\n2. A brief founder story\n3. Your key sustainability certifications\n\nLooking forward to featuring you!\n\nBest,\nSarah Mitchell\nSenior Editor, The Good Trade",
+          sent_at: "2026-03-16T10:30:00Z",
+          direction: "inbound" as const,
+        },
+      ],
+    },
+    {
+      id: "thread_002",
+      project_id: "proj_001",
+      subject: "Re: Guest post pitch — The Future of Sustainable Couture",
+      participants: ["studio@sartelle-atelier.com", "jessica.r@fashionista.com"],
+      initiated_by: "swarme",
+      campaign_id: "oc_002",
+      status: "awaiting" as const,
+      last_message_at: "2026-03-15T14:05:00Z",
+      messages: [
+        {
+          id: "msg_003",
+          from: "studio@sartelle-atelier.com",
+          to: "jessica.r@fashionista.com",
+          body: "Hi Jessica,\n\nYour sustainable fashion guide is one of the most comprehensive resources I've seen. I'd love to contribute a guest post exploring how couture houses are adopting zero-waste patterns and regenerative fabrics.\n\nThe piece would be ~1,200 words with original photography from our atelier.\n\nWould this be a fit for Fashionista?\n\nWarm regards,\nSartelle Atelier",
+          sent_at: "2026-03-15T14:05:00Z",
+          direction: "outbound" as const,
+        },
+      ],
+    },
+    {
+      id: "thread_003",
+      project_id: "proj_001",
+      subject: "Re: Partnership inquiry — Ethical fashion spotlight",
+      participants: ["studio@sartelle-atelier.com", "laura.w@ecosalon.com"],
+      initiated_by: "swarme",
+      campaign_id: "oc_004",
+      status: "replied" as const,
+      last_message_at: "2026-03-14T16:45:00Z",
+      messages: [
+        {
+          id: "msg_004",
+          from: "studio@sartelle-atelier.com",
+          to: "laura.w@ecosalon.com",
+          body: "Hi Laura,\n\nEcoSalon has been our go-to resource for ethical fashion coverage. We'd be honored to partner on a feature about our supply chain transparency initiative.\n\nWe can provide exclusive behind-the-scenes content from our Tuscan workshop.\n\nLooking forward to hearing from you,\nSartelle Atelier",
+          sent_at: "2026-03-11T10:00:00Z",
+          direction: "outbound" as const,
+        },
+        {
+          id: "msg_005",
+          from: "laura.w@ecosalon.com",
+          to: "studio@sartelle-atelier.com",
+          body: "Hi!\n\nAbsolutely, I'd love to do a feature on the supply chain transparency work. Can we schedule a call next week? I'm free Tuesday or Wednesday afternoon.\n\nLaura",
+          sent_at: "2026-03-12T15:20:00Z",
+          direction: "inbound" as const,
+        },
+        {
+          id: "msg_006",
+          from: "studio@sartelle-atelier.com",
+          to: "laura.w@ecosalon.com",
+          body: "Wonderful! Let's do Wednesday at 2 PM EST. I'll send a calendar invite with a Zoom link.\n\nLooking forward to it!\n\nBest,\nSartelle Atelier Team",
+          sent_at: "2026-03-14T16:45:00Z",
+          direction: "outbound" as const,
+        },
+      ],
+    },
+    {
+      id: "thread_004",
+      project_id: "proj_001",
+      subject: "Post-purchase review request — Order #SA-10247",
+      participants: ["reviews@sartelle-atelier.com", "customer@example.com"],
+      initiated_by: "swarme",
+      campaign_id: null,
+      status: "replied" as const,
+      last_message_at: "2026-03-15T09:10:00Z",
+      messages: [
+        {
+          id: "msg_007",
+          from: "reviews@sartelle-atelier.com",
+          to: "customer@example.com",
+          body: "Hi there,\n\nThank you for your recent purchase! We'd love to hear your thoughts on the Cashmere Wrap Coat. Your honest review helps other shoppers and helps us improve.\n\nLeave a review: [Review Link]\n\nSartelle Atelier",
+          sent_at: "2026-03-14T10:00:00Z",
+          direction: "outbound" as const,
+        },
+        {
+          id: "msg_008",
+          from: "customer@example.com",
+          to: "reviews@sartelle-atelier.com",
+          body: "Hi! Just left a 5-star review. The coat is absolutely gorgeous — the quality is incredible. Already eyeing the silk midi skirt!\n\nThanks,\nJessica",
+          sent_at: "2026-03-15T09:10:00Z",
+          direction: "inbound" as const,
+        },
+      ],
+    },
+  ];
+
+  // GET /api/projects/:projectId/email-integration
+  app.get("/api/projects/:projectId/email-integration", (req, res) => {
+    const { projectId } = req.params;
+    const integration = EMAIL_INTEGRATIONS[projectId];
+    if (!integration) {
+      return res.json({ success: true, connected: false, integration: null });
+    }
+    res.json({ success: true, connected: true, integration });
+  });
+
+  // POST /api/projects/:projectId/email-integration/connect
+  app.post("/api/projects/:projectId/email-integration/connect", (req, res) => {
+    const { projectId } = req.params;
+    const { provider } = req.body;
+    if (!provider || !["google", "microsoft"].includes(provider)) {
+      return res.status(400).json({ success: false, error: "Provider must be 'google' or 'microsoft'" });
+    }
+    // In production, this returns an OAuth authorization URL
+    const authUrl = provider === "google"
+      ? `https://accounts.google.com/o/oauth2/v2/auth?client_id=SWARME_CLIENT_ID&redirect_uri=${encodeURIComponent("https://api.swarme.io/oauth/google/callback")}&scope=${encodeURIComponent("https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/gmail.readonly")}&response_type=code&access_type=offline&prompt=consent&state=${projectId}`
+      : `https://login.microsoftonline.com/common/oauth2/v2.0/authorize?client_id=SWARME_CLIENT_ID&redirect_uri=${encodeURIComponent("https://api.swarme.io/oauth/microsoft/callback")}&scope=${encodeURIComponent("Mail.Send Mail.Read offline_access")}&response_type=code&state=${projectId}`;
+    res.json({ success: true, auth_url: authUrl, provider });
+  });
+
+  // POST /api/projects/:projectId/email-integration/disconnect
+  app.post("/api/projects/:projectId/email-integration/disconnect", (req, res) => {
+    const { projectId } = req.params;
+    delete EMAIL_INTEGRATIONS[projectId];
+    res.json({ success: true });
+  });
+
+  // GET /api/projects/:projectId/domain-verification
+  app.get("/api/projects/:projectId/domain-verification", (req, res) => {
+    const { projectId } = req.params;
+    const verifications = DOMAIN_VERIFICATIONS[projectId] || [];
+    res.json({ success: true, verifications });
+  });
+
+  // POST /api/projects/:projectId/domain-verification
+  app.post("/api/projects/:projectId/domain-verification", (req, res) => {
+    const { projectId } = req.params;
+    const { domain } = req.body;
+    if (!domain) {
+      return res.status(400).json({ success: false, error: "Domain is required" });
+    }
+    const newVerification = {
+      id: `dv_${Date.now()}`,
+      domain,
+      status: "pending" as const,
+      dns_records: [
+        { type: "TXT", name: `resend._domainkey.${domain}`, value: "p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBi...auto-generated", ttl: 3600 },
+        { type: "TXT", name: `_dmarc.${domain}`, value: `v=DMARC1; p=none; rua=mailto:dmarc@${domain}`, ttl: 3600 },
+        { type: "MX", name: `send.${domain}`, value: "feedback-smtp.us-east-1.amazonses.com", ttl: 3600, priority: 10 },
+        { type: "TXT", name: `send.${domain}`, value: "v=spf1 include:amazonses.com ~all", ttl: 3600 },
+      ],
+      verified_at: null,
+      created_at: new Date().toISOString(),
+    };
+    if (!DOMAIN_VERIFICATIONS[projectId]) DOMAIN_VERIFICATIONS[projectId] = [];
+    DOMAIN_VERIFICATIONS[projectId].push(newVerification);
+    res.json({ success: true, verification: newVerification });
+  });
+
+  // POST /api/projects/:projectId/domain-verification/:verificationId/check
+  app.post("/api/projects/:projectId/domain-verification/:verificationId/check", (req, res) => {
+    const { projectId, verificationId } = req.params;
+    const verifications = DOMAIN_VERIFICATIONS[projectId] || [];
+    const v = verifications.find((x) => x.id === verificationId);
+    if (!v) return res.status(404).json({ success: false, error: "Verification not found" });
+    // Mock: mark as verified
+    v.status = "verified";
+    v.verified_at = new Date().toISOString();
+    res.json({ success: true, verification: v });
+  });
+
+  // GET /api/projects/:projectId/comms/threads
+  app.get("/api/projects/:projectId/comms/threads", (req, res) => {
+    const { projectId } = req.params;
+    const threads = MOCK_COMMS_THREADS.filter((t) => t.project_id === projectId);
+    const summary = {
+      total: threads.length,
+      needs_reply: threads.filter((t) => t.status === "needs_reply").length,
+      awaiting: threads.filter((t) => t.status === "awaiting").length,
+      replied: threads.filter((t) => t.status === "replied").length,
+    };
+    // Return threads without message bodies for list view
+    const threadPreviews = threads.map((t) => ({
+      id: t.id,
+      subject: t.subject,
+      participants: t.participants,
+      initiated_by: t.initiated_by,
+      campaign_id: t.campaign_id,
+      status: t.status,
+      last_message_at: t.last_message_at,
+      message_count: t.messages.length,
+      last_message_preview: t.messages[t.messages.length - 1]?.body.slice(0, 120) + "...",
+    }));
+    res.json({ success: true, threads: threadPreviews, summary });
+  });
+
+  // GET /api/projects/:projectId/comms/threads/:threadId
+  app.get("/api/projects/:projectId/comms/threads/:threadId", (req, res) => {
+    const { projectId, threadId } = req.params;
+    const thread = MOCK_COMMS_THREADS.find((t) => t.project_id === projectId && t.id === threadId);
+    if (!thread) return res.status(404).json({ success: false, error: "Thread not found" });
+    res.json({ success: true, thread });
+  });
+
+  // POST /api/projects/:projectId/comms/threads/:threadId/reply
+  app.post("/api/projects/:projectId/comms/threads/:threadId/reply", (req, res) => {
+    const { projectId, threadId } = req.params;
+    const { body: msgBody } = req.body;
+    const thread = MOCK_COMMS_THREADS.find((t) => t.project_id === projectId && t.id === threadId);
+    if (!thread) return res.status(404).json({ success: false, error: "Thread not found" });
+    const newMessage = {
+      id: `msg_${Date.now()}`,
+      from: thread.participants[0],
+      to: thread.participants[1],
+      body: msgBody,
+      sent_at: new Date().toISOString(),
+      direction: "outbound" as const,
+    };
+    thread.messages.push(newMessage);
+    thread.status = "replied";
+    thread.last_message_at = newMessage.sent_at;
+    res.json({ success: true, message: newMessage });
+  });
+
   return httpServer;
 }

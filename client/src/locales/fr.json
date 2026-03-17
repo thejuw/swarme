@@ -27,7 +27,8 @@
     "aiManager": "Manager IA",
     "missionControl": "Centre de Mission",
     "offDomain": "Confiance Externe",
-    "wallet": "Swarme Credits"
+    "wallet": "Swarme Credits",
+    "comms": "Communications"
   },
   "footer": {
     "agentsActive": "{{count}} agents actifs"

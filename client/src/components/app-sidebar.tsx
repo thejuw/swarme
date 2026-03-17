@@ -18,6 +18,7 @@ import {
   Satellite,
   Globe2,
   Coins,
+  MessageSquare,
 } from "lucide-react";
 import { Link } from "wouter";
 import { useHashLocation } from "wouter/use-hash-location";
@@ -52,6 +53,7 @@ const mainNav: NavItem[] = [
   { titleKey: "nav.agentActivity", url: "/activity", icon: Activity },
   { titleKey: "nav.aiVisibility", url: "/visibility", icon: Eye },
   { titleKey: "nav.revenue", url: "/roi", icon: DollarSign },
+  { titleKey: "nav.comms", url: "/comms", icon: MessageSquare },
 ];
 
 const engineNav: NavItem[] = [

@@ -47,8 +47,21 @@ import {
   Copy,
   AlertTriangle,
   Terminal,
+  RefreshCw,
 } from "lucide-react";
-import { generateApiKey } from "@/lib/api";
+import {
+  generateApiKey,
+  getEmailIntegration,
+  connectEmailProvider,
+  disconnectEmailProvider,
+  getDomainVerifications,
+  addDomainVerification,
+  checkDomainVerification,
+  type EmailIntegrationResponse,
+  type DomainVerificationResponse,
+  type DomainVerification,
+  type DnsRecord,
+} from "@/lib/api";
 
 // ── Types ──
 
@@ -725,6 +738,289 @@ function NotificationPreferencesCard() {
   );
 }
 
+// ── Email & Domain Authentication Card (Phase 58) ──
+
+function EmailDomainCard({ projectId }: { projectId: string }) {
+  const { toast } = useToast();
+  const [newDomain, setNewDomain] = useState("");
+
+  const { data: emailData, isLoading: emailLoading } = useQuery<EmailIntegrationResponse>({
+    queryKey: ["/api/projects", projectId, "email-integration"],
+    queryFn: () => getEmailIntegration(projectId),
+  });
+
+  const { data: domainData, isLoading: domainLoading } = useQuery<DomainVerificationResponse>({
+    queryKey: ["/api/projects", projectId, "domain-verification"],
+    queryFn: () => getDomainVerifications(projectId),
+  });
+
+  const connectMutation = useMutation({
+    mutationFn: (provider: "google" | "microsoft") =>
+      connectEmailProvider(projectId, provider),
+    onSuccess: (data) => {
+      if (data.auth_url) {
+        window.open(data.auth_url, "_blank");
+        toast({
+          title: "Authorization started",
+          description: `Complete ${data.provider === "google" ? "Google" : "Microsoft"} login in the new window.`,
+        });
+      }
+    },
+    onError: (err: Error) => {
+      toast({ title: "Connection failed", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const disconnectMutation = useMutation({
+    mutationFn: () => disconnectEmailProvider(projectId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "email-integration"] });
+      toast({ title: "Disconnected", description: "Email integration has been removed." });
+    },
+  });
+
+  const addDomainMutation = useMutation({
+    mutationFn: () => addDomainVerification(projectId, newDomain),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "domain-verification"] });
+      toast({ title: "Domain added", description: "Configure the DNS records below, then verify." });
+      setNewDomain("");
+    },
+    onError: (err: Error) => {
+      toast({ title: "Failed to add domain", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const checkMutation = useMutation({
+    mutationFn: (verificationId: string) =>
+      checkDomainVerification(projectId, verificationId),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "domain-verification"] });
+      toast({
+        title: data.verification.status === "verified" ? "Domain verified" : "Verification pending",
+        description: data.verification.status === "verified"
+          ? "All DNS records are correctly configured."
+          : "DNS records not yet propagated. Try again in a few minutes.",
+      });
+    },
+  });
+
+  const integration = emailData?.integration;
+  const isLoading = emailLoading || domainLoading;
+
+  const statusBadge = (status: string) => {
+    switch (status) {
+      case "connected":
+      case "verified":
+        return <Badge variant="default" className="bg-emerald-600 text-white text-[10px]">{status}</Badge>;
+      case "pending":
+        return <Badge variant="secondary" className="text-[10px]">{status}</Badge>;
+      case "failed":
+      case "expired":
+      case "disconnected":
+        return <Badge variant="destructive" className="text-[10px]">{status}</Badge>;
+      default:
+        return <Badge variant="outline" className="text-[10px]">{status}</Badge>;
+    }
+  };
+
+  return (
+    <Card data-testid="card-email-domain">
+      <CardHeader>
+        <div className="flex items-center gap-2">
+          <Mail className="h-5 w-5 text-muted-foreground" />
+          <CardTitle className="text-base">Email & Domain Authentication</CardTitle>
+        </div>
+        <CardDescription>
+          Connect your email provider for outbound communications and verify sending domains via DNS.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-5">
+        {isLoading ? (
+          <div className="flex items-center justify-center py-6">
+            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+          </div>
+        ) : (
+          <>
+            {/* Email Provider Section */}
+            <div className="space-y-3">
+              <Label className="text-xs font-medium flex items-center gap-1.5">
+                <Mail className="h-3.5 w-3.5" />
+                Email Provider
+              </Label>
+
+              {integration && integration.status === "connected" ? (
+                <div className="rounded-md border border-emerald-500/30 bg-emerald-500/5 p-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <ShieldCheck className="h-4 w-4 text-emerald-500" />
+                      <span className="text-sm font-medium">
+                        {integration.provider === "google" ? "Google Workspace" : "Microsoft 365"}
+                      </span>
+                      {statusBadge(integration.status)}
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="text-xs text-destructive hover:text-destructive"
+                      onClick={() => disconnectMutation.mutate()}
+                      disabled={disconnectMutation.isPending}
+                      data-testid="button-disconnect-email"
+                    >
+                      Disconnect
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {integration.email} &middot; Connected {new Date(integration.connected_at).toLocaleDateString()}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground font-mono">
+                    Scopes: {integration.scopes.join(", ")}
+                  </p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    className="flex flex-col items-center gap-2 rounded-md border border-border/50 bg-muted/30 hover:border-primary/50 hover:bg-primary/5 transition-colors p-4 cursor-pointer"
+                    onClick={() => connectMutation.mutate("google")}
+                    disabled={connectMutation.isPending}
+                    data-testid="button-connect-google"
+                  >
+                    <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none">
+                      <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/>
+                      <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                      <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+                      <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+                    </svg>
+                    <span className="text-xs font-medium">Google Workspace</span>
+                  </button>
+                  <button
+                    className="flex flex-col items-center gap-2 rounded-md border border-border/50 bg-muted/30 hover:border-primary/50 hover:bg-primary/5 transition-colors p-4 cursor-pointer"
+                    onClick={() => connectMutation.mutate("microsoft")}
+                    disabled={connectMutation.isPending}
+                    data-testid="button-connect-microsoft"
+                  >
+                    <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none">
+                      <rect x="1" y="1" width="10" height="10" fill="#F25022"/>
+                      <rect x="13" y="1" width="10" height="10" fill="#7FBA00"/>
+                      <rect x="1" y="13" width="10" height="10" fill="#00A4EF"/>
+                      <rect x="13" y="13" width="10" height="10" fill="#FFB900"/>
+                    </svg>
+                    <span className="text-xs font-medium">Microsoft 365</span>
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <Separator />
+
+            {/* Domain Verification Section */}
+            <div className="space-y-3">
+              <Label className="text-xs font-medium flex items-center gap-1.5">
+                <Globe className="h-3.5 w-3.5" />
+                Sending Domain Verification
+              </Label>
+              <p className="text-[11px] text-muted-foreground">
+                Verify your domain's DNS records (DKIM, SPF, DMARC, MX) to ensure outbound emails are delivered reliably.
+              </p>
+
+              {/* Existing verifications */}
+              {domainData?.verifications?.map((v: DomainVerification) => (
+                <div
+                  key={v.id}
+                  className="rounded-md border border-border/50 bg-muted/30 p-3 space-y-3"
+                  data-testid={`domain-verification-${v.domain}`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Globe className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-sm font-medium font-mono">{v.domain}</span>
+                      {statusBadge(v.status)}
+                    </div>
+                    {v.status !== "verified" && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => checkMutation.mutate(v.id)}
+                        disabled={checkMutation.isPending}
+                        data-testid={`button-verify-${v.domain}`}
+                      >
+                        {checkMutation.isPending ? (
+                          <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />
+                        ) : (
+                          <RefreshCw className="mr-1.5 h-3 w-3" />
+                        )}
+                        Verify
+                      </Button>
+                    )}
+                  </div>
+
+                  {/* DNS Records Table */}
+                  <div className="rounded border border-border/30 overflow-hidden">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="bg-muted/50">
+                          <th className="text-left p-2 font-medium text-muted-foreground">Type</th>
+                          <th className="text-left p-2 font-medium text-muted-foreground">Name</th>
+                          <th className="text-left p-2 font-medium text-muted-foreground">Value</th>
+                          <th className="text-left p-2 font-medium text-muted-foreground">TTL</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {v.dns_records.map((r: DnsRecord, i: number) => (
+                          <tr key={i} className="border-t border-border/30">
+                            <td className="p-2 font-mono">{r.type}</td>
+                            <td className="p-2 font-mono text-[10px] break-all">{r.name}</td>
+                            <td className="p-2 font-mono text-[10px] break-all max-w-[200px] truncate" title={r.value}>
+                              {r.value}
+                            </td>
+                            <td className="p-2 font-mono">{r.ttl}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {v.verified_at && (
+                    <p className="text-[10px] text-emerald-500 flex items-center gap-1">
+                      <ShieldCheck className="h-3 w-3" />
+                      Verified {new Date(v.verified_at).toLocaleDateString()}
+                    </p>
+                  )}
+                </div>
+              ))}
+
+              {/* Add new domain */}
+              <div className="flex items-center gap-2">
+                <Input
+                  placeholder="yourdomain.com"
+                  value={newDomain}
+                  onChange={(e) => setNewDomain(e.target.value)}
+                  className="text-sm font-mono max-w-xs"
+                  data-testid="input-new-domain"
+                />
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => addDomainMutation.mutate()}
+                  disabled={addDomainMutation.isPending || !newDomain.includes(".")}
+                  data-testid="button-add-domain"
+                >
+                  {addDomainMutation.isPending ? (
+                    <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />
+                  ) : (
+                    <Globe className="mr-1.5 h-3 w-3" />
+                  )}
+                  Add Domain
+                </Button>
+              </div>
+            </div>
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 // ── Developer API Card (Enterprise only) ──
 
 function DeveloperApiCard({ workspace }: { workspace: Workspace }) {
@@ -914,6 +1210,7 @@ export default function Settings() {
             <BillingCard workspace={workspaceData.workspace} />
             <NotificationPreferencesCard />
             <CMSConnectionCard projectId={defaultProjectId} />
+            <EmailDomainCard projectId={defaultProjectId} />
             <DeveloperApiCard workspace={workspaceData.workspace} />
           </>
         ) : (

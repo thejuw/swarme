@@ -1249,6 +1249,14 @@ export const queryKeys = {
     ["/api/admin/failsafe", "status"] as const,
   throttleStatus: () =>
     ["/api/throttle", "status"] as const,
+  emailIntegration: (projectId: string) =>
+    ["/api/projects", projectId, "email-integration"] as const,
+  domainVerifications: (projectId: string) =>
+    ["/api/projects", projectId, "domain-verification"] as const,
+  commsThreads: (projectId: string) =>
+    ["/api/projects", projectId, "comms", "threads"] as const,
+  commsThread: (projectId: string, threadId: string) =>
+    ["/api/projects", projectId, "comms", "threads", threadId] as const,
 } as const;
 
 // ────────────────────────────────────────────
@@ -2145,5 +2153,130 @@ export interface ThrottleStatusResponse {
 
 export async function getThrottleStatus(): Promise<ThrottleStatusResponse> {
   const res = await apiRequest("GET", "/api/throttle/status");
+  return res.json();
+}
+
+// ────────────────────────────────────────────
+// Phase 58: Dual-Engine Communications Bridge
+// ────────────────────────────────────────────
+
+export interface EmailIntegration {
+  provider: "google" | "microsoft";
+  email: string;
+  status: "connected" | "disconnected" | "expired";
+  scopes: string[];
+  connected_at: string;
+  token_expires_at: string;
+}
+
+export interface EmailIntegrationResponse {
+  success: boolean;
+  connected: boolean;
+  integration: EmailIntegration | null;
+}
+
+export async function getEmailIntegration(projectId: string): Promise<EmailIntegrationResponse> {
+  const res = await apiRequest("GET", `/api/projects/${projectId}/email-integration`);
+  return res.json();
+}
+
+export async function connectEmailProvider(projectId: string, provider: "google" | "microsoft"): Promise<{ success: boolean; auth_url: string; provider: string }> {
+  const res = await apiRequest("POST", `/api/projects/${projectId}/email-integration/connect`, { provider });
+  return res.json();
+}
+
+export async function disconnectEmailProvider(projectId: string): Promise<{ success: boolean }> {
+  const res = await apiRequest("POST", `/api/projects/${projectId}/email-integration/disconnect`);
+  return res.json();
+}
+
+export interface DnsRecord {
+  type: string;
+  name: string;
+  value: string;
+  ttl: number;
+  priority?: number;
+}
+
+export interface DomainVerification {
+  id: string;
+  domain: string;
+  status: "pending" | "verified" | "failed";
+  dns_records: DnsRecord[];
+  verified_at: string | null;
+  created_at: string;
+}
+
+export interface DomainVerificationResponse {
+  success: boolean;
+  verifications: DomainVerification[];
+}
+
+export async function getDomainVerifications(projectId: string): Promise<DomainVerificationResponse> {
+  const res = await apiRequest("GET", `/api/projects/${projectId}/domain-verification`);
+  return res.json();
+}
+
+export async function addDomainVerification(projectId: string, domain: string): Promise<{ success: boolean; verification: DomainVerification }> {
+  const res = await apiRequest("POST", `/api/projects/${projectId}/domain-verification`, { domain });
+  return res.json();
+}
+
+export async function checkDomainVerification(projectId: string, verificationId: string): Promise<{ success: boolean; verification: DomainVerification }> {
+  const res = await apiRequest("POST", `/api/projects/${projectId}/domain-verification/${verificationId}/check`);
+  return res.json();
+}
+
+export interface CommsMessage {
+  id: string;
+  from: string;
+  to: string;
+  body: string;
+  sent_at: string;
+  direction: "inbound" | "outbound";
+}
+
+export interface CommsThreadPreview {
+  id: string;
+  subject: string;
+  participants: string[];
+  initiated_by: string;
+  campaign_id: string | null;
+  status: "needs_reply" | "awaiting" | "replied";
+  last_message_at: string;
+  message_count: number;
+  last_message_preview: string;
+}
+
+export interface CommsThread {
+  id: string;
+  subject: string;
+  participants: string[];
+  initiated_by: string;
+  campaign_id: string | null;
+  status: "needs_reply" | "awaiting" | "replied";
+  last_message_at: string;
+  messages: CommsMessage[];
+}
+
+export interface CommsThreadsSummary {
+  total: number;
+  needs_reply: number;
+  awaiting: number;
+  replied: number;
+}
+
+export async function getCommsThreads(projectId: string): Promise<{ success: boolean; threads: CommsThreadPreview[]; summary: CommsThreadsSummary }> {
+  const res = await apiRequest("GET", `/api/projects/${projectId}/comms/threads`);
+  return res.json();
+}
+
+export async function getCommsThread(projectId: string, threadId: string): Promise<{ success: boolean; thread: CommsThread }> {
+  const res = await apiRequest("GET", `/api/projects/${projectId}/comms/threads/${threadId}`);
+  return res.json();
+}
+
+export async function replyToCommsThread(projectId: string, threadId: string, body: string): Promise<{ success: boolean; message: CommsMessage }> {
+  const res = await apiRequest("POST", `/api/projects/${projectId}/comms/threads/${threadId}/reply`, { body });
   return res.json();
 }
