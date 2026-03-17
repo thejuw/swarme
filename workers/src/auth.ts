@@ -376,7 +376,7 @@ authRouter.post("/magic-verify", async (c) => {
     // Verify JWT signature and expiration
     let payload: any;
     try {
-      payload = await verify(magicToken, getJwtSecret(c.env));
+      payload = await verify(magicToken, getJwtSecret(c.env), "HS256");
     } catch {
       return c.json({ success: false, error: "Invalid or expired magic link" }, 401);
     }
@@ -451,7 +451,7 @@ export function protectRoute() {
 
     const token = authHeader.substring(7);
     try {
-      const payload = await verify(token, getJwtSecret(c.env));
+      const payload = await verify(token, getJwtSecret(c.env), "HS256");
       c.set("jwtPayload", payload);
       c.set("userId", payload.sub);
       await next();
@@ -481,7 +481,7 @@ export function requireSuperadmin() {
     const token = authHeader.substring(7);
     let payload: any;
     try {
-      payload = await verify(token, getJwtSecret(c.env));
+      payload = await verify(token, getJwtSecret(c.env), "HS256");
     } catch (err) {
       return c.json({ success: false, error: "Invalid or expired token" }, 401);
     }
