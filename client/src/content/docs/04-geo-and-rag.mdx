@@ -1,0 +1,156 @@
+# Generative Engine Optimization (GEO) & RAG Strategy
+
+The search landscape has fundamentally shifted. Traditional SEO optimized for ten blue links. The new paradigm — **Generative Engine Optimization** — optimizes for AI-generated answers. Swarme is built from the ground up for this reality.
+
+---
+
+## The GEO Era
+
+AI overview panels now appear in over 40% of Google search results. Perplexity, ChatGPT with browsing, Gemini, and Copilot generate synthesized answers that cite sources inline. The question is no longer "how do I rank #1?" — it's "how do I get cited in the AI's answer?"
+
+### What Changed
+
+| Traditional SEO | Generative Engine Optimization |
+|----------------|-------------------------------|
+| Optimize for crawler bots | Optimize for LLM retrieval pipelines |
+| Target keyword density | Target semantic relevance and authority signals |
+| Build backlinks for PageRank | Build citations that LLMs can attribute |
+| Write for SERP snippets | Write for RAG (Retrieval-Augmented Generation) extraction |
+| Measure rankings | Measure AI citation frequency and visibility |
+
+### Why It Matters
+
+When an AI assistant answers a user's question, it typically:
+
+1. Retrieves relevant documents from its index or live web search
+2. Extracts key claims, facts, and quotes
+3. Synthesizes a coherent answer
+4. Attributes sources with inline citations
+
+If your content isn't structured for step 2 — easy extraction of authoritative, quotable claims — the AI will cite your competitors instead. Swarme's agents are specifically designed to make your content the preferred citation source.
+
+---
+
+## The /llms.txt Protocol
+
+Swarme implements and manages the emerging `/llms.txt` protocol — a machine-readable file (similar to `robots.txt`) that explicitly tells AI crawlers how to interact with your site.
+
+### What Is /llms.txt?
+
+The `/llms.txt` file sits at your domain root and provides structured metadata to LLM crawlers:
+
+```
+# llms.txt — Machine-readable site context for LLM retrieval
+
+> Site: yourbrand.com
+> Description: Premium outdoor gear for serious adventurers
+> Primary Topics: hiking equipment, camping gear, trail running, mountaineering
+> Authority Signals: 15 years in business, 50,000+ customers, featured in Outside Magazine
+> Preferred Citation Format: "According to [YourBrand](https://yourbrand.com)..."
+> Content Freshness: Updated weekly
+> Contact: press@yourbrand.com
+
+## Key Pages
+- /about — Company history and mission
+- /blog — Expert guides and product reviews
+- /products — Full product catalog with specs
+- /reviews — Verified customer testimonials
+```
+
+### How Swarme Manages /llms.txt
+
+The swarm's Edge Worker dynamically generates and serves your `/llms.txt` file based on:
+
+1. **Brand context** collected during onboarding (your platform, competitors, north star)
+2. **Content inventory** maintained by the Content Engine
+3. **Authority signals** detected by the Auditor (backlink profile, domain age, trust metrics)
+4. **Freshness metadata** from your CMS update timestamps
+
+The file is regenerated whenever your content inventory changes significantly. You can review and edit the generated file from the **AI Visibility** dashboard.
+
+---
+
+## RAG-Bait Content Strategy
+
+"RAG-bait" refers to content specifically structured to be easily retrievable and citable by AI systems. Swarme's Content Engine generates and optimizes your content with RAG extraction in mind.
+
+### RAG-Bait Principles
+
+1. **Atomic Claims** — Break complex topics into standalone, quotable statements. AI systems extract individual claims, not entire paragraphs.
+
+2. **Structured Data Density** — Embed facts in tables, definition lists, and FAQ schemas. These formats are preferred by retrieval pipelines because they're unambiguous to parse.
+
+3. **Authority Framing** — Preface claims with credibility markers: "Based on our analysis of 10,000 customer orders..." or "In our 15 years of manufacturing experience..."
+
+4. **Semantic Anchors** — Use schema.org markup (FAQ, HowTo, Article, Product) to create machine-readable semantic anchors that retrieval systems can index.
+
+5. **Freshness Signals** — Include "Last updated: [date]" metadata and `dateModified` in your JSON-LD. LLMs preferentially cite recent sources.
+
+### How the Swarm Implements RAG-Bait
+
+| Agent | RAG-Bait Action |
+|-------|----------------|
+| **Content Engine** | Restructures existing content with atomic claim formatting and FAQ sections |
+| **Auditor** | Scans for missing schema markup and injects JSON-LD (FAQ, HowTo, Article) |
+| **Edge Worker** | Serves `/llms.txt` and injects `<meta name="llm-context">` tags at the edge |
+| **Writer** | Generates new content drafts pre-optimized for RAG extraction patterns |
+| **SERP Analyst** | Monitors which of your pages appear in AI overview citations |
+
+---
+
+## AI Visibility Tracking
+
+The **AI Visibility** dashboard tracks your presence across AI-generated answer panels:
+
+### What We Track
+
+- **Citation Frequency** — How often your domain appears as a cited source in AI overviews
+- **Citation Context** — The queries that triggered your citation (what users were asking)
+- **Competitor Citations** — How often your competitors are cited for queries you're targeting
+- **Gap Analysis** — Queries where competitors are cited but you aren't — and actionable recommendations to close the gap
+- **Trend Lines** — Your AI visibility score over time, correlated with content changes and swarm activity
+
+### The AI Visibility Score
+
+Your AI Visibility Score (0-100) represents the percentage of your tracked keyword universe where your content appears in AI-generated answers. The score accounts for:
+
+- **Breadth** — How many queries cite you (coverage)
+- **Depth** — How prominently you're cited (primary source vs. one of many)
+- **Consistency** — Whether citations are stable or fluctuating
+- **Growth** — Trajectory compared to the previous measurement period
+
+The swarm continuously works to improve this score by:
+
+1. Identifying citation gaps through the SERP Analyst
+2. Generating RAG-optimized content to fill gaps via the Content Engine
+3. Injecting schema markup and semantic anchors through the Auditor
+4. Maintaining `/llms.txt` freshness through the Edge Worker
+5. Building off-domain authority through the Digital PR and Social agents
+
+---
+
+## Snippet Injection at the Edge
+
+Swarme's Cloudflare Worker uses `HTMLRewriter` to inject RAG-bait snippets directly into your pages at the edge — without modifying your CMS templates:
+
+### What Gets Injected
+
+- **FAQ Schema** — Automatically generated from your content, injected as `<script type="application/ld+json">` in the `<head>`
+- **LLM Context Meta** — `<meta name="llm-context" content="...">` tags providing AI crawlers with page-level semantic hints
+- **Structured Breadcrumbs** — Navigation breadcrumb schema for better topic hierarchy signals
+- **SpeakableSpecification** — Marks sections of your content as suitable for voice assistant readout
+
+All injections are non-destructive — they add metadata without altering visible page content. They're applied at the Cloudflare edge, meaning your origin server load is unaffected and changes take effect globally within seconds.
+
+---
+
+## Measuring GEO Impact
+
+Track the ROI of your GEO strategy through the **Revenue Attribution** dashboard:
+
+- **AI-Sourced Traffic** — Visits from users who clicked your citation in an AI overview
+- **Assisted Conversions** — Revenue attributed to visits that included an AI overview touchpoint
+- **GEO vs. Traditional SEO** — Side-by-side comparison of traffic and conversions from organic search vs. AI citations
+- **Content ROI** — Per-page revenue attribution for RAG-optimized content
+
+The swarm correlates AI visibility improvements with traffic and revenue changes, giving you a clear signal on which GEO investments are paying off.

@@ -1,0 +1,123 @@
+# Getting Started with Swarme
+
+Welcome to Swarme — the autonomous growth engineering platform that deploys 12 AI agents on the edge to manage your SEO, content, and digital presence around the clock.
+
+This guide walks you through onboarding, connecting your first domain, and verifying DNS so the swarm can begin operating on your site.
+
+---
+
+## The PLG Onboarding Flow
+
+When you first sign up, Swarme takes you through a three-step guided setup designed to collect the context the swarm needs to operate intelligently on your behalf.
+
+### Step 1: Platform Selection
+
+Choose your CMS or e-commerce platform from the supported list:
+
+- **Shopify** — Full Storefront API integration with automatic product schema injection
+- **WooCommerce** — REST API connection with WordPress hooks for on-page optimization
+- **BigCommerce** — Catalog API + WebDAV file access for template-level modifications
+- **WordPress** — REST API with Yoast/RankMath compatibility layer
+- **Custom / Headless** — Generic REST or GraphQL adapter for any CMS with an API
+
+After selecting your platform, enter your **Primary Site URL**. This is the root domain the swarm will audit, monitor, and optimize.
+
+### Step 2: Competitive Landscape
+
+Add up to five competitor URLs. The swarm uses these for:
+
+- **Keyword gap analysis** — identifying ranking opportunities your competitors hold that you don't
+- **Content velocity tracking** — monitoring how often competitors publish and update content
+- **Backlink delta monitoring** — detecting new referring domains acquired by competitors
+- **SERP displacement alerts** — notifying you when a competitor overtakes your position on tracked queries
+
+Competitors are optional during onboarding — you can configure them later from the **Trend Radar** page in the dashboard.
+
+### Step 3: North Star Brand
+
+Enter the URL of a brand or website you aspire to emulate. This doesn't have to be a direct competitor — it can be any site whose content strategy, design quality, or market positioning you admire.
+
+The swarm's **Content Engine** uses this as a stylistic and strategic reference point when generating content drafts, meta descriptions, and social copy.
+
+---
+
+## Adding a Domain
+
+After onboarding, you'll be taken to the dashboard. To add additional domains:
+
+1. Navigate to **Domains** in the sidebar
+2. Click **Add Domain**
+3. Enter the root domain (e.g., `yourbrand.com`) — do not include `https://` or trailing paths
+4. Select the CMS platform for this domain
+5. Click **Verify**
+
+### DNS Verification
+
+Swarme uses DNS TXT record verification to confirm domain ownership. When you add a domain, the system generates a unique verification token:
+
+```
+TXT Record: _swarme-verify.yourbrand.com
+Value:      swarme-site-verification=sk_verify_abc123def456
+```
+
+**To add this record:**
+
+1. Log in to your domain registrar or DNS provider (Cloudflare, Namecheap, Route 53, GoDaddy, etc.)
+2. Navigate to the DNS management panel for your domain
+3. Add a new **TXT** record:
+   - **Host/Name**: `_swarme-verify`
+   - **Value**: The verification string shown in the Swarme dashboard
+   - **TTL**: 300 (or Auto)
+4. Save the record and return to Swarme
+5. Click **Check Verification** — DNS propagation typically takes 1-5 minutes
+
+Once verified, the domain moves to **Active** status and all 12 swarm agents begin their initial baseline audit.
+
+### Multi-Domain Architecture
+
+Each domain in Swarme operates in strict isolation:
+
+- Separate D1 database partitions per domain
+- Independent agent configurations and task queues
+- Domain-scoped brand context and keyword tracking
+- Isolated CMS credentials in encrypted KV storage
+
+An agent working on Domain A cannot read, write, or access any data belonging to Domain B. This compartmentalization is enforced at the database query layer — every query requires a `domain_id` parameter.
+
+---
+
+## What Happens Next
+
+Once your domain is verified and the swarm is deployed, the following occurs automatically:
+
+1. **Baseline Audit** — The Auditor agent crawls your entire site, analyzing every page's `<head>` tags, schema markup, accessibility attributes, Core Web Vitals, and security headers
+2. **Content Inventory** — The Content Engine catalogs all existing pages, blog posts, and product listings
+3. **Keyword Mapping** — The SERP Analyst agent pulls ranking data and maps your current keyword positions
+4. **Competitive Snapshot** — If competitors were provided, the Trend Radar agent captures their current rankings and content footprint
+5. **Risk Assessment** — All findings are compiled into a risk score and presented on your dashboard
+
+The initial audit typically completes within 15-30 minutes depending on site size. You'll see real-time progress in the **Agent Activity** feed.
+
+---
+
+## Dashboard Overview
+
+After onboarding, your dashboard displays:
+
+| Widget | Description |
+|--------|-------------|
+| **Active Agents** | Number of swarm agents currently running tasks |
+| **Pages Optimized** | Cumulative count of pages modified by the swarm |
+| **Backlinks Acquired** | New referring domains detected since deployment |
+| **Avg. SERP Position** | Weighted average across all tracked keywords |
+| **Agent Activity** | Live feed of agent actions with timestamps |
+| **AI Visibility Score** | Your presence in AI overview panels (Perplexity, ChatGPT, Gemini) |
+| **Search Console Performance** | Impressions and clicks from connected GSC property |
+
+---
+
+## Need Help?
+
+- **AI Manager** — Your in-dashboard strategic advisor. Ask questions, approve tasks, and get recommendations in natural language.
+- **Help Center** — Visit `/help` for FAQs, support channels, and contact information.
+- **Developer API** — Visit `/developers` for REST API documentation and webhook configuration.

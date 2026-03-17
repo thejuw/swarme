@@ -51,6 +51,7 @@ import ContactPage from "@/pages/public/contact";
 import SecurityPage from "@/pages/public/security";
 import HelpPage from "@/pages/public/help";
 import DevelopersPage from "@/pages/public/developers";
+import DocsPage from "@/pages/docs";
 import { getIntegrationStatus, queryKeys } from "@/lib/api";
 import { useEffect } from "react";
 import { usePublicSettings } from "@/hooks/use-public-settings";
@@ -300,6 +301,8 @@ function LayoutRouter() {
       <Route path="/security" component={SecurityPage} />
       <Route path="/help" component={HelpPage} />
       <Route path="/developers" component={DevelopersPage} />
+      <Route path="/docs" component={DocsPage} />
+      <Route path="/docs/:slug" component={DocsPage} />
 
       {/* Protected standalone (no sidebar but requires auth) */}
       <Route path="/connect-store">

@@ -82,7 +82,7 @@ const DEFAULT_FOOTER: FooterConfig = {
       title: "Resources",
       links: [
         { label: "Help Center", href: "/help" },
-        { label: "Documentation", href: "/developers" },
+        { label: "Documentation", href: "/docs" },
         { label: "System Status", href: "https://status.swarme.io", external: true },
         { label: "Community", href: "https://discord.gg/swarme", external: true },
       ],
