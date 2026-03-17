@@ -480,10 +480,14 @@ app.post("/api/admin/infrastructure/keys", async (c) => {
     keys[category][key_name] = value;
     await c.env.CONFIG_KV.put("global:config:keys", JSON.stringify(keys));
 
-    // Audit log
-    await c.env.DB.prepare(
-      "INSERT INTO Infrastructure_Audit_Log (category, key_name, action, actor_id) VALUES (?1, ?2, ?3, ?4)"
-    ).bind(category, key_name, value ? "set" : "revoked", actorId).run();
+    // Audit log (non-blocking — key save should succeed even if audit fails)
+    try {
+      await c.env.DB.prepare(
+        "INSERT INTO Infrastructure_Audit_Log (category, key_name, action, actor_id) VALUES (?1, ?2, ?3, ?4)"
+      ).bind(category, key_name, value ? "set" : "revoked", actorId || "system").run();
+    } catch (auditErr) {
+      console.warn(`[Vault] Audit log write failed (non-critical): ${auditErr}`);
+    }
 
     return c.json({ success: true });
   } catch (err: any) {
