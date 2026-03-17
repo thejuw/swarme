@@ -585,12 +585,12 @@ export async function handleManagerChat(
   // Prepare the full message array for Perplexity
   const messages = [systemMessage, ...messageHistory];
 
-  // Retrieve Perplexity API key from KV vault
-  const vaultKeys = await env.CONFIG_KV.get<Record<string, string>>(
-    "vault:infrastructure:ai_models",
+  // Retrieve Perplexity API key from KV vault (Admin Vault saves to global:config:keys)
+  const globalConfig = await env.CONFIG_KV.get<Record<string, Record<string, string>>>(
+    "global:config:keys",
     "json"
   );
-  const apiKey = vaultKeys?.perplexity_api_key || env.PERPLEXITY_API_KEY;
+  const apiKey = globalConfig?.ai_models?.PERPLEXITY_API_KEY || env.PERPLEXITY_API_KEY;
 
   if (!apiKey) {
     return {

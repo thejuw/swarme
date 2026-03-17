@@ -270,12 +270,12 @@ export async function analyzeNorthStarDesign(
     return buildMockNorthStarAnalysis(northStarUrl);
   }
 
-  // Get Perplexity API key
-  const vaultKeys = await env.CONFIG_KV.get<Record<string, string>>(
-    "vault:infrastructure:ai_models",
+  // Get Perplexity API key from Admin Vault
+  const globalConfig = await env.CONFIG_KV.get<Record<string, Record<string, string>>>(
+    "global:config:keys",
     "json"
   );
-  const apiKey = vaultKeys?.perplexity_api_key || (env as any).PERPLEXITY_API_KEY;
+  const apiKey = globalConfig?.ai_models?.PERPLEXITY_API_KEY || (env as any).PERPLEXITY_API_KEY;
 
   if (!apiKey) {
     console.log("[CRO/NorthStar] No Perplexity key — returning mock analysis");
