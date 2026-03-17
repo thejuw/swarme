@@ -188,28 +188,10 @@ app.use(
 
 // ── Auth Routes (public — no JWT required) ──
 app.route("/api/auth", authRouter);
-app.route("/api/manager", managerRouter);
 
 // ── Webhooks (public — Stripe verifies its own signature, catalog verifies per-platform) ──
 app.route("/api/webhooks", webhookRouter);
 app.route("/api/webhooks/catalog", catalogWebhookRouter);
-
-// ── Billing (protected — JWT required, mounted after auth middleware) ──
-// Note: protectRoute() is applied via the /api/billing/* middleware below
-app.route("/api/billing", billingRouter);
-
-// ── GSC Integration (protected — JWT required) ──
-app.route("/api/gsc", gscRouter);
-
-// ── GA4 Integration (protected — JWT required) ──
-app.route("/api/ga4", ga4Router);
-
-// ── Phase 49: Pinterest & Reddit OAuth (protected — JWT required) ──
-app.route("/api/pinterest", pinterestRouter);
-app.route("/api/reddit", redditRouter);
-
-// ── Phase 51: Media Wallet recharge routes (protected — JWT required) ──
-app.route("/api/billing/wallet", walletRechargeRouter);
 
 // ── Phase 53: /llms.txt Dynamic Edge Router (public — for AI crawlers) ──
 app.route("/llms.txt", llmsTxtRouter);
@@ -252,6 +234,17 @@ app.use("/api/circuit-breaker/*", protectRoute());
 app.use("/api/admin/failsafe/*", protectRoute());
 app.use("/api/throttle/*", protectRoute());
 // Note: /api/webhooks/* is intentionally unprotected — Stripe signs its own payloads
+
+// ── Protected Route Mounting ──
+// CRITICAL: In Hono v4, routes MUST be mounted AFTER their middleware declarations.
+// Mounting a route before its middleware means the middleware never applies.
+app.route("/api/manager", managerRouter);
+app.route("/api/billing", billingRouter);
+app.route("/api/billing/wallet", walletRechargeRouter);
+app.route("/api/gsc", gscRouter);
+app.route("/api/ga4", ga4Router);
+app.route("/api/pinterest", pinterestRouter);
+app.route("/api/reddit", redditRouter);
 
 // ─────────────────────────────────────────────────────────────
 // Phase 56: Circuit Breaker Status & Control Endpoints

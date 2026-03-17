@@ -586,11 +586,14 @@ export async function handleManagerChat(
   const messages = [systemMessage, ...messageHistory];
 
   // Retrieve Perplexity API key from KV vault (Admin Vault saves to global:config:keys)
+  // Only use the vault key if it's non-empty and looks like a valid key (>10 chars).
+  // Otherwise fall back to the Worker secret (env.PERPLEXITY_API_KEY).
   const globalConfig = await env.CONFIG_KV.get<Record<string, Record<string, string>>>(
     "global:config:keys",
     "json"
   );
-  const apiKey = globalConfig?.ai_models?.PERPLEXITY_API_KEY || env.PERPLEXITY_API_KEY;
+  const vaultKey = globalConfig?.ai_models?.PERPLEXITY_API_KEY;
+  const apiKey = (vaultKey && vaultKey.trim().length > 10) ? vaultKey.trim() : env.PERPLEXITY_API_KEY;
 
   if (!apiKey) {
     return {
@@ -628,10 +631,15 @@ export async function handleManagerChat(
 
     if (!response.ok) {
       const errText = await response.text();
-      console.error(`[aiManager] Perplexity error: ${errText}`);
+      console.error(`[aiManager] Perplexity error (${response.status}): ${errText}`);
+      // Provide actionable debug info — API key source helps diagnose vault-vs-env issues
+      const keySource = (vaultKey && vaultKey.trim().length > 10) ? "Admin Vault" : "Worker Secret";
+      const keyPreview = apiKey ? `${apiKey.slice(0, 8)}...` : "(none)";
       return {
         reply:
-          "I encountered an issue connecting to the AI service. Please try again in a moment.",
+          `I encountered an issue connecting to the AI service (HTTP ${response.status}). ` +
+          `Key source: ${keySource} (${keyPreview}). ` +
+          `Please verify your Perplexity API key in the Admin Vault or contact support.`,
         brandContextUpdated,
         roadmapItemsAdded,
       };
