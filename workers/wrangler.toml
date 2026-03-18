@@ -106,12 +106,12 @@ local_protocol = "http"
 [[d1_databases]]
 binding = "DB"
 database_name = "edge-swarm-db"
-database_id = "<INSERT_PRODUCTION_D1_ID>"
+database_id = "b2427161-228a-4a5d-9f91-b1a1513f6e01"
 migrations_dir = "migrations"
 
 [[kv_namespaces]]
 binding = "CONFIG_KV"
-id = "<INSERT_PRODUCTION_KV_ID>"
+id = "c3ddde537a9947a087622e2f27f3e1cf"
 
 [vars]
 ENVIRONMENT = "development"
@@ -198,12 +198,12 @@ R2_PUBLIC_BASE = "https://media.swarme.io"
 [[env.production.d1_databases]]
 binding = "DB"
 database_name = "edge-swarm-db"
-database_id = "<INSERT_PRODUCTION_D1_ID>"
+database_id = "b2427161-228a-4a5d-9f91-b1a1513f6e01"
 migrations_dir = "migrations"
 
 [[env.production.kv_namespaces]]
 binding = "CONFIG_KV"
-id = "<INSERT_PRODUCTION_KV_ID>"
+id = "c3ddde537a9947a087622e2f27f3e1cf"
 
 # Production crons — full autonomous schedule
 [env.production.triggers]
