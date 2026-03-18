@@ -13,6 +13,7 @@ import {
   getProprietaryReport,
   publishProprietaryReport,
   getTelemetryStatus,
+  getChatHistory,
   queryKeys,
   type ManagerChatMessage,
   type AIRoadmapItem,
@@ -114,10 +115,12 @@ function ChatPanel({
   messages,
   onSend,
   isSending,
+  isHydrating = false,
 }: {
   messages: ManagerChatMessage[];
   onSend: (text: string) => void;
   isSending: boolean;
+  isHydrating?: boolean;
 }) {
   const [input, setInput] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -155,6 +158,12 @@ function ChatPanel({
 
       {/* Messages area */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-3 space-y-4">
+        {isHydrating && (
+          <div className="flex items-center justify-center py-8 text-muted-foreground" data-testid="chat-hydrating">
+            <Loader2 className="h-5 w-5 animate-spin mr-2" />
+            <span className="text-sm">Restoring conversation...</span>
+          </div>
+        )}
         {messages.map((msg, i) => (
           <div
             key={i}
@@ -1003,12 +1012,41 @@ const PROACTIVE_TELEMETRY_MESSAGE: ManagerChatMessage = {
 
 export default function AiManager() {
   const PROJECT_ID = useProjectId();
-  const [messages, setMessages] = useState<ManagerChatMessage[]>([
-    WELCOME_MESSAGE,
-    PROACTIVE_TELEMETRY_MESSAGE,
-    PROACTIVE_MILESTONE_MESSAGE,
-  ]);
+  const [messages, setMessages] = useState<ManagerChatMessage[]>([]);
+  const [isHydrated, setIsHydrated] = useState(false);
   const { toast } = useToast();
+
+  // Phase 61: Hydrate chat from persistent history on mount
+  const { data: historyData, isLoading: isLoadingHistory } = useQuery({
+    queryKey: queryKeys.chatHistory(PROJECT_ID),
+    queryFn: () => getChatHistory(PROJECT_ID),
+    enabled: !!PROJECT_ID,
+    staleTime: Infinity, // Only fetch once on mount
+  });
+
+  // Hydrate messages once history loads
+  useEffect(() => {
+    if (isHydrated || isLoadingHistory) return;
+
+    const historyMessages: ManagerChatMessage[] =
+      historyData?.messages?.map((m) => ({
+        role: m.role as "user" | "assistant",
+        content: m.content,
+      })) ?? [];
+
+    if (historyMessages.length > 0) {
+      // Resume from persisted history
+      setMessages(historyMessages);
+    } else {
+      // No history — show onboarding messages
+      setMessages([
+        WELCOME_MESSAGE,
+        PROACTIVE_TELEMETRY_MESSAGE,
+        PROACTIVE_MILESTONE_MESSAGE,
+      ]);
+    }
+    setIsHydrated(true);
+  }, [historyData, isLoadingHistory, isHydrated]);
 
   const chatMutation = useMutation({
     mutationFn: (userMessages: ManagerChatMessage[]) =>
@@ -1026,6 +1064,10 @@ export default function AiManager() {
             queryKey: queryKeys.managerRoadmap(PROJECT_ID),
           });
         }
+        // Phase 61: Invalidate chat history cache so next reload is fresh
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.chatHistory(PROJECT_ID),
+        });
       } else {
         toast({
           title: "AI Error",
@@ -1062,6 +1104,7 @@ export default function AiManager() {
           messages={messages}
           onSend={handleSend}
           isSending={chatMutation.isPending}
+          isHydrating={isLoadingHistory && !isHydrated}
         />
       </div>
 

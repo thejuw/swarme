@@ -55,6 +55,7 @@ import { llmsTxtRouter } from "./routes/llms-txt";
 import { runApiFuzzer } from "./tests/chaos/apiFuzzer";
 import { runLlmAttacker } from "./tests/chaos/llmAttacker";
 import { handleLinkRotCron } from "./cron/linkRot";
+import { handleMemoryCompression } from "./cron/memoryCompressor";
 import { getAllCircuitStatuses, CircuitBreaker, CIRCUIT_SERVICES } from "./utils/circuitBreaker";
 import type { CircuitService } from "./utils/circuitBreaker";
 import { getAllThrottleStatuses, THROTTLED_SERVICES } from "./utils/throttle";
@@ -5942,6 +5943,33 @@ async function handleScheduled(
         }
       })();
       ctx.waitUntil(linkRotPromise);
+    }
+
+    // ── Phase 61: Daily Memory Compressor (00:00 UTC) ───────
+    if (cronPattern === "0 0 * * *") {
+      console.log("[Swarme Cron] Starting daily memory compression...");
+      const memoryPromise = (async () => {
+        try {
+          const result = await handleMemoryCompression(env);
+          console.log(
+            `[Swarme Cron] Memory compression complete — ${result.domainsProcessed} domains, ` +
+            `${result.messagesCompressed} messages compressed, ${result.factsExtracted} facts extracted`
+          );
+
+          if (result.messagesCompressed > 0) {
+            await env.DB.prepare(
+              `INSERT INTO Agent_Tasks (project_id, agent_type, action, status, task_description, result_payload)
+               VALUES ('system', 'memory_compressor', 'Daily Memory Compression', 'Completed', ?1, ?2)`
+            ).bind(
+              `Compressed ${result.messagesCompressed} messages from ${result.domainsProcessed} domains into ${result.factsExtracted} facts`,
+              JSON.stringify(result)
+            ).run();
+          }
+        } catch (err) {
+          console.error("[Swarme Cron] Memory compression failed:", err);
+        }
+      })();
+      ctx.waitUntil(memoryPromise);
     }
 
     const elapsed = Date.now() - startTime;

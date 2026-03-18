@@ -1,19 +1,18 @@
 /**
  * ============================================================
- * Phase 26: AI Manager Engine
+ * Phase 26 + Phase 61: AI Manager Engine
  * ============================================================
  *
  * Conversational state machine that acts as a "Chief Strategy
  * Officer" for an e-commerce brand. Uses Perplexity Sonar Pro
- * with structured JSON action parsing to orchestrate three
- * internal tools:
+ * with structured JSON action parsing to orchestrate internal tools.
  *
- *   1. run_site_analysis(url) — triggers /crawl site audit
- *   2. update_brand_context(contextData) — persists brand memory
- *   3. propose_roadmap_items(items) — inserts suggested actions
- *
- * The engine reads Brand_Context before each turn, giving the
- * LLM perpetual memory of the brand's goals and identity.
+ * Phase 61 additions:
+ *   - Persistent Chat_History table (short-term rolling transcript)
+ *   - User_Memories table (compressed long-term facts)
+ *   - Rolling context window: last 10 messages + all memories
+ *     injected into the system prompt each turn
+ *   - Messages are persisted to D1 on every send/receive
  * ============================================================
  */
 
@@ -339,6 +338,98 @@ async function insertRoadmapItems(
   return inserted;
 }
 
+
+// ─────────────────────────────────────────────────────────────
+// Phase 61: Chat History & User Memory persistence
+// ─────────────────────────────────────────────────────────────
+
+export interface ChatHistoryRow {
+  id: string;
+  domain_id: string;
+  role: "user" | "assistant";
+  content: string;
+  compressed: number;
+  created_at: string;
+}
+
+export interface UserMemoryRow {
+  id: string;
+  domain_id: string;
+  memory_fact: string;
+  source: string;
+  created_at: string;
+}
+
+/**
+ * Persist a single chat message to the Chat_History table.
+ * Called after every user send and assistant reply.
+ */
+export async function persistChatMessage(
+  domainId: string,
+  role: "user" | "assistant",
+  content: string,
+  env: Env
+): Promise<void> {
+  const id = `chat_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  try {
+    await env.DB.prepare(
+      `INSERT INTO Chat_History (id, domain_id, role, content) VALUES (?, ?, ?, ?)`
+    )
+      .bind(id, domainId, role, content)
+      .run();
+  } catch (err) {
+    console.error(`[aiManager] Failed to persist chat message: ${err}`);
+  }
+}
+
+/**
+ * Fetch the most recent N messages for a domain (short-term memory).
+ * Returns them in chronological order (oldest first).
+ */
+export async function fetchRecentChatHistory(
+  domainId: string,
+  limit: number,
+  env: Env
+): Promise<ChatHistoryRow[]> {
+  try {
+    const { results } = await env.DB.prepare(
+      `SELECT * FROM Chat_History
+       WHERE domain_id = ?
+       ORDER BY created_at DESC
+       LIMIT ?`
+    )
+      .bind(domainId, limit)
+      .all<ChatHistoryRow>();
+    // Reverse so oldest message comes first (chronological)
+    return (results ?? []).reverse();
+  } catch (err) {
+    console.error(`[aiManager] Failed to fetch chat history: ${err}`);
+    return [];
+  }
+}
+
+/**
+ * Fetch all compressed User_Memories for a domain (long-term memory).
+ */
+export async function fetchUserMemories(
+  domainId: string,
+  env: Env
+): Promise<UserMemoryRow[]> {
+  try {
+    const { results } = await env.DB.prepare(
+      `SELECT * FROM User_Memories
+       WHERE domain_id = ?
+       ORDER BY created_at ASC`
+    )
+      .bind(domainId)
+      .all<UserMemoryRow>();
+    return results ?? [];
+  } catch (err) {
+    console.error(`[aiManager] Failed to fetch user memories: ${err}`);
+    return [];
+  }
+}
+
 // ─────────────────────────────────────────────────────────────
 // Tool execution handlers
 // ─────────────────────────────────────────────────────────────
@@ -452,7 +543,11 @@ async function executeTool(
 // System Prompt Builder
 // ─────────────────────────────────────────────────────────────
 
-function buildSystemPrompt(brandContext: BrandContext | null): string {
+function buildSystemPrompt(
+  brandContext: BrandContext | null,
+  userMemories: UserMemoryRow[] = [],
+  recentHistory: ChatHistoryRow[] = []
+): string {
   let prompt = `You are the Chief Strategy Officer embedded in the Swarme AI SEO platform. Your role is to guide the user through building a growth engine for their website.
 
 Your conversation flow:
@@ -525,6 +620,29 @@ You have previously stored the following context about this brand:
 Use this knowledge to provide continuity. Do not ask for information you already have unless the user wants to update it.
 If business_model is "(not set)", ask for it in your next response — it is critical for tailoring CRO/SEO strategy.
 If north_star_url is "(not set)", ask the user to choose an aspirational site during onboarding.`;
+  }
+
+  // ── Phase 61: Inject long-term memories ──────────────────
+  if (userMemories.length > 0) {
+    const facts = userMemories.map((m) => `- ${m.memory_fact}`).join("\n");
+    prompt += `\n\n--- LONG-TERM USER MEMORY ---
+Here are established facts about this user's preferences and history, extracted from past conversations:
+${facts}
+
+Use these facts to personalize your responses. Do not re-ask for information already captured here.`;
+  }
+
+  // ── Phase 61: Inject recent conversation transcript ──────
+  if (recentHistory.length > 0) {
+    const transcript = recentHistory
+      .map((m) => `${m.role === "user" ? "User" : "Assistant"}: ${m.content}`)
+      .join("\n\n");
+    prompt += `\n\n--- RECENT CONVERSATION TRANSCRIPT ---
+Here is the transcript of your most recent conversation with this user:
+
+${transcript}
+
+Resume the conversation naturally from this point. Do not repeat your last greeting or re-introduce yourself.`;
   }
 
   return prompt;
@@ -611,13 +729,24 @@ export async function handleManagerChat(
   messageHistory: ChatMessage[],
   env: Env
 ): Promise<ManagerResult> {
-  // Fetch brand context for perpetual memory
-  const brandContext = await fetchBrandContext(projectId, env);
+  // Phase 61: Fetch all three memory layers in parallel
+  const [brandContext, recentHistory, userMemories] = await Promise.all([
+    fetchBrandContext(projectId, env),
+    fetchRecentChatHistory(projectId, 10, env),
+    fetchUserMemories(projectId, env),
+  ]);
 
-  // Build the system message with brand context and tool instructions injected
+  // Phase 61: Persist the latest user message to Chat_History.
+  // The last message in messageHistory is always the new user message.
+  const lastMsg = messageHistory[messageHistory.length - 1];
+  if (lastMsg && lastMsg.role === "user") {
+    await persistChatMessage(projectId, "user", lastMsg.content, env);
+  }
+
+  // Build the system message with brand context, memories, and tool instructions
   const systemMessage: ChatMessage = {
     role: "system",
-    content: buildSystemPrompt(brandContext) + TOOL_INSTRUCTION_BLOCK,
+    content: buildSystemPrompt(brandContext, userMemories, recentHistory) + TOOL_INSTRUCTION_BLOCK,
   };
 
   // Prepare the full message array for Perplexity.
@@ -717,8 +846,11 @@ export async function handleManagerChat(
 
     // If no actions found, return the text response (strip any residual markers)
     if (actions.length === 0) {
+      const cleanReply = content.replace(/<<ACTION>>[\s\S]*?<<\/ACTION>>/g, "").trim();
+      // Phase 61: Persist assistant reply to Chat_History
+      await persistChatMessage(projectId, "assistant", cleanReply, env);
       return {
-        reply: content.replace(/<<ACTION>>[\s\S]*?<<\/ACTION>>/g, "").trim(),
+        reply: cleanReply,
         brandContextUpdated,
         roadmapItemsAdded,
       };
@@ -759,9 +891,11 @@ export async function handleManagerChat(
   }
 
   // Safety: if we exhausted iterations, return last known state
+  const safetyReply = "I've completed the analysis. Check the roadmap panel for the suggested actions.";
+  // Phase 61: Persist safety reply
+  await persistChatMessage(projectId, "assistant", safetyReply, env);
   return {
-    reply:
-      "I've completed the analysis. Check the roadmap panel for the suggested actions.",
+    reply: safetyReply,
     brandContextUpdated,
     roadmapItemsAdded,
   };

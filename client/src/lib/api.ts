@@ -955,6 +955,27 @@ export async function sendManagerChat(
   return res.json();
 }
 
+// Phase 61: Chat history hydration
+export interface ChatHistoryMessage {
+  role: "user" | "assistant";
+  content: string;
+  created_at: string;
+}
+
+export interface ChatHistoryResponse {
+  success: boolean;
+  project_id: string;
+  messages: ChatHistoryMessage[];
+  total: number;
+}
+
+export async function getChatHistory(
+  projectId: string
+): Promise<ChatHistoryResponse> {
+  const res = await apiRequest("GET", `/api/manager/chat-history?project_id=${projectId}`);
+  return res.json();
+}
+
 export async function getManagerRoadmap(
   projectId: string
 ): Promise<AIRoadmapResponse> {
@@ -1207,6 +1228,8 @@ export const queryKeys = {
     ["/api/projects", projectId, "social-drafts"] as const,
   decayCandidates: (projectId: string) =>
     ["/api/projects", projectId, "decay", "candidates"] as const,
+  chatHistory: (projectId: string) =>
+    ["/api/manager", "chat-history", projectId] as const,
   managerRoadmap: (projectId: string) =>
     ["/api/manager", "roadmap", projectId] as const,
   brandContext: (projectId: string) =>

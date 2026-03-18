@@ -4,6 +4,7 @@
  * ============================================================
  *
  * POST /chat          — Send a message to the AI Manager
+ * GET  /chat-history  — Fetch recent chat messages for UI hydration (Phase 61)
  * GET  /roadmap       — Fetch the current AI_Roadmap for a project
  * PATCH /roadmap/:taskId — Update a roadmap item status
  * POST /roadmap/:taskId/deploy — Approve & dispatch to Swarm
@@ -17,6 +18,7 @@ import {
   handleManagerChat,
   fetchBrandContext,
   fetchRoadmap,
+  fetchRecentChatHistory,
   type ChatMessage,
   type RoadmapItem,
 } from "../utils/aiManager";
@@ -60,6 +62,35 @@ managerRouter.post("/chat", async (c) => {
       },
       500
     );
+  }
+});
+
+// ─────────────────────────────────────────────────────────────
+// Phase 61: GET /chat-history?project_id=xxx — Fetch recent chat for hydration
+// ─────────────────────────────────────────────────────────────
+
+managerRouter.get("/chat-history", async (c) => {
+  const projectId = c.req.query("project_id");
+  if (!projectId) {
+    return c.json({ success: false, error: "project_id is required" }, 400);
+  }
+
+  try {
+    const messages = await fetchRecentChatHistory(projectId, 50, c.env);
+
+    return c.json({
+      success: true,
+      project_id: projectId,
+      messages: messages.map((m) => ({
+        role: m.role,
+        content: m.content,
+        created_at: m.created_at,
+      })),
+      total: messages.length,
+    });
+  } catch (err) {
+    console.error(`[manager/chat-history] Error: ${err}`);
+    return c.json({ success: false, error: "Failed to fetch chat history" }, 500);
   }
 });
 
