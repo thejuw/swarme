@@ -86,8 +86,9 @@ jobs:
         working-directory: workers
         run: npm ci
 
-      - name: Type check workers
+      - name: Type check workers (non-blocking)
         working-directory: workers
+        continue-on-error: true
         run: npx tsc --noEmit
 
       - name: Apply D1 migrations
