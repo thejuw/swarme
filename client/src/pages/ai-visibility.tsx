@@ -136,8 +136,8 @@ export default function AiVisibility() {
 
           {/* Engine Breakdown */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            {[...engineMap.entries()].map(([engine, logs]) => {
-              const engineCited = logs.filter((l) => l.cited === 1).length;
+            {Array.from(engineMap.entries()).map(([engine, logs]: [string, VisibilityLog[]]) => {
+              const engineCited = logs.filter((l: VisibilityLog) => l.cited === 1).length;
               const pct = logs.length > 0 ? Math.round((engineCited / logs.length) * 100) : 0;
               return (
                 <Card key={engine} className="border-border/50" data-testid={`card-engine-${engine.toLowerCase()}`}>

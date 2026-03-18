@@ -458,6 +458,7 @@ function UGCCampaignCard({
 // ─────────────────────────────────────────────────────────────
 
 function RoadmapPanel() {
+  const PROJECT_ID = useProjectId();
   const { toast } = useToast();
 
   const { data, isLoading } = useQuery({
@@ -715,6 +716,7 @@ const EXPLAIN_TEXTS: Record<string, string> = {
 };
 
 function TelemetryWidget() {
+  const PROJECT_ID = useProjectId();
   const { data, isLoading } = useQuery({
     queryKey: ["manager", "telemetry-status", PROJECT_ID],
     queryFn: () => getTelemetryStatus(PROJECT_ID),
@@ -829,6 +831,7 @@ function TelemetryWidget() {
 // ─────────────────────────────────────────────────────────────
 
 function ProprietaryReportsPanel() {
+  const PROJECT_ID = useProjectId();
   const { toast } = useToast();
   const [selectedReport, setSelectedReport] = useState<ProprietaryReport | null>(null);
 

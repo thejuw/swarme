@@ -85,7 +85,7 @@ export default function AgentActivity() {
     return true;
   });
 
-  const agentTypes = [...new Set(tasks.map((t) => t.agent_type))].sort();
+  const agentTypes = Array.from(new Set(tasks.map((t) => t.agent_type))).sort();
 
   return (
     <div className="h-full flex flex-col" data-testid="page-agent-activity">

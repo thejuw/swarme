@@ -2912,7 +2912,7 @@ export async function registerRoutes(
             admin_id: userId || "unknown",
             admin_email: adminUser?.email || "unknown",
             action,
-            target: req.params?.id || req.params?.ticketId || req.params?.postId || req.params?.ip || routePath,
+            target: (req.params as any)?.id || (req.params as any)?.ticketId || (req.params as any)?.postId || (req.params as any)?.ip || routePath,
             metadata: req.body ? JSON.stringify(req.body) : null,
             created_at: new Date().toISOString(),
           });
@@ -3737,11 +3737,11 @@ export async function registerRoutes(
       return res.status(404).json({ error: "Job not found" });
     }
     let result = null;
-    if (task.result_payload) {
+    if ((task as any).result_payload) {
       try {
-        result = JSON.parse(task.result_payload);
+        result = JSON.parse((task as any).result_payload);
       } catch {
-        result = task.result_payload;
+        result = (task as any).result_payload;
       }
     }
     res.json({
@@ -4935,7 +4935,7 @@ export async function registerRoutes(
   // ────────────────────────────────────────────
 
   // Public scanner endpoint (no auth required)
-  app.post("/api/public/scanner", (req: Request, res: Response) => {
+  app.post("/api/public/scanner", (req, res) => {
     const { url } = req.body;
     if (!url) {
       return res.status(400).json({ success: false, error: "URL is required" });
@@ -4974,7 +4974,7 @@ export async function registerRoutes(
   // In-memory onboarding context store
   const onboardingContextStore: Record<string, any> = {};
 
-  app.post("/api/projects/:projectId/onboarding/context", (req: Request, res: Response) => {
+  app.post("/api/projects/:projectId/onboarding/context", (req, res) => {
     const { projectId } = req.params;
     const { cmsProvider, siteUrl, competitorUrls, northStarUrl } = req.body;
     onboardingContextStore[projectId] = {
@@ -4988,7 +4988,7 @@ export async function registerRoutes(
     res.json({ success: true });
   });
 
-  app.get("/api/projects/:projectId/onboarding/context", (req: Request, res: Response) => {
+  app.get("/api/projects/:projectId/onboarding/context", (req, res) => {
     const { projectId } = req.params;
     const ctx = onboardingContextStore[projectId];
     if (!ctx) {

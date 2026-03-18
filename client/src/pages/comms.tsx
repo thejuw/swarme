@@ -150,6 +150,7 @@ function ThreadView({
   threadId: string;
   onBack: () => void;
 }) {
+  const PROJECT_ID = useProjectId();
   const [replyText, setReplyText] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
 

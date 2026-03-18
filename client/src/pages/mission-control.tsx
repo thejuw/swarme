@@ -370,6 +370,7 @@ function CronJobsPanel({ cronJobs }: { cronJobs: CronJobStatus[] }) {
 // ─────────────────────────────────────────────────────────────
 
 function ActionTimeline() {
+  const PROJECT_ID = useProjectId();
   const { toast } = useToast();
   const [filter, setFilter] = useState<string>("all");
 
@@ -393,7 +394,7 @@ function ActionTimeline() {
   const actions = data?.actions ?? [];
   const filtered = filter === "all" ? actions : actions.filter((a) => a.agent_type === filter);
 
-  const agentTypes = [...new Set(actions.map((a) => a.agent_type))];
+  const agentTypes = Array.from(new Set(actions.map((a: any) => a.agent_type)));
 
   return (
     <Card className="flex flex-col">
@@ -599,6 +600,7 @@ function parseDraft(raw: string | null): OutreachDraftContent | null {
 }
 
 function OutreachPanel() {
+  const PROJECT_ID = useProjectId();
   const { toast } = useToast();
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [selectedCampaign, setSelectedCampaign] = useState<OutreachCampaign | null>(null);
@@ -910,6 +912,7 @@ function OutreachPanel() {
 // ─────────────────────────────────────────────────────────────
 
 function LinkGraphPanel() {
+  const PROJECT_ID = useProjectId();
   const { toast } = useToast();
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
 
@@ -1242,6 +1245,7 @@ function engineIcon(engine: string): string {
 }
 
 function GeoAnalyticsPanel() {
+  const PROJECT_ID = useProjectId();
   const { data, isLoading } = useQuery({
     queryKey: queryKeys.geoAnalytics(PROJECT_ID),
     queryFn: () => getGeoAnalytics(PROJECT_ID),

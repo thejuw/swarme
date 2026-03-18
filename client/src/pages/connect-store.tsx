@@ -359,6 +359,7 @@ function CredentialInput({
   onSuccess: (storeName: string) => void;
   t: (key: string) => string;
 }) {
+  const PROJECT_ID = useProjectId();
   // Shopify fields
   const [shopifyDomain, setShopifyDomain] = useState("");
   const [shopifyToken, setShopifyToken] = useState("");

@@ -230,6 +230,7 @@ function FindingsList({
 type DispatchState = "idle" | "dispatching" | "deployed";
 
 function AuditRoadmap({ roadmap }: { roadmap: RoadmapItem[] }) {
+  const PROJECT_ID = useProjectId();
   const { t } = useTranslation();
   const { toast } = useToast();
   const [dispatchStates, setDispatchStates] = useState<Record<number, DispatchState>>({});

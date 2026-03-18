@@ -337,7 +337,7 @@ function HeroSection({
 
       {/* Invisible Turnstile widget */}
       <Turnstile
-        ref={turnstileRef}
+        ref={turnstileRef as any}
         siteKey={TURNSTILE_SITE_KEY}
         options={{ size: "invisible", theme: "dark" }}
         onSuccess={(token) => setTurnstileToken(token)}
