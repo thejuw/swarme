@@ -216,6 +216,19 @@ export async function anonymizeLesson(
 }
 
 /**
+ * hashDomainId — One-way SHA-256 hash of a domain_id.
+ * Used to count unique domain contributors in the consensus
+ * engine without revealing the originating tenant.
+ */
+export async function hashDomainId(domainId: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(`swarme_hive_${domainId}`);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+/**
  * Map the raw business_model string from Brand_Context to a
  * standardized category for the Global Brain.
  */

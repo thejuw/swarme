@@ -56,6 +56,7 @@ import {
   ResponsiveContainer,
   Legend,
 } from "recharts";
+import { NetworkAlert } from "@/components/admin/network-alert";
 
 // ─────────────────────────────────────────────────────────────
 // Types
@@ -441,6 +442,9 @@ export default function AdminOverview() {
       <FailsafeBanner />
       <CircuitBreakerBanner />
       <ThrottleStatusWidget />
+
+      {/* ── Phase 65.5: Global Hive Mind Governance ── */}
+      <NetworkAlert />
 
       {/* ── Metric Grid ── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

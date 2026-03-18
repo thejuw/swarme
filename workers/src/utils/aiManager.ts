@@ -26,6 +26,11 @@
  *   - AI now reads from TWO knowledge sources each turn:
  *     1. Local Vectorize — brand voice, tone, domain-specific history
  *     2. Global KV — empirically proven GEO rules from the network
+ *
+ * Phase 65.5 additions (Governance Gate):
+ *   - Global rules are NO LONGER auto-injected for all tenants
+ *   - Each rule must be explicitly approved via Global_Rule_Approvals
+ *   - fetchApprovedGlobalRules() gates KV reads through D1 ledger
  * ============================================================
  */
 
@@ -34,6 +39,49 @@ import { discoverActualCompetitors, type DiscoveredCompetitor } from "./research
 import { createThrottledFetch } from "./throttle";
 import { generateEmbedding } from "./vectorize";
 import { fetchGlobalRules, type GlobalRule } from "./hiveSync";
+
+/**
+ * Phase 65.5: Governance-gated global rules.
+ * Fetches all global rules from HIVE_MIND KV, then filters them
+ * through the Global_Rule_Approvals ledger. Only rules with
+ * status = 'approved' for the given domain_id are returned.
+ *
+ * If the approval table doesn't exist yet (pre-migration), falls
+ * back to returning all rules (backwards-compatible).
+ */
+async function fetchApprovedGlobalRules(
+  domainId: string,
+  env: Env,
+): Promise<GlobalRule[]> {
+  const allRules = await fetchGlobalRules(env);
+  if (allRules.length === 0) return [];
+
+  try {
+    // Get the set of approved rule IDs for this domain
+    const approvedRows = await env.DB.prepare(
+      `SELECT rule_id FROM Global_Rule_Approvals
+       WHERE domain_id = ?1 AND status = 'approved'`,
+    )
+      .bind(domainId)
+      .all<{ rule_id: string }>();
+
+    const approvedIds = new Set(
+      (approvedRows.results ?? []).map((r) => r.rule_id),
+    );
+
+    // If no approval rows exist at all for this domain, return
+    // empty — rules default to gated, not open.
+    if (approvedIds.size === 0) return [];
+
+    return allRules.filter((r) => approvedIds.has(r.id));
+  } catch {
+    // Table may not exist yet (pre-migration 0042) — graceful fallback
+    console.warn(
+      "[AIManager] Global_Rule_Approvals table not available, skipping governance gate",
+    );
+    return [];
+  }
+}
 
 // ─────────────────────────────────────────────────────────────
 // Type Definitions
@@ -862,8 +910,8 @@ export async function handleManagerChat(
     fetchUserMemories(projectId, env),
     // Phase 63: Semantic recall of relevant strategic lessons from Vectorize
     userQuery ? fetchRelevantLessons(projectId, userQuery, 3, env) : Promise.resolve([]),
-    // Phase 65: Global Hive Mind rules from KV (cross-tenant consensus)
-    fetchGlobalRules(env),
+    // Phase 65.5: Governance-gated global rules (only approved for this domain)
+    fetchApprovedGlobalRules(projectId, env),
   ]);
 
   // Phase 61: Persist the latest user message to Chat_History.

@@ -61,8 +61,9 @@ import { handleOutcomeEvaluation } from "./cron/outcomeEvaluator";
 import { handleLogArchival } from "./cron/logArchiver";
 import { handleGlobalConsensus } from "./cron/globalConsensus";
 import { auditRouter } from "./routes/settings/audit";
+import { governanceRouter } from "./routes/settings/governance";
 import { setupAllLogpushJobs } from "./utils/logpushSetup";
-import { syncRulesToKV, fetchGlobalRulesMeta } from "./utils/hiveSync";
+import { syncRulesToKV, fetchGlobalRulesMeta, fetchGlobalRules } from "./utils/hiveSync";
 import { getAllCircuitStatuses, CircuitBreaker, CIRCUIT_SERVICES } from "./utils/circuitBreaker";
 import type { CircuitService } from "./utils/circuitBreaker";
 import { getAllThrottleStatuses, THROTTLED_SERVICES } from "./utils/throttle";
@@ -249,6 +250,7 @@ app.use("/api/circuit-breaker/*", protectRoute());
 app.use("/api/admin/failsafe/*", protectRoute());
 app.use("/api/throttle/*", protectRoute());
 app.use("/api/settings/*", protectRoute());
+app.use("/api/governance/*", protectRoute());
 // Note: /api/webhooks/* is intentionally unprotected — Stripe signs its own payloads
 
 // ── Protected Route Mounting ──
@@ -262,6 +264,7 @@ app.route("/api/ga4", ga4Router);
 app.route("/api/pinterest", pinterestRouter);
 app.route("/api/reddit", redditRouter);
 app.route("/api/settings/audit", auditRouter);
+app.route("/api/governance", governanceRouter);
 
 // ─────────────────────────────────────────────────────────────
 // GET /api/workspace — Current user's workspace (for Settings page)
@@ -495,6 +498,21 @@ app.post("/api/admin/hive-mind/sync", async (c) => {
       rules_synced: result.rulesSynced,
       categories: result.categories,
     });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Unknown";
+    return c.json({ success: false, error: msg }, 500);
+  }
+});
+
+/**
+ * GET /api/admin/hive-mind/rules
+ * Superadmin-only: List all active global rules from KV.
+ * Used by the admin dashboard's Network Intelligence panel.
+ */
+app.get("/api/admin/hive-mind/rules", async (c) => {
+  try {
+    const rules = await fetchGlobalRules(c.env);
+    return c.json({ success: true, rules });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Unknown";
     return c.json({ success: false, error: msg }, 500);

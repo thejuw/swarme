@@ -43,7 +43,7 @@ import {
   markKeyFailed,
   currentWeekWindow,
 } from "../utils/idempotency";
-import { anonymizeLesson, resolveDomainCategory } from "../utils/anonymizer";
+import { anonymizeLesson, resolveDomainCategory, hashDomainId } from "../utils/anonymizer";
 
 // ─────────────────────────────────────────────────────────────
 // Configuration
@@ -341,11 +341,12 @@ export async function handleOutcomeEvaluation(
 
         if (anonResult.success && anonResult.insight && !anonResult.rejected) {
           const insightId = `insight_${crypto.randomUUID().replace(/-/g, "").slice(0, 16)}`;
+          const domainHash = await hashDomainId(domainId);
           await env.DB.prepare(
-            `INSERT INTO Unverified_Insights (id, sanitized_lesson, originating_category)
-             VALUES (?1, ?2, ?3)`,
+            `INSERT INTO Unverified_Insights (id, sanitized_lesson, originating_category, source_domain_hash)
+             VALUES (?1, ?2, ?3, ?4)`,
           )
-            .bind(insightId, anonResult.insight.sanitized_lesson, anonResult.insight.originating_category)
+            .bind(insightId, anonResult.insight.sanitized_lesson, anonResult.insight.originating_category, domainHash)
             .run();
 
           console.log(
