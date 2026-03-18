@@ -304,15 +304,29 @@ authRouter.post("/login", async (c) => {
  * Returns the currently authenticated user (requires valid JWT).
  */
 authRouter.get("/me", async (c) => {
-  // This route is protected by the middleware applied at the parent level
-  const payload = (c as any).get("jwtPayload");
-  if (!payload) {
-    return c.json({ success: false, error: "Unauthorized" }, 401);
+  // Self-contained JWT verification (auth routes are public, no global middleware)
+  const authHeader = c.req.header("Authorization");
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return c.json({ success: false, error: "Authorization header required" }, 401);
   }
+  const token = authHeader.substring(7);
+  let payload: any;
+  try {
+    payload = await verify(token, getJwtSecret(c.env), "HS256");
+  } catch {
+    return c.json({ success: false, error: "Invalid or expired token" }, 401);
+  }
+
+  // Look up full user record for role info
+  const userRow = await c.env.DB.prepare(
+    "SELECT id, email, role FROM Users WHERE id = ?"
+  ).bind(payload.sub).first<{ id: string; email: string; role: string }>();
 
   return c.json({
     success: true,
-    user: { id: payload.sub, email: payload.email },
+    user: userRow
+      ? { id: userRow.id, email: userRow.email, role: userRow.role }
+      : { id: payload.sub, email: payload.email },
   });
 });
 

@@ -247,6 +247,56 @@ app.route("/api/pinterest", pinterestRouter);
 app.route("/api/reddit", redditRouter);
 
 // ─────────────────────────────────────────────────────────────
+// GET /api/workspace — Current user's workspace (for Settings page)
+// ─────────────────────────────────────────────────────────────
+
+app.get("/api/workspace", protectRoute(), async (c: any) => {
+  const userId = c.get("userId");
+  if (!userId) return c.json({ success: false, error: "Unauthorized" }, 401);
+
+  // Look up user email, then find their workspace
+  const user = await c.env.DB.prepare(
+    "SELECT email FROM Users WHERE id = ?"
+  ).bind(userId).first<{ email: string }>();
+
+  if (!user) return c.json({ success: false, error: "User not found" }, 404);
+
+  // Find workspace by owner_email
+  let ws = await c.env.DB.prepare(
+    "SELECT * FROM Workspaces WHERE owner_email = ? LIMIT 1"
+  ).bind(user.email).first();
+
+  // If no workspace exists, auto-create one for this user
+  if (!ws) {
+    const wsId = "ws_" + crypto.randomUUID().replace(/-/g, "").substring(0, 12);
+    await c.env.DB.prepare(
+      `INSERT INTO Workspaces (id, name, owner_email, subscription_status, plan)
+       VALUES (?1, ?2, ?3, 'active', 'growth')`
+    ).bind(wsId, `${user.email.split("@")[0]}'s Workspace`, user.email).run();
+
+    ws = await c.env.DB.prepare(
+      "SELECT * FROM Workspaces WHERE id = ?"
+    ).bind(wsId).first();
+  }
+
+  // Map DB columns to frontend Workspace interface
+  return c.json({
+    success: true,
+    workspace: {
+      id: (ws as any).id,
+      name: (ws as any).name,
+      owner_email: (ws as any).owner_email,
+      plan_tier: (ws as any).plan,
+      plan_status: (ws as any).subscription_status,
+      stripe_customer_id: (ws as any).stripe_customer_id || null,
+      stripe_subscription_id: null,
+      created_at: (ws as any).created_at,
+      updated_at: (ws as any).updated_at,
+    },
+  });
+});
+
+// ─────────────────────────────────────────────────────────────
 // Phase 56: Circuit Breaker Status & Control Endpoints
 // ─────────────────────────────────────────────────────────────
 

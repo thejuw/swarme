@@ -18,6 +18,14 @@ import { setAuthToken } from "@/lib/queryClient";
 import { queryClient } from "@/lib/queryClient";
 import type { AuthUser } from "@/lib/api";
 
+/** Resolve API base URL (same logic as queryClient.ts) */
+function getApiBase(): string {
+  if (typeof window !== "undefined" && window.location.hostname === "swarme.io") {
+    return "https://api.swarme.io";
+  }
+  return "";
+}
+
 // ─────────────────────────────────────────────────────────────
 // Context shape
 // ─────────────────────────────────────────────────────────────
@@ -48,39 +56,111 @@ const AuthContext = createContext<AuthContextValue>({
 // ─────────────────────────────────────────────────────────────
 
 /**
- * In-memory token store for the session.
- * We can't use localStorage (sandbox blocks it), so we keep
- * a module-level ref that survives re-renders but not full page reloads.
+ * Persist auth to localStorage so sessions survive page reloads
+ * and browser back/forward navigation.
+ * Falls back to in-memory storage if localStorage is blocked (e.g. sandboxed iframes).
  */
-let _storedToken: string | null = null;
-let _storedUser: AuthUser | null = null;
+function safeGetStorage(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function safeSetStorage(key: string, value: string | null) {
+  try {
+    if (value === null) {
+      localStorage.removeItem(key);
+    } else {
+      localStorage.setItem(key, value);
+    }
+  } catch {
+    // localStorage blocked — session will be in-memory only
+  }
+}
+
+const STORAGE_TOKEN_KEY = "swarme_auth_token";
+const STORAGE_USER_KEY = "swarme_auth_user";
+
+function loadPersistedToken(): string | null {
+  return safeGetStorage(STORAGE_TOKEN_KEY);
+}
+
+function loadPersistedUser(): AuthUser | null {
+  const raw = safeGetStorage(STORAGE_USER_KEY);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as AuthUser;
+  } catch {
+    return null;
+  }
+}
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<AuthUser | null>(_storedUser);
-  const [token, setToken] = useState<string | null>(_storedToken);
-  const [isLoading, setIsLoading] = useState(false);
+  const [user, setUser] = useState<AuthUser | null>(loadPersistedUser);
+  const [token, setToken] = useState<string | null>(loadPersistedToken);
+  const [isLoading, setIsLoading] = useState(() => {
+    // If we have a persisted token, validate it on mount
+    return !!loadPersistedToken();
+  });
+
+  // On mount: if we have a persisted token, validate it against the server
+  useEffect(() => {
+    const savedToken = loadPersistedToken();
+    if (!savedToken) {
+      setIsLoading(false);
+      return;
+    }
+    // Set token for API calls immediately
+    setAuthToken(savedToken);
+    // Validate by calling /api/auth/me
+    fetch(`${getApiBase()}/api/auth/me`, {
+      headers: { Authorization: `Bearer ${savedToken}` },
+    })
+      .then((res) => {
+        if (res.ok) return res.json();
+        throw new Error("Invalid token");
+      })
+      .then((data: { success: boolean; user: AuthUser }) => {
+        if (data.success && data.user) {
+          setUser(data.user);
+          setToken(savedToken);
+          safeSetStorage(STORAGE_USER_KEY, JSON.stringify(data.user));
+        } else {
+          throw new Error("Invalid session");
+        }
+      })
+      .catch(() => {
+        // Token expired or invalid — clear everything
+        setToken(null);
+        setUser(null);
+        setAuthToken(null);
+        safeSetStorage(STORAGE_TOKEN_KEY, null);
+        safeSetStorage(STORAGE_USER_KEY, null);
+      })
+      .finally(() => setIsLoading(false));
+  }, []);
 
   // Sync token to apiRequest layer whenever it changes
   useEffect(() => {
     setAuthToken(token);
-    _storedToken = token;
-    _storedUser = user;
-  }, [token, user]);
+  }, [token]);
 
   const login = useCallback((newToken: string, newUser: AuthUser) => {
     setToken(newToken);
     setUser(newUser);
     setAuthToken(newToken);
-    _storedToken = newToken;
-    _storedUser = newUser;
+    safeSetStorage(STORAGE_TOKEN_KEY, newToken);
+    safeSetStorage(STORAGE_USER_KEY, JSON.stringify(newUser));
   }, []);
 
   const logout = useCallback(() => {
     setToken(null);
     setUser(null);
     setAuthToken(null);
-    _storedToken = null;
-    _storedUser = null;
+    safeSetStorage(STORAGE_TOKEN_KEY, null);
+    safeSetStorage(STORAGE_USER_KEY, null);
     // Clear all cached queries on logout
     queryClient.clear();
   }, []);
