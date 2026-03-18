@@ -1,17 +1,16 @@
 # ============================================================
-# Swarme — Production CI/CD Pipeline (Phase 25)
+# Swarme — Production CI/CD Pipeline
 # ============================================================
 #
-# Trigger: Push to `main` (merge of a PR)
+# Trigger: Push to `main`
 #
 # Steps:
-#   1. Checkout → Node.js setup → Install
-#   2. Type-check + build the dashboard
-#   3. Type-check + deploy workers to production
-#   4. Apply D1 migrations (if any new migration files)
+#   1. Build dashboard → deploy to Cloudflare Pages
+#   2. Type-check + deploy workers to production
+#   3. Apply D1 migrations (if any new migration files)
 #
 # Required GitHub Secrets:
-#   CLOUDFLARE_API_TOKEN  — API Token with Workers + D1 + KV permissions
+#   CLOUDFLARE_API_TOKEN  — API Token with Workers + D1 + KV + Pages permissions
 #   CLOUDFLARE_ACCOUNT_ID — Your Cloudflare account ID
 #
 # ============================================================
@@ -31,10 +30,10 @@ env:
 
 jobs:
   # ─────────────────────────────────────────
-  # Job 1: Lint, type-check, and build the dashboard
+  # Job 1: Build + deploy dashboard to Cloudflare Pages
   # ─────────────────────────────────────────
   dashboard:
-    name: Dashboard — Build
+    name: Dashboard — Build & Deploy to Pages
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -55,6 +54,12 @@ jobs:
       - name: Build dashboard
         run: npm run build
 
+      - name: Deploy to Cloudflare Pages
+        run: npx wrangler pages deploy dist/public --project-name=swarme --branch=main --commit-dirty=true
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
   # ─────────────────────────────────────────
   # Job 2: Deploy workers to production
   # ─────────────────────────────────────────
@@ -64,7 +69,7 @@ jobs:
     needs: dashboard
     environment:
       name: production
-      url: https://swarme-api.${{ secrets.CLOUDFLARE_SUBDOMAIN || 'your-subdomain' }}.workers.dev
+      url: https://api.swarme.io
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -107,7 +112,7 @@ jobs:
         run: |
           echo "Waiting 5s for propagation..."
           sleep 5
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://swarme-api.${{ secrets.CLOUDFLARE_SUBDOMAIN || 'your-subdomain' }}.workers.dev/api/public/config)
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://api.swarme.io/api/public/config)
           echo "Health check returned: $STATUS"
           if [ "$STATUS" != "200" ]; then
             echo "::warning::Smoke test returned HTTP $STATUS (expected 200)"
