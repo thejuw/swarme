@@ -58,6 +58,9 @@ import { handleLinkRotCron } from "./cron/linkRot";
 import { handleMemoryCompression } from "./cron/memoryCompressor";
 import { handleDeadLetterSweep } from "./cron/deadLetter";
 import { handleOutcomeEvaluation } from "./cron/outcomeEvaluator";
+import { handleLogArchival } from "./cron/logArchiver";
+import { auditRouter } from "./routes/settings/audit";
+import { setupAllLogpushJobs } from "./utils/logpushSetup";
 import { getAllCircuitStatuses, CircuitBreaker, CIRCUIT_SERVICES } from "./utils/circuitBreaker";
 import type { CircuitService } from "./utils/circuitBreaker";
 import { getAllThrottleStatuses, THROTTLED_SERVICES } from "./utils/throttle";
@@ -240,6 +243,7 @@ app.use("/api/ga4/*", protectRoute());
 app.use("/api/circuit-breaker/*", protectRoute());
 app.use("/api/admin/failsafe/*", protectRoute());
 app.use("/api/throttle/*", protectRoute());
+app.use("/api/settings/*", protectRoute());
 // Note: /api/webhooks/* is intentionally unprotected — Stripe signs its own payloads
 
 // ── Protected Route Mounting ──
@@ -252,6 +256,7 @@ app.route("/api/gsc", gscRouter);
 app.route("/api/ga4", ga4Router);
 app.route("/api/pinterest", pinterestRouter);
 app.route("/api/reddit", redditRouter);
+app.route("/api/settings/audit", auditRouter);
 
 // ─────────────────────────────────────────────────────────────
 // GET /api/workspace — Current user's workspace (for Settings page)
@@ -399,6 +404,42 @@ app.get("/api/throttle/status", async (c) => {
   try {
     const statuses = await getAllThrottleStatuses(c.env.CONFIG_KV);
     return c.json({ success: true, services: statuses });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Unknown";
+    return c.json({ success: false, error: msg }, 500);
+  }
+});
+
+// ─────────────────────────────────────────────────────────────
+// Phase 64: Admin — Logpush Setup (one-shot provisioning)
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * POST /api/admin/logpush/setup
+ * Superadmin-only: Provision Cloudflare Logpush jobs to stream
+ * HTTP request logs and Worker Trace Events into R2.
+ * Body: { cf_api_token: string }
+ */
+app.post("/api/admin/logpush/setup", async (c) => {
+  try {
+    const body = await c.req.json<{ cf_api_token?: string }>();
+    if (!body.cf_api_token) {
+      return c.json({ success: false, error: "cf_api_token is required" }, 400);
+    }
+
+    const accountId = "a6b2989fec67663a5184cf0060621331";
+    const result = await setupAllLogpushJobs({
+      accountId,
+      apiToken: body.cf_api_token,
+      bucketName: "swarme-media",
+    });
+
+    return c.json({
+      success: result.errors.length === 0,
+      httpRequestsJobId: result.httpRequestsJobId,
+      workersTraceJobId: result.workersTraceJobId,
+      errors: result.errors,
+    });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Unknown";
     return c.json({ success: false, error: msg }, 500);
@@ -5995,6 +6036,35 @@ async function handleScheduled(
         }
       })();
       ctx.waitUntil(memoryPromise);
+    }
+
+    // ── Phase 64: Monthly Log Archiver (1st of month, 00:30 UTC) ─
+    // Cold-storage: moves 90-day-old logs to R2 as .jsonl, then
+    // purges from D1 to keep the hot database lean.
+    if (cronPattern === "30 0 1 * *") {
+      console.log("[Swarme Cron] Starting monthly log archival...");
+      const archivePromise = (async () => {
+        try {
+          const result = await handleLogArchival(env);
+          console.log(
+            `[Swarme Cron] Log archival complete — ${result.tablesProcessed} tables, ` +
+            `${result.totalRecordsArchived} records archived, ${result.errors.length} errors`
+          );
+
+          if (result.totalRecordsArchived > 0) {
+            await env.DB.prepare(
+              `INSERT INTO Agent_Tasks (project_id, agent_type, action, status, task_description, result_payload)
+               VALUES ('system', 'log_archiver', 'Monthly Cold Storage Archival', 'Completed', ?1, ?2)`
+            ).bind(
+              `Archived ${result.totalRecordsArchived} records from ${result.tablesProcessed} tables to R2`,
+              JSON.stringify(result)
+            ).run();
+          }
+        } catch (err) {
+          console.error("[Swarme Cron] Log archival failed:", err);
+        }
+      })();
+      ctx.waitUntil(archivePromise);
     }
 
     // ── Phase 63: Weekly Outcome Evaluator (Sundays 01:00 UTC) ─
