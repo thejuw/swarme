@@ -565,6 +565,44 @@ IMPORTANT: Always include your conversational text OUTSIDE the action blocks. Th
 `;
 
 // ─────────────────────────────────────────────────────────────
+// Message Sanitizer — enforce alternating roles for Perplexity
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * Perplexity API requires strictly alternating user/assistant roles
+ * after the system message. The frontend may inject proactive assistant
+ * messages (e.g. telemetry updates, milestone alerts) that break this
+ * pattern. This function:
+ *   1. Merges consecutive same-role messages into one
+ *   2. Ensures the sequence starts with a "user" message
+ */
+function sanitizeMessages(msgs: ChatMessage[]): ChatMessage[] {
+  if (msgs.length === 0) return msgs;
+
+  // Step 1: Merge consecutive same-role messages
+  const merged: ChatMessage[] = [];
+  for (const msg of msgs) {
+    if (msg.role === "system") continue; // strip any stray system messages
+    const last = merged[merged.length - 1];
+    if (last && last.role === msg.role) {
+      // Merge into the previous message
+      last.content += "\n\n" + msg.content;
+    } else {
+      merged.push({ ...msg });
+    }
+  }
+
+  // Step 2: Ensure sequence starts with a "user" message.
+  // If it starts with assistant, drop leading assistant messages
+  // (they're proactive UI messages, not part of the actual conversation).
+  while (merged.length > 0 && merged[0].role !== "user") {
+    merged.shift();
+  }
+
+  return merged;
+}
+
+// ─────────────────────────────────────────────────────────────
 // Main Chat Handler
 // ─────────────────────────────────────────────────────────────
 
@@ -582,8 +620,11 @@ export async function handleManagerChat(
     content: buildSystemPrompt(brandContext) + TOOL_INSTRUCTION_BLOCK,
   };
 
-  // Prepare the full message array for Perplexity
-  const messages = [systemMessage, ...messageHistory];
+  // Prepare the full message array for Perplexity.
+  // Perplexity requires strictly alternating user/assistant roles after system.
+  // The frontend may include proactive assistant messages that break this rule.
+  const sanitized = sanitizeMessages(messageHistory);
+  const messages = [systemMessage, ...sanitized];
 
   // Retrieve Perplexity API key from KV vault (Admin Vault saves to global:config:keys)
   // Only use the vault key if it's non-empty and looks like a valid key (>10 chars).
