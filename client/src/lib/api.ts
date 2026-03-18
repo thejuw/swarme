@@ -794,7 +794,7 @@ export async function getSocialDrafts(
   const params = new URLSearchParams();
   if (status) params.set("status", status);
   const qs = params.toString();
-  const url = `/api/projects/${projectId}/social/drafts${qs ? `?${qs}` : ""}`;
+  const url = `/api/projects/${projectId}/social-drafts${qs ? `?${qs}` : ""}`;
   const res = await apiRequest("GET", url);
   return res.json();
 }
@@ -804,7 +804,7 @@ export async function updateSocialDraft(
   draftId: string,
   body: { status?: SocialDraftStatus; draft_content?: string }
 ): Promise<{ success: boolean; draft: SocialDraft }> {
-  const res = await apiRequest("PATCH", `/api/projects/${projectId}/social/drafts/${draftId}`, body);
+  const res = await apiRequest("PATCH", `/api/social-drafts/${draftId}`, body);
   return res.json();
 }
 
@@ -1204,7 +1204,7 @@ export const queryKeys = {
   telemetrySummary: (projectId: string) =>
     ["/api/projects", projectId, "telemetry", "summary"] as const,
   socialDrafts: (projectId: string) =>
-    ["/api/projects", projectId, "social", "drafts"] as const,
+    ["/api/projects", projectId, "social-drafts"] as const,
   decayCandidates: (projectId: string) =>
     ["/api/projects", projectId, "decay", "candidates"] as const,
   managerRoadmap: (projectId: string) =>
