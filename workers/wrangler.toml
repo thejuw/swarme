@@ -121,6 +121,15 @@ migrations_dir = "migrations"
 binding = "CONFIG_KV"
 id = "c3ddde537a9947a087622e2f27f3e1cf"
 
+# ─── Phase 65: Global Hive Mind KV ───────────────────────────
+# Globally replicated KV for cross-tenant consensus rules.
+# Uses the same physical namespace as CONFIG_KV (keys are prefixed
+# with "hive:rules:" so there's zero collision). Can be split to a
+# dedicated namespace later via: npx wrangler kv namespace create SWARME_HIVE_MIND
+[[kv_namespaces]]
+binding = "HIVE_MIND"
+id = "c3ddde537a9947a087622e2f27f3e1cf"
+
 [vars]
 ENVIRONMENT = "development"
 SWARM_MODE = "copilot"
@@ -213,6 +222,10 @@ migrations_dir = "migrations"
 binding = "CONFIG_KV"
 id = "c3ddde537a9947a087622e2f27f3e1cf"
 
+[[env.production.kv_namespaces]]
+binding = "HIVE_MIND"
+id = "c3ddde537a9947a087622e2f27f3e1cf"
+
 # ─── Production Bindings (must be duplicated — not inherited) ───
 
 [[env.production.r2_buckets]]
@@ -255,5 +268,6 @@ crons = [
   "0 14 * * *",    # Daily at 14:00 UTC — Phase 27: Retention engine
   "0 0 * * *",     # Daily at 00:00 UTC — Phase 61: Memory compressor
   "0 1 * * 7",     # Weekly (Sunday 01:00 UTC) — Phase 63: Outcome evaluator
-  "30 0 1 * *"     # Monthly (1st, 00:30 UTC) — Phase 64: Log archiver
+  "30 0 1 * *",    # Monthly (1st, 00:30 UTC) — Phase 64: Log archiver
+  "0 2 */2 * *"    # Every 48h (02:00 UTC) — Phase 65: Global consensus
 ]

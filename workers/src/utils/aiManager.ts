@@ -1,6 +1,6 @@
 /**
  * ============================================================
- * Phase 26 + Phase 61 + Phase 63: AI Manager Engine
+ * Phase 26 + Phase 61 + Phase 63 + Phase 65: AI Manager Engine
  * ============================================================
  *
  * Conversational state machine that acts as a "Chief Strategy
@@ -20,6 +20,12 @@
  *     are injected into the system prompt as binding rules
  *   - Lessons come from the outcomeEvaluator.ts weekly cron
  *     which grades past actions against real analytics data
+ *
+ * Phase 65 additions (Dual-Brain Architecture):
+ *   - Global Hive Mind rules from KV (cross-tenant consensus)
+ *   - AI now reads from TWO knowledge sources each turn:
+ *     1. Local Vectorize — brand voice, tone, domain-specific history
+ *     2. Global KV — empirically proven GEO rules from the network
  * ============================================================
  */
 
@@ -27,6 +33,7 @@ import type { Env } from "../index";
 import { discoverActualCompetitors, type DiscoveredCompetitor } from "./researcher";
 import { createThrottledFetch } from "./throttle";
 import { generateEmbedding } from "./vectorize";
+import { fetchGlobalRules, type GlobalRule } from "./hiveSync";
 
 // ─────────────────────────────────────────────────────────────
 // Type Definitions
@@ -625,7 +632,9 @@ async function executeTool(
 function buildSystemPrompt(
   brandContext: BrandContext | null,
   userMemories: UserMemoryRow[] = [],
-  recentHistory: ChatHistoryRow[] = []
+  recentHistory: ChatHistoryRow[] = [],
+  strategicLessons: StrategicLessonHit[] = [],
+  globalRules: GlobalRule[] = [],
 ): string {
   let prompt = `You are the Chief Strategy Officer embedded in the Swarme AI SEO platform. Your role is to guide the user through building a growth engine for their website.
 
@@ -729,6 +738,22 @@ ${lessonEntries}
 You must strictly adhere to these rules in your next suggestion. If a user request conflicts with a learned rule, explain the conflict and recommend the data-backed approach instead.`;
   }
 
+  // ── Phase 65: Inject Global Hive Mind rules (cross-tenant) ──
+  if (globalRules.length > 0) {
+    const ruleEntries = globalRules
+      .map((r, i) => {
+        return `${i + 1}. [Confidence: ${r.confidence}/100, Verified by ${r.supporters} sites] ${r.rule}`;
+      })
+      .join("\n");
+
+    prompt += `\n\n--- GLOBAL NETWORK INTELLIGENCE (Hive Mind) ---
+The following rules have been empirically validated across the entire Swarme network by ${globalRules.reduce((sum, r) => sum + r.supporters, 0)}+ independent websites. These are universal GEO laws — they apply regardless of brand or industry.
+
+${ruleEntries}
+
+These global rules complement your local strategic lessons. When both local and global rules exist for the same topic, prefer the local rule (it's brand-specific) but mention the global consensus as supporting evidence.`;
+  }
+
   // ── Phase 61: Inject recent conversation transcript ──────
   if (recentHistory.length > 0) {
     const transcript = recentHistory
@@ -826,17 +851,19 @@ export async function handleManagerChat(
   messageHistory: ChatMessage[],
   env: Env
 ): Promise<ManagerResult> {
-  // Phase 61+63: Fetch all four memory layers in parallel
+  // Phase 61+63+65: Fetch all five memory layers in parallel
   // Extract the user's latest message for semantic lesson recall
   const latestUserMsg = messageHistory[messageHistory.length - 1];
   const userQuery = latestUserMsg?.role === "user" ? latestUserMsg.content : "";
 
-  const [brandContext, recentHistory, userMemories, strategicLessons] = await Promise.all([
+  const [brandContext, recentHistory, userMemories, strategicLessons, globalRules] = await Promise.all([
     fetchBrandContext(projectId, env),
     fetchRecentChatHistory(projectId, 10, env),
     fetchUserMemories(projectId, env),
     // Phase 63: Semantic recall of relevant strategic lessons from Vectorize
     userQuery ? fetchRelevantLessons(projectId, userQuery, 3, env) : Promise.resolve([]),
+    // Phase 65: Global Hive Mind rules from KV (cross-tenant consensus)
+    fetchGlobalRules(env),
   ]);
 
   // Phase 61: Persist the latest user message to Chat_History.
@@ -848,7 +875,7 @@ export async function handleManagerChat(
   // Build the system message with brand context, memories, lessons, and tool instructions
   const systemMessage: ChatMessage = {
     role: "system",
-    content: buildSystemPrompt(brandContext, userMemories, recentHistory, strategicLessons) + TOOL_INSTRUCTION_BLOCK,
+    content: buildSystemPrompt(brandContext, userMemories, recentHistory, strategicLessons, globalRules) + TOOL_INSTRUCTION_BLOCK,
   };
 
   // Prepare the full message array for Perplexity.

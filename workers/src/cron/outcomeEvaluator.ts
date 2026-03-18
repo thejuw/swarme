@@ -43,6 +43,7 @@ import {
   markKeyFailed,
   currentWeekWindow,
 } from "../utils/idempotency";
+import { anonymizeLesson, resolveDomainCategory } from "../utils/anonymizer";
 
 // ─────────────────────────────────────────────────────────────
 // Configuration
@@ -327,6 +328,41 @@ export async function handleOutcomeEvaluation(
         errors.push(`Vectorize embed failed for ${lessonId}: ${msg}`);
         console.warn(`[OutcomeEvaluator] Embedding failed: ${msg}`);
         // The lesson is still saved in D1 — embedding failure is non-fatal
+      }
+
+      // ── Phase 65: Contribute anonymized insight to Global Brain ──
+      try {
+        const category = await resolveDomainCategory(domainId, env);
+        const anonResult = await anonymizeLesson(
+          evaluation.lesson_learned,
+          category,
+          env,
+        );
+
+        if (anonResult.success && anonResult.insight && !anonResult.rejected) {
+          const insightId = `insight_${crypto.randomUUID().replace(/-/g, "").slice(0, 16)}`;
+          await env.DB.prepare(
+            `INSERT INTO Unverified_Insights (id, sanitized_lesson, originating_category)
+             VALUES (?1, ?2, ?3)`,
+          )
+            .bind(insightId, anonResult.insight.sanitized_lesson, anonResult.insight.originating_category)
+            .run();
+
+          console.log(
+            `[OutcomeEvaluator] Contributed anonymized insight ${insightId} to Global Brain`,
+          );
+        } else if (anonResult.rejected) {
+          console.log(
+            `[OutcomeEvaluator] Insight rejected by anonymizer: ${anonResult.rejection_reason}`,
+          );
+        }
+      } catch (anonErr) {
+        // Non-fatal — local lesson is already saved
+        console.warn(
+          `[OutcomeEvaluator] Global Brain contribution failed: ${
+            anonErr instanceof Error ? anonErr.message : anonErr
+          }`,
+        );
       }
 
       await markKeyCompleted(

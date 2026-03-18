@@ -59,8 +59,10 @@ import { handleMemoryCompression } from "./cron/memoryCompressor";
 import { handleDeadLetterSweep } from "./cron/deadLetter";
 import { handleOutcomeEvaluation } from "./cron/outcomeEvaluator";
 import { handleLogArchival } from "./cron/logArchiver";
+import { handleGlobalConsensus } from "./cron/globalConsensus";
 import { auditRouter } from "./routes/settings/audit";
 import { setupAllLogpushJobs } from "./utils/logpushSetup";
+import { syncRulesToKV, fetchGlobalRulesMeta } from "./utils/hiveSync";
 import { getAllCircuitStatuses, CircuitBreaker, CIRCUIT_SERVICES } from "./utils/circuitBreaker";
 import type { CircuitService } from "./utils/circuitBreaker";
 import { getAllThrottleStatuses, THROTTLED_SERVICES } from "./utils/throttle";
@@ -118,6 +120,9 @@ export interface Env {
 
   // ── Phase 15: Shopify Webhook ──
   SHOPIFY_WEBHOOK_SECRET: string;
+
+  // ── Phase 65: Global Hive Mind KV ──
+  HIVE_MIND: KVNamespace;
 
   // ── Phase 19: JWT Authentication ──
   JWT_SECRET: string;
@@ -439,6 +444,56 @@ app.post("/api/admin/logpush/setup", async (c) => {
       httpRequestsJobId: result.httpRequestsJobId,
       workersTraceJobId: result.workersTraceJobId,
       errors: result.errors,
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Unknown";
+    return c.json({ success: false, error: msg }, 500);
+  }
+});
+
+// ─────────────────────────────────────────────────────────────
+// Phase 65: Admin — Hive Mind Status & Manual Sync
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * GET /api/admin/hive-mind/status
+ * Returns the Hive Mind metadata: last sync, rule count, categories.
+ */
+app.get("/api/admin/hive-mind/status", async (c) => {
+  try {
+    const meta = await fetchGlobalRulesMeta(c.env);
+    const ruleCount = await c.env.DB.prepare(
+      `SELECT COUNT(*) as total FROM Verified_Global_Rules WHERE active = 1`
+    ).first<{ total: number }>();
+    const insightCount = await c.env.DB.prepare(
+      `SELECT COUNT(*) as total FROM Unverified_Insights WHERE promoted = 0`
+    ).first<{ total: number }>();
+
+    return c.json({
+      success: true,
+      hive_mind: {
+        kv_meta: meta,
+        active_rules: ruleCount?.total ?? 0,
+        pending_insights: insightCount?.total ?? 0,
+      },
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Unknown";
+    return c.json({ success: false, error: msg }, 500);
+  }
+});
+
+/**
+ * POST /api/admin/hive-mind/sync
+ * Superadmin-only: Force-sync Verified_Global_Rules to KV.
+ */
+app.post("/api/admin/hive-mind/sync", async (c) => {
+  try {
+    const result = await syncRulesToKV(c.env);
+    return c.json({
+      success: true,
+      rules_synced: result.rulesSynced,
+      categories: result.categories,
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Unknown";
@@ -6065,6 +6120,35 @@ async function handleScheduled(
         }
       })();
       ctx.waitUntil(archivePromise);
+    }
+
+    // ── Phase 65: Global Consensus Engine (every 48h, 02:00 UTC) ─
+    // Clusters anonymized insights and promotes consensus rules
+    // to the Verified_Global_Rules table + HIVE_MIND KV.
+    if (cronPattern === "0 2 */2 * *") {
+      console.log("[Swarme Cron] Starting global consensus engine...");
+      const consensusPromise = (async () => {
+        try {
+          const result = await handleGlobalConsensus(env);
+          console.log(
+            `[Swarme Cron] Global consensus complete — ${result.insightsEmbedded} embedded, ` +
+            `${result.clustersFormed} clusters, ${result.rulesPromoted} rules promoted`
+          );
+
+          if (result.rulesPromoted > 0 || result.insightsEmbedded > 0) {
+            await env.DB.prepare(
+              `INSERT INTO Agent_Tasks (project_id, agent_type, action, status, task_description, result_payload)
+               VALUES ('system', 'hive_mind', 'Global Consensus Analysis', 'Completed', ?1, ?2)`
+            ).bind(
+              `Embedded ${result.insightsEmbedded} insights, formed ${result.clustersFormed} clusters, promoted ${result.rulesPromoted} rules`,
+              JSON.stringify(result)
+            ).run();
+          }
+        } catch (err) {
+          console.error("[Swarme Cron] Global consensus failed:", err);
+        }
+      })();
+      ctx.waitUntil(consensusPromise);
     }
 
     // ── Phase 63: Weekly Outcome Evaluator (Sundays 01:00 UTC) ─
