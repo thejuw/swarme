@@ -205,6 +205,30 @@ migrations_dir = "migrations"
 binding = "CONFIG_KV"
 id = "c3ddde537a9947a087622e2f27f3e1cf"
 
+# ─── Production Bindings (must be duplicated — not inherited) ───
+
+[[env.production.r2_buckets]]
+binding = "MEDIA_BUCKET"
+bucket_name = "swarme-media"
+
+[[env.production.vectorize]]
+binding = "VECTORIZE"
+index_name = "swarme-semantic-memory"
+
+[[env.production.durable_objects.bindings]]
+name = "AGENT_WORKFLOW"
+class_name = "AgentWorkflowManager"
+
+[[env.production.migrations]]
+tag = "v1"
+new_classes = ["AgentWorkflowManager"]
+
+[env.production.browser]
+binding = "BROWSER"
+
+[env.production.ai]
+binding = "AI"
+
 # Production crons — full autonomous schedule
 [env.production.triggers]
 crons = [

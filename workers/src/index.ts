@@ -5955,18 +5955,12 @@ async function handleScheduled(
 }
 
 // ─────────────────────────────────────────────────────────────
-// Worker Export — wrapped with Sentry for APM & error tracking
+// Worker Export
 // ─────────────────────────────────────────────────────────────
+// TODO: Re-enable Sentry wrapping once @sentry/cloudflare is
+//       installed and SENTRY_DSN is configured as a secret.
 
-import { withSentry } from "@sentry/cloudflare";
-
-export default withSentry(
-  (env: Env) => ({
-    dsn: env.SENTRY_DSN || "",
-    tracesSampleRate: 0.1,
-  }),
-  {
-    fetch: app.fetch,
-    scheduled: handleScheduled,
-  } as ExportedHandler<Env>
-);
+export default {
+  fetch: app.fetch,
+  scheduled: handleScheduled,
+} as ExportedHandler<Env>;
