@@ -37,6 +37,8 @@ import {
 } from "lucide-react";
 import type { Task, TasksResponse } from "@/lib/api";
 import { queryKeys, getTasks } from "@/lib/api";
+import { useProjectId } from "@/hooks/use-project-id";
+
 
 // ── Agent icon + label maps ──────────────────────────────
 
@@ -154,9 +156,11 @@ interface AgentActivityLogProps {
 }
 
 export function AgentActivityLog({
-  projectId = "proj_001",
+  projectId: propProjectId,
   onSelectTask,
 }: AgentActivityLogProps) {
+  const hookProjectId = useProjectId();
+  const projectId = propProjectId || hookProjectId;
   const { data, isLoading, isError } = useQuery<TasksResponse>({
     queryKey: queryKeys.tasks(projectId),
     queryFn: () => getTasks(projectId, { limit: 50 }),

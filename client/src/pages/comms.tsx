@@ -28,6 +28,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { useProjectId } from "@/hooks/use-project-id";
 import {
   Inbox,
   Mail,
@@ -40,8 +41,6 @@ import {
   User,
   Bot,
 } from "lucide-react";
-
-const PROJECT_ID = "proj_001";
 
 const statusConfig: Record<string, { label: string; color: string; icon: React.ElementType }> = {
   needs_reply: { label: "Needs Reply", color: "bg-red-500/10 text-red-400 border-red-500/25", icon: AlertCircle },
@@ -305,6 +304,7 @@ function ThreadView({
 }
 
 export default function CommsPage() {
+  const PROJECT_ID = useProjectId();
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
 
   const { data, isLoading } = useQuery({

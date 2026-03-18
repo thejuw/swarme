@@ -9,6 +9,8 @@ import {
   ArrowUp,
 } from "lucide-react";
 import { getTasks, queryKeys } from "@/lib/api";
+import { useProjectId } from "@/hooks/use-project-id";
+
 
 interface Project {
   id: string;
@@ -27,7 +29,9 @@ interface KpiData {
   icon: React.ElementType;
 }
 
-export function KpiCards({ projectId = "proj_001" }: { projectId?: string }) {
+export function KpiCards({ projectId: propProjectId }: { projectId?: string }) {
+  const hookProjectId = useProjectId();
+  const projectId = propProjectId || hookProjectId;
   const { data: projectsData, isLoading } = useQuery<{
     success: boolean;
     projects: Project[];

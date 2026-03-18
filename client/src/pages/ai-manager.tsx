@@ -54,6 +54,7 @@ import {
   HelpCircle,
   BookOpen,
 } from "lucide-react";
+import { useProjectId } from "@/hooks/use-project-id";
 import {
   Dialog,
   DialogContent,
@@ -61,8 +62,6 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-
-const PROJECT_ID = "proj_001";
 
 const WELCOME_MESSAGE: ManagerChatMessage = {
   role: "assistant",
@@ -1000,6 +999,7 @@ const PROACTIVE_TELEMETRY_MESSAGE: ManagerChatMessage = {
 // ─────────────────────────────────────────────────────────────
 
 export default function AiManager() {
+  const PROJECT_ID = useProjectId();
   const [messages, setMessages] = useState<ManagerChatMessage[]>([
     WELCOME_MESSAGE,
     PROACTIVE_TELEMETRY_MESSAGE,

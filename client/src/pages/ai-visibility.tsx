@@ -20,6 +20,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useProjectId } from "@/hooks/use-project-id";
 import {
   Eye,
   CheckCircle2,
@@ -29,8 +30,6 @@ import {
   AlertTriangle,
 } from "lucide-react";
 
-const PROJECT_ID = "proj_001";
-
 const engineColors: Record<string, string> = {
   Perplexity: "bg-teal-500/10 text-teal-400 border-teal-500/25",
   ChatGPT: "bg-emerald-500/10 text-emerald-400 border-emerald-500/25",
@@ -39,6 +38,7 @@ const engineColors: Record<string, string> = {
 };
 
 export default function AiVisibility() {
+  const PROJECT_ID = useProjectId();
   const { data, isLoading } = useQuery({
     queryKey: queryKeys.visibility(PROJECT_ID),
     queryFn: () => getVisibility(PROJECT_ID),

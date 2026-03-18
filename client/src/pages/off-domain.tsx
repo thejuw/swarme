@@ -21,6 +21,7 @@ import {
   ResponsiveContainer,
   Tooltip,
 } from "recharts";
+import { useProjectId } from "@/hooks/use-project-id";
 import {
   Loader2,
   Globe,
@@ -37,8 +38,6 @@ import {
   Clock,
   ExternalLink,
 } from "lucide-react";
-
-const PROJECT_ID = "proj_001";
 
 // ─────────────────────────────────────────────────────────────
 // Helpers
@@ -376,6 +375,7 @@ function ReviewRoutingLog({ entries }: { entries: ReviewRoutingEntry[] }) {
 // ─────────────────────────────────────────────────────────────
 
 export default function OffDomain() {
+  const PROJECT_ID = useProjectId();
   const { data, isLoading } = useQuery({
     queryKey: queryKeys.offDomain(PROJECT_ID),
     queryFn: () => getOffDomainData(PROJECT_ID),

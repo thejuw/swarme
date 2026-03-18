@@ -20,6 +20,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useProjectId } from "@/hooks/use-project-id";
 import {
   Cpu,
   CheckCircle2,
@@ -30,8 +31,6 @@ import {
   Server,
   Timer,
 } from "lucide-react";
-
-const PROJECT_ID = "proj_001";
 
 interface AgentHealth {
   agent_type: string;
@@ -83,6 +82,7 @@ function formatLatency(ms: number): string {
 }
 
 export default function EdgeWorkers() {
+  const PROJECT_ID = useProjectId();
   const { data, isLoading } = useQuery({
     queryKey: ["/api/projects", PROJECT_ID, "mission-control"],
     queryFn: async () => {

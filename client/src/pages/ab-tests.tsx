@@ -11,6 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useProjectId } from "@/hooks/use-project-id";
 import {
   FlaskConical,
   Trophy,
@@ -20,8 +21,6 @@ import {
   TrendingUp,
   AlertCircle,
 } from "lucide-react";
-
-const PROJECT_ID = "proj_001";
 
 /** Format a rate (0–1) as a percentage string */
 function pct(rate: number): string {
@@ -233,6 +232,7 @@ function AbTestSkeleton() {
 }
 
 export default function AbTests() {
+  const PROJECT_ID = useProjectId();
   const { user } = useAuth();
 
   // Phase 32: Tier gate — A/B testing requires autopilot+

@@ -43,6 +43,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
+import { useProjectId } from "@/hooks/use-project-id";
 import {
   Coins,
   Plus,
@@ -56,8 +57,6 @@ import {
   Scale,
   ScrollText,
 } from "lucide-react";
-
-const PROJECT_ID = "proj_001";
 
 // ── Helpers ──────────────────────────────────────────────────
 
@@ -489,6 +488,7 @@ function LegalDisclaimer() {
 // ── Main Page Component ──────────────────────────────────────
 
 export default function SwarmeCredits() {
+  const PROJECT_ID = useProjectId();
   const { toast } = useToast();
 
   const { data, isLoading } = useQuery({

@@ -4,6 +4,8 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Eye, TrendingUp, AlertTriangle } from "lucide-react";
 import { getVisibility, queryKeys } from "@/lib/api";
+import { useProjectId } from "@/hooks/use-project-id";
+
 
 interface VisibilityLog {
   id: string;
@@ -26,7 +28,9 @@ interface VisibilitySummary {
   keywords: VisibilityLog[];
 }
 
-export function VisibilityScore({ projectId = "proj_001" }: { projectId?: string }) {
+export function VisibilityScore({ projectId: propProjectId }: { projectId?: string }) {
+  const hookProjectId = useProjectId();
+  const projectId = propProjectId || hookProjectId;
   const { data, isLoading, isError } = useQuery<VisibilitySummary>({
     queryKey: queryKeys.visibility(projectId),
     queryFn: () => getVisibility(projectId),

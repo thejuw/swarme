@@ -31,6 +31,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useProjectId } from "@/hooks/use-project-id";
 import {
   Mail,
   ExternalLink,
@@ -41,8 +42,6 @@ import {
   XCircle,
   Target,
 } from "lucide-react";
-
-const PROJECT_ID = "proj_001";
 
 const statusConfig: Record<string, { color: string; icon: React.ElementType }> = {
   Draft: { color: "bg-slate-500/10 text-slate-400 border-slate-500/25", icon: FileEdit },
@@ -60,6 +59,7 @@ function formatStatus(s: string): string {
 }
 
 export default function DigitalPR() {
+  const PROJECT_ID = useProjectId();
   const [statusFilter, setStatusFilter] = useState<string>("all");
 
   const { data, isLoading } = useQuery({

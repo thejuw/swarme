@@ -19,6 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useProjectId } from "@/hooks/use-project-id";
 import {
   Search,
   PenTool,
@@ -35,8 +36,6 @@ import {
   Newspaper,
   FlaskConical,
 } from "lucide-react";
-
-const PROJECT_ID = "proj_001";
 
 const agentIcons: Record<string, React.ElementType> = {
   scraper: Search,
@@ -68,6 +67,7 @@ function timeAgo(iso: string): string {
 }
 
 export default function AgentActivity() {
+  const PROJECT_ID = useProjectId();
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [agentFilter, setAgentFilter] = useState<string>("all");
 

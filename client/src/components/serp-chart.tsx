@@ -12,8 +12,8 @@ import {
 } from "recharts";
 import { useQuery } from "@tanstack/react-query";
 import { getGscMetrics, queryKeys, type GscMetricRow } from "@/lib/api";
+import { useProjectId } from "@/hooks/use-project-id";
 
-const PROJECT_ID = "proj_001";
 
 /** Format ISO date string to "Mar 5" short label */
 function fmtDate(iso: string): string {
@@ -22,6 +22,7 @@ function fmtDate(iso: string): string {
 }
 
 export function SerpChart() {
+  const PROJECT_ID = useProjectId();
   const { data, isLoading, isError } = useQuery({
     queryKey: queryKeys.gscMetrics(PROJECT_ID),
     queryFn: () => getGscMetrics(PROJECT_ID),

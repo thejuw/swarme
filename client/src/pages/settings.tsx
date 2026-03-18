@@ -28,6 +28,7 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
+import { useProjectId } from "@/hooks/use-project-id";
 import {
   CreditCard,
   Zap,
@@ -1187,7 +1188,7 @@ export default function Settings() {
     queryKey: ["/api/workspace"],
   });
 
-  const defaultProjectId = "proj_001";
+  const defaultProjectId = useProjectId();
 
   return (
     <ScrollArea className="h-full">

@@ -56,6 +56,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
+import { useProjectId } from "@/hooks/use-project-id";
 import {
   Activity,
   Plug,
@@ -96,8 +97,6 @@ import {
   ShieldCheck,
   TriangleAlert,
 } from "lucide-react";
-
-const PROJECT_ID = "proj_001";
 
 // ─────────────────────────────────────────────────────────────
 // Status helpers
@@ -1468,6 +1467,7 @@ function GeoAnalyticsPanel() {
 // ─────────────────────────────────────────────────────────────
 
 export default function MissionControl() {
+  const PROJECT_ID = useProjectId();
   const { data, isLoading } = useQuery({
     queryKey: queryKeys.missionControl(PROJECT_ID),
     queryFn: () => getMissionControl(PROJECT_ID),

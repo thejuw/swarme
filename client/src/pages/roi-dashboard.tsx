@@ -28,8 +28,8 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { DollarSign, TrendingUp, ShoppingCart, ExternalLink } from "lucide-react";
+import { useProjectId } from "@/hooks/use-project-id";
 
-const PROJECT_ID = "proj_001";
 
 /* ─── Formatters ────────────────────────────────────── */
 
@@ -297,6 +297,7 @@ function ROIError() {
 /* ─── Main Page ─────────────────────────────────────── */
 
 export default function ROIDashboard() {
+  const PROJECT_ID = useProjectId();
   const { t } = useTranslation();
 
   const {

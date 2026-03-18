@@ -42,8 +42,8 @@ import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
+import { useProjectId } from "@/hooks/use-project-id";
 
-const PROJECT_ID = "proj_001";
 
 // ── Severity config ──────────────────────────────────────
 
@@ -439,6 +439,7 @@ function AuditSkeleton() {
 // ── Main component ───────────────────────────────────────
 
 export default function SiteAuditPage() {
+  const PROJECT_ID = useProjectId();
   const { t } = useTranslation();
   const { toast } = useToast();
   const [findingFilter, setFindingFilter] = useState<string | null>(null);

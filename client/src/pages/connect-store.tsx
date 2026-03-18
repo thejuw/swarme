@@ -37,6 +37,7 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { Separator } from "@/components/ui/separator";
+import { useProjectId } from "@/hooks/use-project-id";
 import {
   ShoppingBag,
   Store,
@@ -88,8 +89,6 @@ const PLATFORMS: PlatformConfig[] = [
 ];
 
 // Active project ID (using the Sartelle Atelier mock)
-const PROJECT_ID = "proj_001";
-
 // ─── Step indicator ──────────────────────────────────────
 
 function StepIndicator({
@@ -697,6 +696,7 @@ function SuccessScreen({
 // ─── Main Wizard Orchestrator ────────────────────────────
 
 export default function ConnectStore() {
+  const PROJECT_ID = useProjectId();
   const { t } = useTranslation();
   const [, setLocation] = useLocation();
   const [step, setStep] = useState<WizardStep>(1);

@@ -19,6 +19,7 @@ import { useAuth } from "@/context/AuthContext";
 import { SwarmeLogo } from "@/components/swarme-logo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useProjectId } from "@/hooks/use-project-id";
 import {
   ShoppingBag,
   Store,
@@ -35,8 +36,6 @@ import {
   Compass,
   Check,
 } from "lucide-react";
-
-const PROJECT_ID = "proj_001";
 
 // ── CMS Options ──────────────────────────────────────────
 const CMS_OPTIONS = [
@@ -254,6 +253,7 @@ function StepNorthStar({
 
 // ── Main component ───────────────────────────────────────
 export default function ContextSetup() {
+  const PROJECT_ID = useProjectId();
   const { user } = useAuth();
   const [, navigate] = useLocation();
   const [step, setStep] = useState(1);

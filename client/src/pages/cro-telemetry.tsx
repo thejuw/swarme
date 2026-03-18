@@ -30,6 +30,7 @@ import {
   ResponsiveContainer,
   Cell,
 } from "recharts";
+import { useProjectId } from "@/hooks/use-project-id";
 import {
   BarChart3,
   Eye,
@@ -39,8 +40,6 @@ import {
   AlertTriangle,
   ExternalLink,
 } from "lucide-react";
-
-const PROJECT_ID = "proj_001";
 
 /* ─── Helpers ───────────────────────────────────────── */
 
@@ -351,6 +350,7 @@ function CROError() {
 /* ─── Main Page ─────────────────────────────────────── */
 
 export default function CROTelemetry() {
+  const PROJECT_ID = useProjectId();
   const { t } = useTranslation();
   const { user } = useAuth();
 

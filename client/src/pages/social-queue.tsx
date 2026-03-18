@@ -34,8 +34,8 @@ import {
   Filter,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useProjectId } from "@/hooks/use-project-id";
 
-const PROJECT_ID = "proj_001";
 
 /* ─── Helpers ───────────────────────────────────────── */
 
@@ -260,6 +260,7 @@ function LoadingSkeleton() {
 /* ─── Main Page ────────────────────────────────────── */
 
 export default function SocialQueue() {
+  const PROJECT_ID = useProjectId();
   const { t } = useTranslation();
   const { toast } = useToast();
   const qc = useQueryClient();
