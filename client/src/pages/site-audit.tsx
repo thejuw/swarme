@@ -184,7 +184,7 @@ function FindingsList({
     ? findings.filter((f) => f.category === filter || f.severity === filter)
     : findings;
 
-  // Sort: critical → high → medium → low
+  // Sort: critical -> high -> medium -> low
   const order = { critical: 0, high: 1, medium: 2, low: 3 };
   const sorted = [...filtered].sort(
     (a, b) => (order[a.severity] ?? 3) - (order[b.severity] ?? 3)

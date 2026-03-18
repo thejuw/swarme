@@ -3,7 +3,7 @@
  * Phase 51.5: Swarme Credits — Compute Balance UI
  * ============================================================
  *
- * Legal compliance refactor: "Media Wallet" → "Swarme Credits"
+ * Legal compliance refactor: "Media Wallet" -> "Swarme Credits"
  * Closed-loop credit system — NO dollar signs on balances.
  * Credits are non-refundable digital software licenses.
  *

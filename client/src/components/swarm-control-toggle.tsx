@@ -92,10 +92,10 @@ export function SwarmControlToggle({
 
   const handleSwitchChange = (checked: boolean) => {
     if (checked) {
-      // Switching TO autopilot → show confirmation dialog
+      // Switching TO autopilot -> show confirmation dialog
       setShowConfirm(true);
     } else {
-      // Switching TO copilot → safe, do immediately
+      // Switching TO copilot -> safe, do immediately
       mutation.mutate("copilot");
     }
   };

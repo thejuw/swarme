@@ -35,7 +35,7 @@ const ACTION_COLORS: Record<string, string> = {
   "flags.update": "bg-violet-500/10 text-violet-400 border-violet-500/20",
 };
 
-/** Humanize action strings: "settings.update" → "Updated Settings" */
+/** Humanize action strings: "settings.update" -> "Updated Settings" */
 function humanizeAction(action: string): string {
   const map: Record<string, string> = {
     "settings.update": "Updated Settings",

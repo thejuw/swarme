@@ -333,7 +333,7 @@ export async function getWorkflowStatus(
 
 /**
  * POST /api/projects/:projectId/workflow-approve
- * Approves a DO workflow that is in AWAITING_APPROVAL state → publishes.
+ * Approves a DO workflow that is in AWAITING_APPROVAL state -> publishes.
  */
 export async function approveWorkflow(
   projectId: string

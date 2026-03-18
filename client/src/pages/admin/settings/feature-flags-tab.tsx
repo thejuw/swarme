@@ -144,7 +144,7 @@ function FlagCard({
   const badgeInfo = STATE_BADGES[localState] || STATE_BADGES.disabled;
   const BadgeIcon = badgeInfo.icon;
 
-  // Display-friendly name: "beta_pinterest_agent" → "Beta Pinterest Agent"
+  // Display-friendly name: "beta_pinterest_agent" -> "Beta Pinterest Agent"
   const displayName = flagKey.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 
   return (

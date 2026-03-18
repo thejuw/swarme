@@ -5,7 +5,7 @@
  * Two actions: "Approve & Publish" and "Reject / Retry".
  *
  * For DO-backed workflows (orchestrator tasks), it also fetches the
- * full WorkflowStateData to display the pipeline (research → draft → audit).
+ * full WorkflowStateData to display the pipeline (research -> draft -> audit).
  *
  * Optimistic UI: badge flips immediately, rolls back on error.
  */
@@ -236,7 +236,7 @@ export function CopilotApprovalSheet({
                       <PipelineRow label="Title" value={workflow.pipeline.draft.title} />
                       <PipelineRow label="Words" value={String(workflow.pipeline.draft.wordCount)} />
                       <PipelineRow label="SEO Score" value={`${workflow.pipeline.draft.seoScore}/100`} />
-                      <PipelineRow label="Sections" value={workflow.pipeline.draft.sections.join(" → ")} />
+                      <PipelineRow label="Sections" value={workflow.pipeline.draft.sections.join(" -> ")} />
                       {workflow.pipeline.draft.metaDescription && (
                         <div className="mt-1.5 p-2 rounded bg-muted text-xs text-muted-foreground">
                           <span className="font-medium text-foreground">Meta: </span>

@@ -689,7 +689,7 @@ export async function registerRoutes(
         test_name: "Signup Form — Single vs Two-Step",
         target_selector: ".signup-form",
         variant_a_html: '<form class="signup-form"><input placeholder="Email" /><button>Sign Up</button></form>',
-        variant_b_html: '<form class="signup-form"><button>Get Started →</button></form>',
+        variant_b_html: '<form class="signup-form"><button>Get Started -></button></form>',
         views_a: 2100,
         views_b: 2050,
         conversions_a: 168,
@@ -1381,7 +1381,7 @@ export async function registerRoutes(
           "2/ The colour palette is never arbitrary. This season's muted terracotta and ivory were drawn from Renaissance frescoes in the Uffizi Gallery.",
           "3/ Fabric sourcing alone takes 4 months. We work exclusively with mills in Como and Lyon that meet our sustainability certifications.",
           "4/ The final fitting is sacred. Each garment is adjusted to the model's body — no two pieces leave the atelier identical.",
-          "Discover the full collection → [link]"
+          "Discover the full collection -> [link]"
         ]),
         status: "AWAITING_APPROVAL",
         created_at: "2026-03-13T14:22:00Z",
@@ -1393,7 +1393,7 @@ export async function registerRoutes(
         asset_id: "asset_301",
         article_title: "The Anatomy of a Sartelle Atelier Runway Collection",
         platform: "linkedin",
-        draft_content: "Behind every Sartelle Atelier collection is a 6-month journey from concept to runway.\n\nOur latest collection drew inspiration from Renaissance frescoes — translating centuries-old colour theory into modern haute couture.\n\nKey insights from our creative process:\n\n→ 200+ hours of hand-stitching per garment\n→ Fabrics sourced exclusively from certified mills in Como and Lyon\n→ A colour palette rooted in art history, not trend forecasting\n→ Zero-waste pattern cutting reducing material waste by 34%\n\nIn an industry obsessed with speed, we choose to slow down. Craftsmanship is not a luxury — it's a responsibility.\n\n#HauteCouture #SartelleAtelier #SustainableFashion #Craftsmanship",
+        draft_content: "Behind every Sartelle Atelier collection is a 6-month journey from concept to runway.\n\nOur latest collection drew inspiration from Renaissance frescoes — translating centuries-old colour theory into modern haute couture.\n\nKey insights from our creative process:\n\n-> 200+ hours of hand-stitching per garment\n-> Fabrics sourced exclusively from certified mills in Como and Lyon\n-> A colour palette rooted in art history, not trend forecasting\n-> Zero-waste pattern cutting reducing material waste by 34%\n\nIn an industry obsessed with speed, we choose to slow down. Craftsmanship is not a luxury — it's a responsibility.\n\n#HauteCouture #SartelleAtelier #SustainableFashion #Craftsmanship",
         status: "AWAITING_APPROVAL",
         created_at: "2026-03-13T14:22:05Z",
         updated_at: "2026-03-13T14:22:05Z",
@@ -1409,7 +1409,7 @@ export async function registerRoutes(
           "1/ The average fast-fashion garment is worn 7 times before disposal. A Sartelle piece is designed to last 20+ years — both structurally and aesthetically.",
           "2/ Our made-to-order model means we produce 40% less inventory waste than traditional luxury houses.",
           "3/ Slowing down isn't anti-business. Our client retention rate is 87% — because investment pieces create lasting relationships.",
-          "Quality is the ultimate sustainability. Read more → [link]"
+          "Quality is the ultimate sustainability. Read more -> [link]"
         ]),
         status: "APPROVED",
         created_at: "2026-03-12T09:15:00Z",
@@ -1437,7 +1437,7 @@ export async function registerRoutes(
           "1/ Five pieces. Five eras. Each garment reinterprets a silhouette from the Met's permanent collection — from 18th-century court dress to 1960s mod.",
           "2/ The fabrics were developed in partnership with @PremierVision, using bio-based fibres that mirror the drape and weight of historical textiles.",
           "3/ Every piece ships with a Certificate of Provenance linking it to the original archival garment that inspired it.",
-          "Available by appointment only, starting April 1. Details → [link]"
+          "Available by appointment only, starting April 1. Details -> [link]"
         ]),
         status: "AWAITING_APPROVAL",
         created_at: "2026-03-14T00:05:00Z",
@@ -1449,7 +1449,7 @@ export async function registerRoutes(
         asset_id: "asset_303",
         article_title: "Sartelle Atelier x The Met: A Capsule in Cultural Memory",
         platform: "linkedin",
-        draft_content: "Thrilled to unveil our most meaningful collaboration yet — Sartelle Atelier x The Metropolitan Museum of Art.\n\nThis capsule collection reimagines five iconic silhouettes from the Costume Institute's permanent archive, spanning three centuries of fashion history.\n\nWhat makes this project unique:\n\n→ Bio-based fabrics co-developed with Première Vision that replicate historical textile properties\n→ Each garment includes a Certificate of Provenance linking it to the archival original\n→ Available exclusively by appointment — no mass production\n→ A portion of proceeds supports the Costume Institute's conservation programme\n\nFashion is cultural memory. This collection is our way of honouring that legacy while pushing it forward.\n\nAppointments open April 1.\n\n#SartelleAtelier #TheMet #CostumeInstitute #FashionHistory #HauteCouture",
+        draft_content: "Thrilled to unveil our most meaningful collaboration yet — Sartelle Atelier x The Metropolitan Museum of Art.\n\nThis capsule collection reimagines five iconic silhouettes from the Costume Institute's permanent archive, spanning three centuries of fashion history.\n\nWhat makes this project unique:\n\n-> Bio-based fabrics co-developed with Première Vision that replicate historical textile properties\n-> Each garment includes a Certificate of Provenance linking it to the archival original\n-> Available exclusively by appointment — no mass production\n-> A portion of proceeds supports the Costume Institute's conservation programme\n\nFashion is cultural memory. This collection is our way of honouring that legacy while pushing it forward.\n\nAppointments open April 1.\n\n#SartelleAtelier #TheMet #CostumeInstitute #FashionHistory #HauteCouture",
         status: "AWAITING_APPROVAL",
         created_at: "2026-03-14T00:05:05Z",
         updated_at: "2026-03-14T00:05:05Z",
@@ -4158,7 +4158,7 @@ export async function registerRoutes(
       created_at: new Date().toISOString(),
     };
     mockCreditLedger.push(entry);
-    console.log(`[Credits] Purchase: +${amount_credits.toLocaleString()} cr → new balance ${mockCreditBalance.available_credits.toLocaleString()} cr`);
+    console.log(`[Credits] Purchase: +${amount_credits.toLocaleString()} cr -> new balance ${mockCreditBalance.available_credits.toLocaleString()} cr`);
     res.json({ success: true, amount_credits, new_balance: mockCreditBalance.available_credits });
   });
 

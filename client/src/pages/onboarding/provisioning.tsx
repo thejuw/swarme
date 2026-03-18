@@ -23,7 +23,7 @@ const PROVISION_LINES = [
   { text: "Deploying Worker: content-engine@edge-iad", delay: 1500, status: "ok" },
   { text: "Deploying Worker: accessibility-scanner@edge-lhr", delay: 1900, status: "ok" },
   { text: "Provisioning D1 database: swarme-prod", delay: 2400, status: "run" },
-  { text: "Running migrations (0001 → 0037)...", delay: 2900, status: "ok" },
+  { text: "Running migrations (0001 -> 0037)...", delay: 2900, status: "ok" },
   { text: "Seeding KV namespace: CONFIG_KV", delay: 3300, status: "ok" },
   { text: "Bootstrapping Vectorize index: brand-memory", delay: 3700, status: "run" },
   { text: "Registering 12 swarm agents...", delay: 4100, status: "ok" },

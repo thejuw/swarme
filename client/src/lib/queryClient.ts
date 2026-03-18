@@ -2,9 +2,9 @@ import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
 /**
  * API_BASE resolves in three contexts:
- *   1. Local dev (Vite proxy)        → ""  (relative URLs, same port)
- *   2. deploy_website (S3/iframe)    → "__PORT_5000__" gets replaced at deploy time
- *   3. Cloudflare Pages (swarme.io)  → "https://api.swarme.io" (cross-origin)
+ *   1. Local dev (Vite proxy)        -> ""  (relative URLs, same port)
+ *   2. deploy_website (S3/iframe)    -> "__PORT_5000__" gets replaced at deploy time
+ *   3. Cloudflare Pages (swarme.io)  -> "https://api.swarme.io" (cross-origin)
  */
 const API_BASE = "__PORT_5000__".startsWith("__")
   ? (typeof window !== "undefined" && window.location.hostname === "swarme.io"

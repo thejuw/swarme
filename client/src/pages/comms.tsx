@@ -6,8 +6,8 @@
  * take over conversations to finalize deals.
  *
  * Two routing engines feed into this inbox:
- *   1. OAuth Engine (Gmail/MS365) → high-touch outreach to bloggers/influencers
- *   2. Resend Engine (transactional) → post-purchase review requests
+ *   1. OAuth Engine (Gmail/MS365) -> high-touch outreach to bloggers/influencers
+ *   2. Resend Engine (transactional) -> post-purchase review requests
  */
 
 import { useState, useRef, useEffect } from "react";

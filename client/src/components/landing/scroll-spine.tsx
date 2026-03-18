@@ -20,7 +20,7 @@ export function ScrollSpine({ children }: ScrollSpineProps) {
     offset: ["start center", "end center"],
   });
 
-  // Map 0→1 scroll into stroke dasharray reveal
+  // Map 0->1 scroll into stroke dasharray reveal
   const pathLength = useTransform(scrollYProgress, [0, 1], [0, 1]);
   // Glow intensifies as you scroll
   const glowOpacity = useTransform(scrollYProgress, [0, 0.5, 1], [0.2, 0.8, 1]);

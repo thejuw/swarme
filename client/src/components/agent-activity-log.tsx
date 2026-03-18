@@ -4,11 +4,11 @@
  * - Uses typed Task interface from lib/api.ts
  * - react-query polling at 8 s via refetchInterval
  * - Color-coded status badges:
- *     Pending → yellow/amber outline
- *     Running → emerald with spin animation
- *     Awaiting_Approval → blue outline (clickable → opens approval flow)
- *     Completed → green/primary
- *     Failed → red/destructive
+ *     Pending -> yellow/amber outline
+ *     Running -> emerald with spin animation
+ *     Awaiting_Approval -> blue outline (clickable -> opens approval flow)
+ *     Completed -> green/primary
+ *     Failed -> red/destructive
  * - Vertical feed layout with timeline connector
  * - Awaiting_Approval rows emit onSelectTask callback for Copilot Approval Sheet
  * - Agent icons expanded for Phase 4 types: orchestrator, publisher, researcher
@@ -66,13 +66,13 @@ const agentLabels: Record<string, string> = {
   researcher: "Researcher",
 };
 
-// ── Status → visual config ──────────────────────────────
+// ── Status -> visual config ──────────────────────────────
 // Phase 5 color-coded mapping:
-//   Pending      → yellow/amber outline
-//   Running      → emerald spin
-//   Awaiting_Approval → blue outline
-//   Completed    → green/primary
-//   Failed       → red/destructive
+//   Pending      -> yellow/amber outline
+//   Running      -> emerald spin
+//   Awaiting_Approval -> blue outline
+//   Completed    -> green/primary
+//   Failed       -> red/destructive
 
 type BadgeVariant = "default" | "secondary" | "destructive" | "outline";
 

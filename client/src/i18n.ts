@@ -8,7 +8,7 @@
  *
  * Import this file once in main.tsx before rendering the React tree.
  * The language detector plugin reads navigator.language and resolves
- * to the closest supported locale (e.g., "fr-FR" → "fr").
+ * to the closest supported locale (e.g., "fr-FR" -> "fr").
  *
  * Note: localStorage persistence is disabled because the dashboard
  * runs inside a sandboxed iframe where localStorage is blocked.

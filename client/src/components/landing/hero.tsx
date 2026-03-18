@@ -31,7 +31,7 @@ const COMMANDS = [
     text: "> Social queue: 4 posts drafted for approval",
     color: "text-neon-purple",
   },
-  { text: "> Lighthouse score: 94 → 98 (+4)", color: "text-neon-emerald" },
+  { text: "> Lighthouse score: 94 -> 98 (+4)", color: "text-neon-emerald" },
 ];
 
 function useTypingAnimation() {
