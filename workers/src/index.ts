@@ -57,6 +57,7 @@ import { runLlmAttacker } from "./tests/chaos/llmAttacker";
 import { handleLinkRotCron } from "./cron/linkRot";
 import { handleMemoryCompression } from "./cron/memoryCompressor";
 import { handleDeadLetterSweep } from "./cron/deadLetter";
+import { handleOutcomeEvaluation } from "./cron/outcomeEvaluator";
 import { getAllCircuitStatuses, CircuitBreaker, CIRCUIT_SERVICES } from "./utils/circuitBreaker";
 import type { CircuitService } from "./utils/circuitBreaker";
 import { getAllThrottleStatuses, THROTTLED_SERVICES } from "./utils/throttle";
@@ -5994,6 +5995,35 @@ async function handleScheduled(
         }
       })();
       ctx.waitUntil(memoryPromise);
+    }
+
+    // ── Phase 63: Weekly Outcome Evaluator (Sundays 01:00 UTC) ─
+    // Retrospective agent: grades past actions against analytics,
+    // extracts strategic lessons, and embeds them into Vectorize.
+    if (cronPattern === "0 1 * * 7") {
+      console.log("[Swarme Cron] Starting weekly outcome evaluation...");
+      const evaluatorPromise = (async () => {
+        try {
+          const result = await handleOutcomeEvaluation(env);
+          console.log(
+            `[Swarme Cron] Outcome evaluation complete — ${result.actionsEvaluated} evaluated, ` +
+            `${result.lessonsExtracted} lessons, ${result.lessonsEmbedded} embedded`
+          );
+
+          if (result.actionsEvaluated > 0) {
+            await env.DB.prepare(
+              `INSERT INTO Agent_Tasks (project_id, agent_type, action, status, task_description, result_payload)
+               VALUES ('system', 'outcome_evaluator', 'Weekly Retrospective', 'Completed', ?1, ?2)`
+            ).bind(
+              `Evaluated ${result.actionsEvaluated} actions, extracted ${result.lessonsExtracted} lessons, embedded ${result.lessonsEmbedded} into Vectorize`,
+              JSON.stringify(result)
+            ).run();
+          }
+        } catch (err) {
+          console.error("[Swarme Cron] Outcome evaluation failed:", err);
+        }
+      })();
+      ctx.waitUntil(evaluatorPromise);
     }
 
     const elapsed = Date.now() - startTime;

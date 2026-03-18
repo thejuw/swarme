@@ -1,6 +1,6 @@
 /**
  * ============================================================
- * Phase 26 + Phase 61: AI Manager Engine
+ * Phase 26 + Phase 61 + Phase 63: AI Manager Engine
  * ============================================================
  *
  * Conversational state machine that acts as a "Chief Strategy
@@ -13,12 +13,20 @@
  *   - Rolling context window: last 10 messages + all memories
  *     injected into the system prompt each turn
  *   - Messages are persisted to D1 on every send/receive
+ *
+ * Phase 63 additions:
+ *   - Strategic lesson recall via Vectorize semantic search
+ *   - RAG-based reinforcement: top 3 domain-specific lessons
+ *     are injected into the system prompt as binding rules
+ *   - Lessons come from the outcomeEvaluator.ts weekly cron
+ *     which grades past actions against real analytics data
  * ============================================================
  */
 
 import type { Env } from "../index";
 import { discoverActualCompetitors, type DiscoveredCompetitor } from "./researcher";
 import { createThrottledFetch } from "./throttle";
+import { generateEmbedding } from "./vectorize";
 
 // ─────────────────────────────────────────────────────────────
 // Type Definitions
@@ -431,6 +439,77 @@ export async function fetchUserMemories(
 }
 
 // ─────────────────────────────────────────────────────────────
+// Phase 63: Strategic Lesson Recall (Vectorize RAG)
+// ─────────────────────────────────────────────────────────────
+
+export interface StrategicLessonHit {
+  lesson: string;
+  action_type: string;
+  outcome_score: number;
+  confidence: string;
+  similarity: number;
+}
+
+/**
+ * Fetches the most relevant strategic lessons for a given user query
+ * by performing a semantic search against Vectorize. Results are
+ * filtered to the specific domain to maintain tenant isolation.
+ *
+ * Called during every AI Manager conversation to inject learned
+ * rules into the system prompt (few-shot reinforcement).
+ *
+ * @param domainId   - The domain scope
+ * @param userQuery  - The latest user message (used to generate query embedding)
+ * @param topK       - Number of lessons to retrieve (default: 3)
+ * @param env        - Worker environment bindings
+ */
+export async function fetchRelevantLessons(
+  domainId: string,
+  userQuery: string,
+  topK: number = 3,
+  env: Env
+): Promise<StrategicLessonHit[]> {
+  try {
+    // Generate an embedding of the user's current query
+    const queryEmbedding = await generateEmbedding(userQuery, env);
+
+    // Query Vectorize for the closest lesson embeddings
+    // Filter by type=strategic_lesson and matching domain_id
+    const results = await env.VECTORIZE.query(queryEmbedding, {
+      topK,
+      filter: {
+        type: "strategic_lesson",
+        domain_id: domainId,
+      },
+      returnMetadata: "all",
+    });
+
+    if (!results.matches || results.matches.length === 0) {
+      return [];
+    }
+
+    return results.matches
+      .filter((m) => (m.score ?? 0) > 0.5) // Only return reasonably similar lessons
+      .map((m) => ({
+        lesson: (m.metadata as Record<string, unknown>)?.lesson as string ?? "Unknown lesson",
+        action_type: (m.metadata as Record<string, unknown>)?.action_type as string ?? "unknown",
+        outcome_score: (m.metadata as Record<string, unknown>)?.outcome_score as number ?? 0,
+        confidence: (m.metadata as Record<string, unknown>)?.confidence as string ?? "medium",
+        similarity: m.score ?? 0,
+      }));
+  } catch (err) {
+    // Vectorize query failure is non-fatal — the AI Manager still
+    // functions, just without lesson injection this turn
+    console.warn(
+      `[aiManager] Strategic lesson recall failed: ${
+        err instanceof Error ? err.message : err
+      }`
+    );
+    return [];
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
 // Tool execution handlers
 // ─────────────────────────────────────────────────────────────
 
@@ -632,6 +711,24 @@ ${facts}
 Use these facts to personalize your responses. Do not re-ask for information already captured here.`;
   }
 
+  // ── Phase 63: Inject strategic lessons from Vectorize ─────
+  if (strategicLessons.length > 0) {
+    const lessonEntries = strategicLessons
+      .map((l, i) => {
+        const polarity = l.outcome_score > 0 ? "POSITIVE" : "NEGATIVE";
+        const scoreLabel = `${polarity} (score: ${l.outcome_score > 0 ? "+" : ""}${l.outcome_score}, confidence: ${l.confidence})`;
+        return `${i + 1}. [${scoreLabel}] ${l.lesson}`;
+      })
+      .join("\n");
+
+    prompt += `\n\n--- CRITICAL CONTEXT: LEARNED STRATEGIC RULES ---
+You have previously learned the following rules for this brand based on real-world analytics data. These are NOT suggestions — they are evidence-backed conclusions from measured outcomes.
+
+${lessonEntries}
+
+You must strictly adhere to these rules in your next suggestion. If a user request conflicts with a learned rule, explain the conflict and recommend the data-backed approach instead.`;
+  }
+
   // ── Phase 61: Inject recent conversation transcript ──────
   if (recentHistory.length > 0) {
     const transcript = recentHistory
@@ -729,24 +826,29 @@ export async function handleManagerChat(
   messageHistory: ChatMessage[],
   env: Env
 ): Promise<ManagerResult> {
-  // Phase 61: Fetch all three memory layers in parallel
-  const [brandContext, recentHistory, userMemories] = await Promise.all([
+  // Phase 61+63: Fetch all four memory layers in parallel
+  // Extract the user's latest message for semantic lesson recall
+  const latestUserMsg = messageHistory[messageHistory.length - 1];
+  const userQuery = latestUserMsg?.role === "user" ? latestUserMsg.content : "";
+
+  const [brandContext, recentHistory, userMemories, strategicLessons] = await Promise.all([
     fetchBrandContext(projectId, env),
     fetchRecentChatHistory(projectId, 10, env),
     fetchUserMemories(projectId, env),
+    // Phase 63: Semantic recall of relevant strategic lessons from Vectorize
+    userQuery ? fetchRelevantLessons(projectId, userQuery, 3, env) : Promise.resolve([]),
   ]);
 
   // Phase 61: Persist the latest user message to Chat_History.
   // The last message in messageHistory is always the new user message.
-  const lastMsg = messageHistory[messageHistory.length - 1];
-  if (lastMsg && lastMsg.role === "user") {
-    await persistChatMessage(projectId, "user", lastMsg.content, env);
+  if (latestUserMsg && latestUserMsg.role === "user") {
+    await persistChatMessage(projectId, "user", latestUserMsg.content, env);
   }
 
-  // Build the system message with brand context, memories, and tool instructions
+  // Build the system message with brand context, memories, lessons, and tool instructions
   const systemMessage: ChatMessage = {
     role: "system",
-    content: buildSystemPrompt(brandContext, userMemories, recentHistory) + TOOL_INSTRUCTION_BLOCK,
+    content: buildSystemPrompt(brandContext, userMemories, recentHistory, strategicLessons) + TOOL_INSTRUCTION_BLOCK,
   };
 
   // Prepare the full message array for Perplexity.

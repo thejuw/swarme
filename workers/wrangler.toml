@@ -253,5 +253,6 @@ crons = [
   "*/15 * * * *",  # Every 15 min — Trend velocity polling
   "0 0 * * 7",     # Weekly (Sunday 00:00 UTC) — Content decay scan
   "0 14 * * *",    # Daily at 14:00 UTC — Phase 27: Retention engine
-  "0 0 * * *"      # Daily at 00:00 UTC — Phase 61: Memory compressor
+  "0 0 * * *",     # Daily at 00:00 UTC — Phase 61: Memory compressor
+  "0 1 * * 7"      # Weekly (Sunday 01:00 UTC) — Phase 63: Outcome evaluator
 ]
