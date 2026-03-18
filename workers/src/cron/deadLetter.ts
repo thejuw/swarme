@@ -19,7 +19,7 @@
  * Additionally, it purges expired completed/failed keys to
  * prevent unbounded table growth.
  *
- * Schedule: */15 * * * * (every 15 minutes)
+ * Schedule: every 15 minutes (cron: 0,15,30,45 * * * *)
  *
  * ============================================================
  */
