@@ -56,14 +56,16 @@ import { runApiFuzzer } from "./tests/chaos/apiFuzzer";
 import { runLlmAttacker } from "./tests/chaos/llmAttacker";
 import { handleLinkRotCron } from "./cron/linkRot";
 import { handleMemoryCompression } from "./cron/memoryCompressor";
+import { handleDeadLetterSweep } from "./cron/deadLetter";
 import { getAllCircuitStatuses, CircuitBreaker, CIRCUIT_SERVICES } from "./utils/circuitBreaker";
 import type { CircuitService } from "./utils/circuitBreaker";
 import { getAllThrottleStatuses, THROTTLED_SERVICES } from "./utils/throttle";
 import type { ThrottledService } from "./utils/throttle";
 import { getFailsafeStatuses, unblockTask } from "./utils/executionCap";
 
-// Re-export the Durable Object class so Cloudflare can find it
+// Re-export Durable Object classes so Cloudflare can find them
 export { AgentWorkflowManager } from "./durable_object";
+export { WorkflowCheckpointDO } from "./durable_objects/workflowCheckpoint";
 
 // ─────────────────────────────────────────────────────────────
 // Task 2.1: Environment Bindings & Type Definitions
@@ -90,6 +92,9 @@ export interface Env {
 
   // ── Durable Object Bindings (Phase 3) ──
   AGENT_WORKFLOW: DurableObjectNamespace;
+
+  // ── Durable Object Bindings (Phase 62) ──
+  WORKFLOW_CHECKPOINT: DurableObjectNamespace;
 
   // ── Environment Variables ──
   ENVIRONMENT: string;
@@ -5609,6 +5614,25 @@ async function handleScheduled(
         console.log(`[Swarme Cron] Trend detection for ${project.name} — Phase 4 (skipped)`);
         // Phase 4: ctx.waitUntil(checkTrendVelocity(project.id, env));
       }
+    }
+
+    // ── Phase 62: Dead-Letter Sweeper (every 15 min) ─────────
+    // Resets idempotency keys stuck in 'processing' for >10 min
+    // and purges expired keys to prevent table bloat.
+    if (cronPattern === "*/15 * * * *") {
+      console.log("[Swarme Cron] Starting dead-letter sweep...");
+      const deadLetterPromise = (async () => {
+        try {
+          const result = await handleDeadLetterSweep(env);
+          console.log(
+            `[Swarme Cron] Dead-letter sweep complete — ${result.stuckTasksFound} stuck, ` +
+            `${result.tasksReset} reset, ${result.expiredKeysPurged} expired purged`
+          );
+        } catch (err) {
+          console.error("[Swarme Cron] Dead-letter sweep failed:", err);
+        }
+      })();
+      ctx.waitUntil(deadLetterPromise);
     }
 
     // ── Phase 18: Weekly Content Decay Scan ──────────────────
