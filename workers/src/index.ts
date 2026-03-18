@@ -3910,6 +3910,729 @@ app.post("/api/public/scanner", async (c) => {
 });
 
 // ─────────────────────────────────────────────────────────────
+// Priority 2: Admin Panel Endpoints
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * GET /api/admin/audit-log
+ * Returns admin audit log entries from D1.
+ */
+app.get("/api/admin/audit-log", async (c) => {
+  try {
+    let rows: any[] = [];
+    try {
+      const result = await c.env.DB.prepare(
+        `SELECT id, admin_id, action, target, metadata, created_at FROM Admin_Audit_Log ORDER BY created_at DESC LIMIT 200`
+      ).all();
+      rows = result.results || [];
+    } catch {
+      // Table may not exist yet
+    }
+
+    // Enrich with email from Users table
+    const enriched = [];
+    for (const r of rows) {
+      let email = "";
+      try {
+        const u = await c.env.DB.prepare(`SELECT email FROM Users WHERE id = ?1`).bind(r.admin_id).first<{ email: string }>();
+        email = u?.email || r.admin_id;
+      } catch { email = r.admin_id; }
+      enriched.push({
+        id: r.id?.toString() || crypto.randomUUID(),
+        admin_id: r.admin_id,
+        admin_email: email,
+        action: r.action,
+        target: r.target,
+        metadata: r.metadata,
+        created_at: r.created_at,
+      });
+    }
+    return c.json(enriched);
+  } catch (err) {
+    return c.json([], 200);
+  }
+});
+
+/**
+ * GET /api/admin/flags
+ * Returns feature flags map from KV.
+ */
+app.get("/api/admin/flags", async (c) => {
+  try {
+    const raw = await c.env.CONFIG_KV.get("global:config:feature_flags");
+    return c.json(raw ? JSON.parse(raw) : {});
+  } catch {
+    return c.json({});
+  }
+});
+
+/**
+ * POST /api/admin/flags
+ * Saves feature flags and logs to audit.
+ */
+app.post("/api/admin/flags", async (c) => {
+  try {
+    const flags = await c.req.json();
+    await c.env.CONFIG_KV.put("global:config:feature_flags", JSON.stringify(flags));
+
+    // Audit log
+    const adminId = c.get("userId") as string || "system";
+    try {
+      await c.env.DB.prepare(
+        `INSERT INTO Admin_Audit_Log (admin_id, action, target, metadata, created_at) VALUES (?1, 'update_flags', 'feature_flags', ?2, ?3)`
+      ).bind(adminId, JSON.stringify(flags), new Date().toISOString()).run();
+    } catch {}
+
+    return c.json({ success: true });
+  } catch (err) {
+    return c.json({ success: false, error: "Failed to save flags" }, 500);
+  }
+});
+
+/**
+ * GET /api/admin/settings/site
+ * Returns site-wide settings (brand, SEO, social, maintenance).
+ */
+app.get("/api/admin/settings/site", async (c) => {
+  try {
+    const raw = await c.env.CONFIG_KV.get("global:config:site_settings");
+    const defaults = {
+      site_name: "Swarme",
+      logo_url: "",
+      favicon_url: "",
+      maintenance_mode: false,
+      hero_headline: "AI-Powered SEO Automation",
+      hero_subheadline: "Let the swarm handle your SEO.",
+      social_links: { twitter: "", linkedin: "", github: "" },
+      seo_metadata: {
+        title: "Swarme — AI-Powered SEO Automation",
+        description: "Automate your SEO workflow with AI agents.",
+        og_image: "",
+      },
+    };
+    return c.json(raw ? { ...defaults, ...JSON.parse(raw) } : defaults);
+  } catch {
+    return c.json({ site_name: "Swarme", maintenance_mode: false, social_links: { twitter: "", linkedin: "", github: "" }, seo_metadata: { title: "", description: "", og_image: "" } });
+  }
+});
+
+/**
+ * POST /api/admin/settings/site
+ * Partially updates site settings (merges with existing).
+ */
+app.post("/api/admin/settings/site", async (c) => {
+  try {
+    const updates = await c.req.json();
+    const raw = await c.env.CONFIG_KV.get("global:config:site_settings");
+    const current = raw ? JSON.parse(raw) : {};
+    const merged = { ...current, ...updates };
+    await c.env.CONFIG_KV.put("global:config:site_settings", JSON.stringify(merged));
+
+    // Audit log
+    const adminId = c.get("userId") as string || "system";
+    try {
+      await c.env.DB.prepare(
+        `INSERT INTO Admin_Audit_Log (admin_id, action, target, metadata, created_at) VALUES (?1, 'update_site_settings', 'site_settings', ?2, ?3)`
+      ).bind(adminId, JSON.stringify(Object.keys(updates)), new Date().toISOString()).run();
+    } catch {}
+
+    return c.json({ success: true });
+  } catch (err) {
+    return c.json({ success: false, error: "Failed to save site settings" }, 500);
+  }
+});
+
+/**
+ * GET /api/admin/cms/posts
+ * Returns all CMS posts (blog, changelog, legal).
+ */
+app.get("/api/admin/cms/posts", async (c) => {
+  try {
+    let rows: any[] = [];
+    try {
+      const result = await c.env.DB.prepare(
+        `SELECT id, type, title, content, slug, published, author_id, created_at, updated_at
+         FROM Cms_Posts ORDER BY created_at DESC LIMIT 200`
+      ).all();
+      rows = result.results || [];
+    } catch {
+      // Table may not exist; return from KV fallback
+      const raw = await c.env.CONFIG_KV.get("global:config:cms_posts");
+      rows = raw ? JSON.parse(raw) : [];
+    }
+    return c.json(rows);
+  } catch {
+    return c.json([]);
+  }
+});
+
+/**
+ * POST /api/admin/cms/posts
+ * Creates a new CMS post.
+ */
+app.post("/api/admin/cms/posts", async (c) => {
+  try {
+    const body = await c.req.json();
+    const id = `post_${crypto.randomUUID().replace(/-/g, "").slice(0, 12)}`;
+    const now = new Date().toISOString();
+    const post = {
+      id,
+      type: body.type || "blog",
+      title: body.title || "",
+      content: body.content || "",
+      slug: body.slug || body.title?.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "") || id,
+      published: body.published ?? 0,
+      author_id: c.get("userId") as string || "system",
+      created_at: now,
+      updated_at: now,
+    };
+
+    try {
+      await c.env.DB.prepare(
+        `INSERT INTO Cms_Posts (id, type, title, content, slug, published, author_id, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)`
+      ).bind(post.id, post.type, post.title, post.content, post.slug, post.published, post.author_id, post.created_at, post.updated_at).run();
+    } catch {
+      // KV fallback
+      const raw = await c.env.CONFIG_KV.get("global:config:cms_posts");
+      const list = raw ? JSON.parse(raw) : [];
+      list.unshift(post);
+      await c.env.CONFIG_KV.put("global:config:cms_posts", JSON.stringify(list));
+    }
+    return c.json(post, 201);
+  } catch (err) {
+    return c.json({ success: false, error: "Failed to create post" }, 500);
+  }
+});
+
+/**
+ * PATCH /api/admin/cms/posts/:postId
+ * Updates an existing CMS post.
+ */
+app.patch("/api/admin/cms/posts/:postId", async (c) => {
+  const postId = c.req.param("postId");
+  try {
+    const body = await c.req.json();
+    const now = new Date().toISOString();
+
+    try {
+      const sets: string[] = [];
+      const vals: any[] = [];
+      let idx = 1;
+      for (const key of ["type", "title", "content", "slug", "published"]) {
+        if (body[key] !== undefined) {
+          sets.push(`${key} = ?${idx}`);
+          vals.push(body[key]);
+          idx++;
+        }
+      }
+      sets.push(`updated_at = ?${idx}`);
+      vals.push(now);
+      idx++;
+      vals.push(postId);
+      await c.env.DB.prepare(
+        `UPDATE Cms_Posts SET ${sets.join(", ")} WHERE id = ?${idx}`
+      ).bind(...vals).run();
+    } catch {
+      // KV fallback
+      const raw = await c.env.CONFIG_KV.get("global:config:cms_posts");
+      if (raw) {
+        const list = JSON.parse(raw).map((p: any) =>
+          p.id === postId ? { ...p, ...body, updated_at: now } : p
+        );
+        await c.env.CONFIG_KV.put("global:config:cms_posts", JSON.stringify(list));
+      }
+    }
+    return c.json({ success: true, id: postId });
+  } catch (err) {
+    return c.json({ success: false, error: "Failed to update post" }, 500);
+  }
+});
+
+/**
+ * DELETE /api/admin/cms/posts/:postId
+ * Deletes a CMS post.
+ */
+app.delete("/api/admin/cms/posts/:postId", async (c) => {
+  const postId = c.req.param("postId");
+  try {
+    try {
+      await c.env.DB.prepare(`DELETE FROM Cms_Posts WHERE id = ?1`).bind(postId).run();
+    } catch {
+      const raw = await c.env.CONFIG_KV.get("global:config:cms_posts");
+      if (raw) {
+        const list = JSON.parse(raw).filter((p: any) => p.id !== postId);
+        await c.env.CONFIG_KV.put("global:config:cms_posts", JSON.stringify(list));
+      }
+    }
+    return c.json({ success: true });
+  } catch (err) {
+    return c.json({ success: false, error: "Failed to delete post" }, 500);
+  }
+});
+
+/**
+ * GET /api/admin/footer
+ * Returns admin-editable footer configuration.
+ */
+app.get("/api/admin/footer", async (c) => {
+  try {
+    const raw = await c.env.CONFIG_KV.get("global:config:footer");
+    return c.json(raw ? JSON.parse(raw) : {
+      columns: [],
+      company_info: {
+        mission: "AI-powered SEO automation for the modern web.",
+        support_email: "support@swarme.io",
+        address: "",
+        social: { x: "", linkedin: "", discord: "" },
+      },
+    });
+  } catch {
+    return c.json({ columns: [], company_info: { mission: "", support_email: "", address: "", social: {} } });
+  }
+});
+
+/**
+ * POST /api/admin/footer
+ * Saves footer configuration.
+ */
+app.post("/api/admin/footer", async (c) => {
+  try {
+    const footer = await c.req.json();
+    await c.env.CONFIG_KV.put("global:config:footer", JSON.stringify(footer));
+    return c.json({ success: true });
+  } catch (err) {
+    return c.json({ success: false, error: "Failed to save footer" }, 500);
+  }
+});
+
+/**
+ * POST /api/admin/communications/newsletter
+ * Queues a newsletter (stub — logs intent, counts recipients).
+ */
+app.post("/api/admin/communications/newsletter", async (c) => {
+  try {
+    const { subject, html_body } = await c.req.json();
+    if (!subject || !html_body) {
+      return c.json({ success: false, error: "Subject and body are required" }, 400);
+    }
+
+    // Count active users
+    let recipientCount = 0;
+    try {
+      const row = await c.env.DB.prepare(
+        `SELECT COUNT(*) as cnt FROM Users WHERE status = 'active'`
+      ).first<{ cnt: number }>();
+      recipientCount = row?.cnt || 0;
+    } catch {
+      recipientCount = 1;
+    }
+
+    // Log the newsletter dispatch
+    const adminId = c.get("userId") as string || "system";
+    try {
+      await c.env.DB.prepare(
+        `INSERT INTO Admin_Audit_Log (admin_id, action, target, metadata, created_at) VALUES (?1, 'send_newsletter', 'newsletter', ?2, ?3)`
+      ).bind(adminId, JSON.stringify({ subject, recipient_count: recipientCount }), new Date().toISOString()).run();
+    } catch {}
+
+    return c.json({ success: true, recipient_count: recipientCount, status: "queued" });
+  } catch (err) {
+    return c.json({ success: false, error: "Failed to send newsletter" }, 500);
+  }
+});
+
+/**
+ * GET /api/admin/finance/transactions
+ * Returns financial transactions from D1.
+ */
+app.get("/api/admin/finance/transactions", async (c) => {
+  try {
+    let rows: any[] = [];
+    try {
+      const result = await c.env.DB.prepare(
+        `SELECT id, user_id, type, amount, currency, status, plan, stripe_id, created_at
+         FROM Billing_Transactions ORDER BY created_at DESC LIMIT 200`
+      ).all();
+      rows = result.results || [];
+    } catch {}
+
+    // Enrich with email
+    const enriched = [];
+    for (const r of rows) {
+      let email = "";
+      try {
+        const u = await c.env.DB.prepare(`SELECT email FROM Users WHERE id = ?1`).bind(r.user_id).first<{ email: string }>();
+        email = u?.email || r.user_id;
+      } catch { email = r.user_id; }
+      enriched.push({ ...r, email, id: r.id?.toString() || crypto.randomUUID() });
+    }
+    return c.json(enriched);
+  } catch {
+    return c.json([]);
+  }
+});
+
+/**
+ * GET /api/admin/security/ip-blocklist
+ * Returns blocked IPs.
+ */
+app.get("/api/admin/security/ip-blocklist", async (c) => {
+  try {
+    const raw = await c.env.CONFIG_KV.get("global:config:ip_blocklist");
+    return c.json({ success: true, ips: raw ? JSON.parse(raw) : [] });
+  } catch {
+    return c.json({ success: true, ips: [] });
+  }
+});
+
+/**
+ * POST /api/admin/security/ip-blocklist
+ * Adds an IP to the blocklist.
+ */
+app.post("/api/admin/security/ip-blocklist", async (c) => {
+  try {
+    const { ip } = await c.req.json();
+    if (!ip) return c.json({ success: false, error: "IP is required" }, 400);
+
+    const raw = await c.env.CONFIG_KV.get("global:config:ip_blocklist");
+    const list: string[] = raw ? JSON.parse(raw) : [];
+    if (!list.includes(ip)) list.push(ip);
+    await c.env.CONFIG_KV.put("global:config:ip_blocklist", JSON.stringify(list));
+
+    // Audit
+    const adminId = c.get("userId") as string || "system";
+    try {
+      await c.env.DB.prepare(
+        `INSERT INTO Admin_Audit_Log (admin_id, action, target, metadata, created_at) VALUES (?1, 'block_ip', 'ip_blocklist', ?2, ?3)`
+      ).bind(adminId, JSON.stringify({ ip }), new Date().toISOString()).run();
+    } catch {}
+
+    return c.json({ success: true });
+  } catch (err) {
+    return c.json({ success: false, error: "Failed to add IP" }, 500);
+  }
+});
+
+/**
+ * DELETE /api/admin/security/ip-blocklist/:ip
+ * Removes an IP from the blocklist.
+ */
+app.delete("/api/admin/security/ip-blocklist/:ip", async (c) => {
+  const ip = c.req.param("ip");
+  try {
+    const raw = await c.env.CONFIG_KV.get("global:config:ip_blocklist");
+    const list: string[] = raw ? JSON.parse(raw) : [];
+    const filtered = list.filter((i) => i !== ip);
+    await c.env.CONFIG_KV.put("global:config:ip_blocklist", JSON.stringify(filtered));
+    return c.json({ success: true });
+  } catch (err) {
+    return c.json({ success: false, error: "Failed to remove IP" }, 500);
+  }
+});
+
+/**
+ * GET /api/admin/support/tickets
+ * Returns support tickets.
+ */
+app.get("/api/admin/support/tickets", async (c) => {
+  try {
+    let rows: any[] = [];
+    try {
+      const result = await c.env.DB.prepare(
+        `SELECT id, user_id, subject, message, status, priority, assigned_to, created_at, updated_at
+         FROM Support_Tickets ORDER BY created_at DESC LIMIT 200`
+      ).all();
+      rows = result.results || [];
+    } catch {
+      const raw = await c.env.CONFIG_KV.get("global:config:support_tickets");
+      rows = raw ? JSON.parse(raw) : [];
+    }
+    return c.json(rows.map((r: any) => ({ ...r, id: r.id?.toString() || crypto.randomUUID() })));
+  } catch {
+    return c.json([]);
+  }
+});
+
+/**
+ * PATCH /api/admin/support/tickets/:ticketId
+ * Updates a support ticket (status, priority, assigned_to).
+ */
+app.patch("/api/admin/support/tickets/:ticketId", async (c) => {
+  const ticketId = c.req.param("ticketId");
+  try {
+    const body = await c.req.json();
+    const now = new Date().toISOString();
+
+    try {
+      const sets: string[] = [];
+      const vals: any[] = [];
+      let idx = 1;
+      for (const key of ["status", "priority", "assigned_to"]) {
+        if (body[key] !== undefined) {
+          sets.push(`${key} = ?${idx}`);
+          vals.push(body[key]);
+          idx++;
+        }
+      }
+      sets.push(`updated_at = ?${idx}`);
+      vals.push(now);
+      idx++;
+      vals.push(ticketId);
+      await c.env.DB.prepare(
+        `UPDATE Support_Tickets SET ${sets.join(", ")} WHERE id = ?${idx}`
+      ).bind(...vals).run();
+    } catch {
+      const raw = await c.env.CONFIG_KV.get("global:config:support_tickets");
+      if (raw) {
+        const list = JSON.parse(raw).map((t: any) =>
+          t.id === ticketId ? { ...t, ...body, updated_at: now } : t
+        );
+        await c.env.CONFIG_KV.put("global:config:support_tickets", JSON.stringify(list));
+      }
+    }
+    return c.json({ success: true, id: ticketId });
+  } catch (err) {
+    return c.json({ success: false, error: "Failed to update ticket" }, 500);
+  }
+});
+
+/**
+ * GET /api/admin/support/webhooks
+ * Returns support webhook URLs (Discord, Telegram).
+ */
+app.get("/api/admin/support/webhooks", async (c) => {
+  try {
+    const raw = await c.env.CONFIG_KV.get("global:config:support_webhooks");
+    return c.json({
+      success: true,
+      webhooks: raw ? JSON.parse(raw) : { discord_url: "", telegram_url: "" },
+    });
+  } catch {
+    return c.json({ success: true, webhooks: { discord_url: "", telegram_url: "" } });
+  }
+});
+
+/**
+ * POST /api/admin/support/webhooks
+ * Saves support webhook URLs.
+ */
+app.post("/api/admin/support/webhooks", async (c) => {
+  try {
+    const webhooks = await c.req.json();
+    await c.env.CONFIG_KV.put("global:config:support_webhooks", JSON.stringify(webhooks));
+    return c.json({ success: true });
+  } catch (err) {
+    return c.json({ success: false, error: "Failed to save webhooks" }, 500);
+  }
+});
+
+/**
+ * GET /api/admin/traffic
+ * Returns traffic/analytics logs.
+ */
+app.get("/api/admin/traffic", async (c) => {
+  try {
+    let rows: any[] = [];
+    try {
+      const result = await c.env.DB.prepare(
+        `SELECT id, ip_address, device, country, referrer, route, created_at
+         FROM Traffic_Logs ORDER BY created_at DESC LIMIT 200`
+      ).all();
+      rows = result.results || [];
+    } catch {}
+    return c.json(rows.map((r: any) => ({ ...r, id: r.id?.toString() || crypto.randomUUID() })));
+  } catch {
+    return c.json([]);
+  }
+});
+
+/**
+ * GET /api/admin/users/:userId  (single user detail)
+ * Returns detailed info for one user including tasks, GSC, brand context.
+ */
+app.get("/api/admin/users/:userId", async (c) => {
+  const userId = c.req.param("userId");
+  try {
+    // Base user
+    const user = await c.env.DB.prepare(
+      `SELECT id, email, role, status, created_at FROM Users WHERE id = ?1`
+    ).bind(userId).first();
+
+    if (!user) return c.json({ success: false, error: "User not found" }, 404);
+
+    // Get associated project
+    const project = await c.env.DB.prepare(
+      `SELECT id, plan_tier FROM Projects WHERE owner_id = ?1 LIMIT 1`
+    ).bind(userId).first<{ id: string; plan_tier: string }>() || null;
+
+    const planTier = project?.plan_tier || "free";
+    const projectId = project?.id || "";
+
+    // Recent tasks
+    let recentTasks: any[] = [];
+    if (projectId) {
+      try {
+        const taskResult = await c.env.DB.prepare(
+          `SELECT id, agent_type, action, status, task_description, created_at
+           FROM Agent_Tasks WHERE project_id = ?1 ORDER BY created_at DESC LIMIT 10`
+        ).bind(projectId).all();
+        recentTasks = (taskResult.results || []).map((r: any) => ({
+          id: r.id?.toString() || "",
+          agent_type: r.agent_type || "",
+          action: r.action || "",
+          status: r.status || "",
+          task_description: r.task_description || "",
+          created_at: r.created_at,
+        }));
+      } catch {}
+    }
+
+    // Tasks used this month
+    let tasksUsed = 0;
+    if (projectId) {
+      try {
+        const cnt = await c.env.DB.prepare(
+          `SELECT COUNT(*) as cnt FROM Agent_Tasks WHERE project_id = ?1 AND created_at > datetime('now', 'start of month')`
+        ).bind(projectId).first<{ cnt: number }>();
+        tasksUsed = cnt?.cnt || 0;
+      } catch {}
+    }
+
+    // Brand context from KV
+    let brandContext = null;
+    if (projectId) {
+      const raw = await c.env.CONFIG_KV.get(`project:${projectId}:settings`);
+      if (raw) {
+        const s = JSON.parse(raw);
+        if (s.brand_context) brandContext = s.brand_context;
+      }
+    }
+
+    const taskLimits: Record<string, number> = { free: 50, starter: 200, growth: 1000, enterprise: 10000 };
+
+    const detail = {
+      id: (user as any).id,
+      email: (user as any).email,
+      role: (user as any).role,
+      plan: planTier,
+      status: (user as any).status || "active",
+      created_at: (user as any).created_at,
+      plan_tier: planTier,
+      tasks_used_this_month: tasksUsed,
+      task_limit: taskLimits[planTier] || 50,
+      total_revenue: 0,
+      recent_tasks: recentTasks,
+      gsc_summary: { total_clicks: 0, total_impressions: 0, avg_ctr: 0, avg_position: 0, mini_series: [] },
+      brand_context: brandContext,
+    };
+
+    return c.json({ success: true, user: detail });
+  } catch (err) {
+    console.error("[admin/users/:id] Error:", err);
+    return c.json({ success: false, error: "Failed to load user details" }, 500);
+  }
+});
+
+/**
+ * PATCH /api/admin/users/:userId/plan
+ * Override a user's plan tier.
+ */
+app.patch("/api/admin/users/:userId/plan", async (c) => {
+  const userId = c.req.param("userId");
+  try {
+    const { plan_tier } = await c.req.json();
+    const taskLimits: Record<string, number> = { free: 50, starter: 200, growth: 1000, enterprise: 10000 };
+
+    // Update project plan
+    await c.env.DB.prepare(
+      `UPDATE Projects SET plan_tier = ?1 WHERE owner_id = ?2`
+    ).bind(plan_tier, userId).run();
+
+    // Audit
+    const adminId = c.get("userId") as string || "system";
+    try {
+      await c.env.DB.prepare(
+        `INSERT INTO Admin_Audit_Log (admin_id, action, target, metadata, created_at) VALUES (?1, 'override_plan', ?2, ?3, ?4)`
+      ).bind(adminId, userId, JSON.stringify({ plan_tier }), new Date().toISOString()).run();
+    } catch {}
+
+    return c.json({ success: true, plan_tier, task_limit: taskLimits[plan_tier] || 50 });
+  } catch (err) {
+    return c.json({ success: false, error: "Failed to update plan" }, 500);
+  }
+});
+
+/**
+ * PATCH /api/admin/users/:userId/status
+ * Update a user's status (active, suspended, banned).
+ */
+app.patch("/api/admin/users/:userId/status", async (c) => {
+  const userId = c.req.param("userId");
+  try {
+    const { status } = await c.req.json();
+    await c.env.DB.prepare(
+      `UPDATE Users SET status = ?1 WHERE id = ?2`
+    ).bind(status, userId).run();
+
+    // Audit
+    const adminId = c.get("userId") as string || "system";
+    try {
+      await c.env.DB.prepare(
+        `INSERT INTO Admin_Audit_Log (admin_id, action, target, metadata, created_at) VALUES (?1, 'update_user_status', ?2, ?3, ?4)`
+      ).bind(adminId, userId, JSON.stringify({ status }), new Date().toISOString()).run();
+    } catch {}
+
+    return c.json({ success: true, status });
+  } catch (err) {
+    return c.json({ success: false, error: "Failed to update status" }, 500);
+  }
+});
+
+/**
+ * POST /api/admin/users/:userId/impersonate
+ * Generates a temporary JWT for the target user.
+ */
+app.post("/api/admin/users/:userId/impersonate", async (c) => {
+  const userId = c.req.param("userId");
+  try {
+    const user = await c.env.DB.prepare(
+      `SELECT id, email, role FROM Users WHERE id = ?1`
+    ).bind(userId).first<{ id: string; email: string; role: string }>();
+
+    if (!user) return c.json({ success: false, error: "User not found" }, 404);
+
+    // Import JWT signing
+    const { sign } = await import("hono/jwt");
+    const secret = c.env.JWT_SECRET || "swarme-dev-secret";
+    const payload = {
+      sub: user.id,
+      email: user.email,
+      role: user.role,
+      impersonated_by: c.get("userId") as string || "system",
+      exp: Math.floor(Date.now() / 1000) + 3600, // 1 hour
+    };
+    const token = await sign(payload, secret, "HS256");
+
+    // Audit
+    try {
+      await c.env.DB.prepare(
+        `INSERT INTO Admin_Audit_Log (admin_id, action, target, metadata, created_at) VALUES (?1, 'impersonate', ?2, ?3, ?4)`
+      ).bind(c.get("userId") as string || "system", userId, '{}', new Date().toISOString()).run();
+    } catch {}
+
+    return c.json({
+      success: true,
+      token,
+      user: { id: user.id, email: user.email, role: user.role },
+      expires_in: 3600,
+    });
+  } catch (err) {
+    return c.json({ success: false, error: "Failed to impersonate" }, 500);
+  }
+});
+
+// ─────────────────────────────────────────────────────────────
 // Task 2.3: Autonomous Cron Trigger (Scheduled Events)
 // ─────────────────────────────────────────────────────────────
 
