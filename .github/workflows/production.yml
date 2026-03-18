@@ -55,13 +55,23 @@ jobs:
         run: npm run build
 
       - name: Deploy to Cloudflare Pages
-        uses: cloudflare/pages-action@v1
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          projectName: swarme
-          directory: dist/public
-          branch: main
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          # Debug: check token length and character validity
+          echo "Token length: ${#CLOUDFLARE_API_TOKEN}"
+          python3 -c "
+import os
+token = os.environ['CLOUDFLARE_API_TOKEN']
+for i, c in enumerate(token):
+    if ord(c) > 127:
+        print(f'Non-ASCII char at index {i}: U+{ord(c):04X} ({c!r})')
+else:
+    print('Token is ASCII-clean')
+          "
+          # Use npx wrangler with explicit token validation
+          npx wrangler@3.78.12 pages deploy dist/public --project-name=swarme --branch=main --commit-dirty=true
 
   # ─────────────────────────────────────────
   # Job 2: Deploy workers to production
