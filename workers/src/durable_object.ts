@@ -221,7 +221,6 @@ export interface PublishOutput {
 const KV_KEYS = {
   settings: (projectId: string) => `config:project:${projectId}:settings`,
   perplexityKey: (projectId: string) => `vault:project:${projectId}:perplexity_api_key`,
-  perplexityKey: (projectId: string) => `vault:project:${projectId}:perplexity_api_key`,
   brandGuidelines: (projectId: string) => `vault:project:${projectId}:brand_guidelines`,
   cmsWebhookUrl: (projectId: string) => `vault:project:${projectId}:cms_webhook_url`,
   cmsApiKey: (projectId: string) => `vault:project:${projectId}:cms_api_key`,
