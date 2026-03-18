@@ -350,7 +350,7 @@ function CMSConnectionCard({ projectId }: { projectId: string }) {
                     data-testid="input-shopify-blog-id"
                   />
                   <p className="text-[10px] text-muted-foreground">
-                    Find this in Shopify Admin -> Online Store -> Blog posts -> URL bar
+                    Find this in Shopify Admin &gt; Online Store &gt; Blog posts &gt; URL bar
                   </p>
                 </div>
 
