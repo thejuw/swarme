@@ -258,10 +258,15 @@ binding = "BROWSER"
 [env.production.ai]
 binding = "AI"
 
+# Phase 67: Analytics Engine — edge data ingestion
+[[env.production.analytics_engine_datasets]]
+binding = "ANALYTICS"
+dataset = "swarme_analytics"
+
 # Production crons — full autonomous schedule
 [env.production.triggers]
 crons = [
-  "0 * * * *",     # Hourly  — Swarm visibility check + task orchestration
+  "0 * * * *",     # Hourly  — Swarm visibility check + task orchestration + Phase 67 lakehouse export
   "0 6 * * *",     # Daily at 06:00 UTC — Full AI visibility audit
   "*/15 * * * *",  # Every 15 min — Trend velocity polling
   "*/5 * * * *",   # Every 5 min — Phase 66: Pulse engine (dependency health)

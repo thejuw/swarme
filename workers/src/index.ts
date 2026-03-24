@@ -71,6 +71,10 @@ import type { ThrottledService } from "./utils/throttle";
 import { getFailsafeStatuses, unblockTask } from "./utils/executionCap";
 import { handlePulseCheck, getPulseSnapshot } from "./cron/pulseCheck";
 import { getSuspendedTasks, getSuspensionCounts, resumeTasks } from "./utils/taskSuspension";
+import { dataBrokerMiddleware } from "./middleware/dataBroker";
+import { handleLakehouseExport } from "./cron/lakehouseExport";
+import { catalogRouter } from "./routes/catalog";
+import { registerBuyer, revokeBuyer, listBuyers } from "./utils/buyerAccess";
 
 // Re-export Durable Object classes so Cloudflare can find them
 export { AgentWorkflowManager } from "./durable_object";
@@ -158,6 +162,11 @@ export interface Env {
   PINTEREST_APP_SECRET: string;
   REDDIT_CLIENT_ID: string;
   REDDIT_CLIENT_SECRET: string;
+
+  // ── Phase 67: Data Lakehouse ──
+  ANALYTICS: AnalyticsEngineDataset;
+  CF_ACCOUNT_ID: string;
+  CF_API_TOKEN: string;
 }
 
 /**
@@ -203,6 +212,9 @@ app.use(
     allowHeaders: ["Content-Type", "Authorization"],
   })
 );
+
+// ── Phase 67: Analytics Engine Data Broker (fire-and-forget) ──
+app.use("*", dataBrokerMiddleware());
 
 // ── Auth Routes (public — no JWT required) ──
 app.route("/api/auth", authRouter);
@@ -267,6 +279,47 @@ app.route("/api/pinterest", pinterestRouter);
 app.route("/api/reddit", redditRouter);
 app.route("/api/settings/audit", auditRouter);
 app.route("/api/governance", governanceRouter);
+
+// ── Phase 67: Data Lakehouse Catalog Routes (admin-protected) ──
+app.route("/api/admin/catalog", catalogRouter);
+
+// ── Phase 67: Buyer Management Endpoints (admin-protected) ──
+app.get("/api/admin/lakehouse/buyers", async (c) => {
+  try {
+    const buyers = await listBuyers(c.env);
+    return c.json({ success: true, buyers });
+  } catch (err) {
+    return c.json({ success: false, error: "Failed to list buyers" }, 500);
+  }
+});
+
+app.post("/api/admin/lakehouse/buyers", async (c) => {
+  try {
+    const body = await c.req.json<{ name: string; email: string; allowed_tables: string[] }>();
+    if (!body.name || !body.email) {
+      return c.json({ success: false, error: "name and email required" }, 400);
+    }
+    const result = await registerBuyer(c.env, {
+      name: body.name,
+      email: body.email,
+      allowed_tables: body.allowed_tables || ["swarme_events"],
+    });
+    return c.json({ success: true, buyer: result.buyer, token: result.token });
+  } catch (err) {
+    return c.json({ success: false, error: "Failed to create buyer" }, 500);
+  }
+});
+
+app.post("/api/admin/lakehouse/buyers/:buyerId/revoke", async (c) => {
+  const buyerId = c.req.param("buyerId");
+  try {
+    const ok = await revokeBuyer(c.env, buyerId);
+    if (!ok) return c.json({ success: false, error: "Buyer not found" }, 404);
+    return c.json({ success: true });
+  } catch (err) {
+    return c.json({ success: false, error: "Failed to revoke buyer" }, 500);
+  }
+});
 
 // ─────────────────────────────────────────────────────────────
 // GET /api/workspace — Current user's workspace (for Settings page)
@@ -4636,12 +4689,16 @@ app.get("/api/admin/users/:userId", async (c) => {
 
     if (!user) return c.json({ success: false, error: "User not found" }, 404);
 
-    // Get associated project
+    // Get associated project (Projects uses user_id, not owner_id)
     const project = await c.env.DB.prepare(
-      `SELECT id, plan_tier FROM Projects WHERE owner_id = ?1 LIMIT 1`
-    ).bind(userId).first<{ id: string; plan_tier: string }>() || null;
+      `SELECT id FROM Projects WHERE user_id = ?1 LIMIT 1`
+    ).bind(userId).first<{ id: string }>() || null;
 
-    const planTier = project?.plan_tier || "free";
+    // plan_tier lives on Users table (migration 0017), not Projects
+    const userPlan = await c.env.DB.prepare(
+      `SELECT plan_tier FROM Users WHERE id = ?1`
+    ).bind(userId).first<{ plan_tier: string }>();
+    const planTier = userPlan?.plan_tier || "free";
     const projectId = project?.id || "";
 
     // Recent tasks
@@ -4719,9 +4776,9 @@ app.patch("/api/admin/users/:userId/plan", async (c) => {
     const { plan_tier } = await c.req.json();
     const taskLimits: Record<string, number> = { free: 50, starter: 200, growth: 1000, enterprise: 10000 };
 
-    // Update project plan
+    // Update plan_tier on Users table (migration 0017), not Projects
     await c.env.DB.prepare(
-      `UPDATE Projects SET plan_tier = ?1 WHERE owner_id = ?2`
+      `UPDATE Users SET plan_tier = ?1 WHERE id = ?2`
     ).bind(plan_tier, userId).run();
 
     // Audit
@@ -6283,6 +6340,36 @@ async function handleScheduled(
         }
       })();
       ctx.waitUntil(pulsePromise);
+    }
+
+    // ── Phase 67: Lakehouse Export (hourly, shares 0 * * * * cron) ──
+    // Runs alongside the visibility check on the hourly trigger.
+    // Queries Analytics Engine for the past hour's data, writes
+    // JSONL to R2, and registers in the D1 catalog.
+    if (cronPattern === "0 * * * *") {
+      console.log("[Swarme Cron] Starting lakehouse export...");
+      const lakehousePromise = (async () => {
+        try {
+          const result = await handleLakehouseExport(env);
+          console.log(
+            `[Swarme Cron] Lakehouse export complete — ${result.rowsExported} rows, ` +
+            `batch: ${result.batchFile || "none"}, ${result.durationMs}ms`
+          );
+
+          if (result.rowsExported > 0) {
+            await env.DB.prepare(
+              `INSERT INTO Agent_Tasks (project_id, agent_type, action, status, task_description, result_payload)
+               VALUES ('system', 'lakehouse_export', 'Hourly R2 Export', 'Completed', ?1, ?2)`
+            ).bind(
+              `Exported ${result.rowsExported} rows to ${result.batchFile}`,
+              JSON.stringify(result)
+            ).run();
+          }
+        } catch (err) {
+          console.error("[Swarme Cron] Lakehouse export failed:", err);
+        }
+      })();
+      ctx.waitUntil(lakehousePromise);
     }
 
     const elapsed = Date.now() - startTime;
