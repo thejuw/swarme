@@ -66,6 +66,9 @@ export function SupportTab() {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/support/tickets"] });
       toast({ title: "Ticket updated" });
     },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to update ticket.", variant: "destructive" });
+    },
   });
 
   // ── Webhooks ──
@@ -85,6 +88,9 @@ export function SupportTab() {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/support/webhooks"] });
       setLocalWebhooks({});
       toast({ title: "Webhooks saved" });
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to save webhooks.", variant: "destructive" });
     },
   });
 

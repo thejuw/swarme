@@ -167,6 +167,7 @@ export function SecurityOpsTab() {
                   size="sm"
                   className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
                   onClick={() => removeIp.mutate(ip)}
+                  disabled={removeIp.isPending}
                   data-testid={`button-unblock-${ip.replace(/\./g, "-")}`}
                 >
                   <Trash2 className="h-3 w-3" />

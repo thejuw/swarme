@@ -49,6 +49,9 @@ export function CommunicationsTab() {
       setLocalLinks({});
       toast({ title: "Social links saved" });
     },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to save social links.", variant: "destructive" });
+    },
   });
 
   // ── Newsletter ──

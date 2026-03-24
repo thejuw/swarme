@@ -213,6 +213,7 @@ export function BrandCmsTab() {
             size="sm"
             className="h-7 w-7 p-0 text-destructive hover:text-destructive"
             onClick={() => deletePost.mutate(row.id)}
+            disabled={deletePost.isPending}
             data-testid={`button-delete-post-${row.id}`}
           >
             <Trash2 className="h-3 w-3" />
