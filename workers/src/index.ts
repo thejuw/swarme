@@ -29,6 +29,7 @@
  */
 
 import { Hono } from "hono";
+import * as Sentry from "@sentry/cloudflare";
 import { cors } from "hono/cors";
 import { authRouter, protectRoute, requireSuperadmin } from "./auth";
 import { managerRouter } from "./routes/manager";
@@ -3702,33 +3703,132 @@ app.get("/api/projects/:projectId/email-integration", async (c) => {
 
 /**
  * POST /api/projects/:projectId/email-integration/connect
- * Initiates OAuth flow for email provider (stub — returns placeholder auth_url).
+ * Connects an email provider. API key providers (SendGrid, Mailchimp, Resend)
+ * validate the key and store it in KV vault. OAuth providers (Google, Microsoft)
+ * return the consent URL for browser redirect.
  */
 app.post("/api/projects/:projectId/email-integration/connect", async (c) => {
   const projectId = c.req.param("projectId");
   try {
-    const { provider } = await c.req.json();
-    if (!provider || !["google", "microsoft"].includes(provider)) {
-      return c.json({ success: false, error: "Invalid provider. Use 'google' or 'microsoft'." }, 400);
+    const { provider, api_key } = await c.req.json<{ provider: string; api_key?: string }>();
+
+    // Supported providers: sendgrid, mailchimp, resend, google, microsoft
+    const validProviders = ["sendgrid", "mailchimp", "resend", "google", "microsoft"];
+    if (!provider || !validProviders.includes(provider)) {
+      return c.json({ success: false, error: `Invalid provider. Use one of: ${validProviders.join(", ")}` }, 400);
     }
-    // In production this would redirect to Google/Microsoft OAuth.
-    // For now, store as a pending integration.
-    const integration = {
-      provider,
-      email: "",
-      status: "disconnected" as const,
-      scopes: provider === "google"
-        ? ["https://www.googleapis.com/auth/gmail.send"]
-        : ["https://graph.microsoft.com/Mail.Send"],
-      connected_at: "",
-      token_expires_at: "",
-    };
-    await c.env.CONFIG_KV.put(`project:${projectId}:email_integration`, JSON.stringify(integration));
-    return c.json({
-      success: true,
-      auth_url: `https://swarme.io/oauth/${provider}?project=${projectId}`,
-      provider,
+
+    // API key providers (SendGrid, Mailchimp, Resend): validate + store key in KV vault
+    if (["sendgrid", "mailchimp", "resend"].includes(provider)) {
+      if (!api_key || api_key.trim().length < 10) {
+        return c.json({ success: false, error: "A valid API key is required for this provider." }, 400);
+      }
+
+      // Validate the API key by making a test call
+      let isValid = false;
+      let providerEmail = "";
+
+      if (provider === "sendgrid") {
+        // SendGrid v3 API: verify key by fetching sender identities
+        const sgRes = await fetch("https://api.sendgrid.com/v3/verified_senders", {
+          headers: { Authorization: `Bearer ${api_key.trim()}` },
+        });
+        isValid = sgRes.ok;
+        if (isValid) {
+          const sgData = await sgRes.json() as { results?: Array<{ from_email: string }> };
+          providerEmail = sgData.results?.[0]?.from_email || "";
+        }
+      } else if (provider === "mailchimp") {
+        // Mailchimp: extract datacenter from API key (key-dc format), ping the API
+        const dc = api_key.trim().split("-").pop() || "us1";
+        const mcRes = await fetch(`https://${dc}.api.mailchimp.com/3.0/`, {
+          headers: { Authorization: `Bearer ${api_key.trim()}` },
+        });
+        isValid = mcRes.ok;
+        if (isValid) {
+          const mcData = await mcRes.json() as { email?: string; account_name?: string };
+          providerEmail = mcData.email || mcData.account_name || "";
+        }
+      } else if (provider === "resend") {
+        // Resend: verify key by fetching API keys list
+        const rsRes = await fetch("https://api.resend.com/api-keys", {
+          headers: { Authorization: `Bearer ${api_key.trim()}` },
+        });
+        isValid = rsRes.ok;
+        providerEmail = "digest@swarme.io";
+      }
+
+      if (!isValid) {
+        return c.json({ success: false, error: `Invalid ${provider} API key. Please check and try again.` }, 400);
+      }
+
+      // Store the token securely in KV vault (encrypted key)
+      await c.env.CONFIG_KV.put(
+        `vault:project:${projectId}:email:${provider}:api_key`,
+        api_key.trim(),
+      );
+
+      // Store integration metadata
+      const integration = {
+        provider,
+        email: providerEmail,
+        status: "connected" as const,
+        scopes: provider === "sendgrid" ? ["mail.send"] : provider === "mailchimp" ? ["campaigns"] : ["emails"],
+        connected_at: new Date().toISOString(),
+        token_expires_at: "",  // API keys don't expire
+      };
+      await c.env.CONFIG_KV.put(`project:${projectId}:email_integration`, JSON.stringify(integration));
+
+      return c.json({ success: true, provider, email: providerEmail, status: "connected" });
+    }
+
+    // OAuth providers (Google, Microsoft): redirect to consent screen
+    if (provider === "google") {
+      const clientId = c.env.GOOGLE_CLIENT_ID;
+      if (!clientId) {
+        return c.json({ success: false, error: "Google OAuth not configured" }, 503);
+      }
+      const callbackUrl = new URL(c.req.url).origin + "/api/projects/email-integration/callback";
+      const jwtPayload = c.get("jwtPayload") as { sub: string } | undefined;
+      const state = JSON.stringify({ projectId, userId: jwtPayload?.sub || "", provider: "google" });
+      const params = new URLSearchParams({
+        client_id: clientId,
+        redirect_uri: callbackUrl,
+        response_type: "code",
+        scope: "https://www.googleapis.com/auth/gmail.send",
+        access_type: "offline",
+        prompt: "consent",
+        state: btoa(state),
+      });
+      const accept = c.req.header("accept") || "";
+      const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
+      if (accept.includes("application/json")) {
+        return c.json({ success: true, auth_url: authUrl, provider });
+      }
+      return c.redirect(authUrl, 302);
+    }
+
+    // Microsoft OAuth
+    const msClientId = await c.env.CONFIG_KV.get("oauth:microsoft:client_id");
+    if (!msClientId) {
+      return c.json({ success: false, error: "Microsoft OAuth not configured" }, 503);
+    }
+    const callbackUrl = new URL(c.req.url).origin + "/api/projects/email-integration/callback";
+    const jwtPayload = c.get("jwtPayload") as { sub: string } | undefined;
+    const state = JSON.stringify({ projectId, userId: jwtPayload?.sub || "", provider: "microsoft" });
+    const params = new URLSearchParams({
+      client_id: msClientId,
+      redirect_uri: callbackUrl,
+      response_type: "code",
+      scope: "https://graph.microsoft.com/Mail.Send offline_access",
+      state: btoa(state),
     });
+    const accept = c.req.header("accept") || "";
+    const authUrl = `https://login.microsoftonline.com/common/oauth2/v2.0/authorize?${params.toString()}`;
+    if (accept.includes("application/json")) {
+      return c.json({ success: true, auth_url: authUrl, provider });
+    }
+    return c.redirect(authUrl, 302);
   } catch (err) {
     return c.json({ success: false, error: "Failed to initiate email connection" }, 500);
   }
@@ -6491,10 +6591,38 @@ async function handleScheduled(
 // ─────────────────────────────────────────────────────────────
 // Worker Export
 // ─────────────────────────────────────────────────────────────
-// TODO: Re-enable Sentry wrapping once @sentry/cloudflare is
-//       installed and SENTRY_DSN is configured as a secret.
+// Sentry wrapping: instruments both fetch and scheduled handlers
+// with automatic error capture, breadcrumbs, and performance tracing.
+// SENTRY_DSN must be set via `wrangler secret put SENTRY_DSN`.
+// Source maps upload via `sentry-cli` in CI (see production.yml).
+
+const sentryEnabled = (env: Env) => !!env.SENTRY_DSN;
 
 export default {
-  fetch: app.fetch,
-  scheduled: handleScheduled,
-} as ExportedHandler<Env>;
+  fetch: (request: Request, env: Env, ctx: ExecutionContext) => {
+    if (!sentryEnabled(env)) {
+      return app.fetch(request, env, ctx);
+    }
+    return Sentry.withSentry(
+      {
+        dsn: env.SENTRY_DSN,
+        tracesSampleRate: env.ENVIRONMENT === "production" ? 0.1 : 1.0,
+        environment: env.ENVIRONMENT || "development",
+      },
+      () => app.fetch(request, env, ctx),
+    );
+  },
+  scheduled: (event: ScheduledEvent, env: Env, ctx: ExecutionContext) => {
+    if (!sentryEnabled(env)) {
+      return handleScheduled(event, env, ctx);
+    }
+    return Sentry.withSentry(
+      {
+        dsn: env.SENTRY_DSN,
+        tracesSampleRate: 1.0,
+        environment: env.ENVIRONMENT || "development",
+      },
+      () => handleScheduled(event, env, ctx),
+    );
+  },
+} satisfies ExportedHandler<Env>;

@@ -64,7 +64,7 @@ const DEFAULT_CONFIG: CircuitBreakerConfig = {
 
 // ── Services Registry ────────────────────────────────────────
 
-export const CIRCUIT_SERVICES = ["perplexity_chat", "perplexity", "gemini", "resend"] as const;
+export const CIRCUIT_SERVICES = ["perplexity_chat", "perplexity", "gemini", "resend", "claude"] as const;
 export type CircuitService = (typeof CIRCUIT_SERVICES)[number];
 
 // ── Circuit Breaker Class ────────────────────────────────────

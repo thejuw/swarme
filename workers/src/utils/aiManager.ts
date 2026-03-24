@@ -39,6 +39,7 @@ import { discoverActualCompetitors, type DiscoveredCompetitor } from "./research
 import { createThrottledFetch } from "./throttle";
 import { generateEmbedding } from "./vectorize";
 import { fetchGlobalRules, type GlobalRule } from "./hiveSync";
+import { claudeChat } from "./claudeClient";
 
 /**
  * Phase 65.5: Governance-gated global rules.
@@ -979,14 +980,37 @@ export async function handleManagerChat(
     if (!response.ok) {
       const errText = await response.text();
       console.error(`[aiManager] Perplexity error (${response.status}): ${errText}`);
-      // Provide actionable debug info — API key source helps diagnose vault-vs-env issues
+
+      // Attempt Claude fallback when Perplexity is unavailable
+      console.log("[aiManager] Attempting Claude fallback...");
+      const systemContent = workingMessages.find((m) => m.role === "system")?.content || "";
+      const claudeResult = await claudeChat(
+        systemContent,
+        workingMessages,
+        env,
+      );
+
+      if (claudeResult) {
+        console.log(`[aiManager] Claude fallback succeeded (${claudeResult.tokens_used} tokens)`);
+        const fallbackReply = claudeResult.reply;
+        // Persist the reply and return
+        await persistChatMessage(projectId, "assistant", fallbackReply, env);
+        return {
+          reply: fallbackReply,
+          brandContextUpdated,
+          roadmapItemsAdded,
+        };
+      }
+
+      // Both Perplexity and Claude failed — return actionable error
       const keySource = (vaultKey && vaultKey.trim().length > 10) ? "Admin Vault" : "Worker Secret";
       const keyPreview = apiKey ? `${apiKey.slice(0, 8)}...` : "(none)";
       return {
         reply:
           `I encountered an issue connecting to the AI service (HTTP ${response.status}). ` +
           `Key source: ${keySource} (${keyPreview}). ` +
-          `Please verify your Perplexity API key in the Admin Vault or contact support.`,
+          `Claude fallback was also unavailable. ` +
+          `Please verify your API keys in the Admin Vault or contact support.`,
         brandContextUpdated,
         roadmapItemsAdded,
       };

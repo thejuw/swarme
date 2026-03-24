@@ -87,6 +87,17 @@ async function sendDigestEmail(
 // Core dispatcher — shared between daily & weekly
 // ─────────────────────────────────────────────────────────────
 
+// Resend rate limits: Free=2 req/s, Pro=10 req/s. We use a 600ms
+// delay between sends to stay safely under the free-tier limit.
+const BATCH_SIZE = 10;            // Process 10 users per batch
+const INTER_SEND_DELAY_MS = 600;  // 600ms between individual sends (~1.6/s)
+const INTER_BATCH_DELAY_MS = 2000; // 2s pause between batches
+const MAX_EMAILS_PER_CRON = 500;  // Safety cap per cron invocation
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 async function dispatchDigests(
   timeframe: "daily" | "weekly",
   env: Env
@@ -101,13 +112,15 @@ async function dispatchDigests(
 
   try {
     // Query users opted into this frequency who have email enabled
+    // LIMIT to MAX_EMAILS_PER_CRON to avoid exceeding Worker CPU time
     const { results: users } = await env.DB.prepare(
       `SELECT id, email FROM Users
        WHERE alert_frequency = ?1
          AND notify_email = 1
-         AND status = 'active'`
+         AND status = 'active'
+       LIMIT ?2`
     )
-      .bind(timeframe)
+      .bind(timeframe, MAX_EMAILS_PER_CRON)
       .all<DigestUser>();
 
     result.usersQueried = users?.length ?? 0;
@@ -115,26 +128,40 @@ async function dispatchDigests(
 
     if (!users || users.length === 0) return result;
 
-    // Process each user (sequential to avoid Resend rate limits)
-    for (const user of users) {
-      try {
-        const digest = await generateDigestEmail(user.id, timeframe, env);
+    // Process users in rate-limited batches to respect Resend API limits.
+    // Each batch: generate + send emails sequentially with inter-send delays,
+    // then pause between batches to avoid burst throttling.
+    for (let batchStart = 0; batchStart < users.length; batchStart += BATCH_SIZE) {
+      const batch = users.slice(batchStart, batchStart + BATCH_SIZE);
 
-        if (!digest) {
-          // No activity in the timeframe — skip silently
-          result.skipped++;
-          continue;
-        }
+      for (const user of batch) {
+        try {
+          const digest = await generateDigestEmail(user.id, timeframe, env);
 
-        const sent = await sendDigestEmail(user.email, digest.subject, digest.html, env);
-        if (sent) {
-          result.emailsSent++;
-        } else {
+          if (!digest) {
+            result.skipped++;
+            continue;
+          }
+
+          const sent = await sendDigestEmail(user.email, digest.subject, digest.html, env);
+          if (sent) {
+            result.emailsSent++;
+          } else {
+            result.errors++;
+          }
+
+          // Rate limit: wait between sends to stay under Resend's req/s limit
+          await sleep(INTER_SEND_DELAY_MS);
+        } catch (err) {
+          console.error(`[Newsletter] Error for user ${user.id}:`, err instanceof Error ? err.message : err);
           result.errors++;
         }
-      } catch (err) {
-        console.error(`[Newsletter] Error for user ${user.id}:`, err instanceof Error ? err.message : err);
-        result.errors++;
+      }
+
+      // Pause between batches if there are more to process
+      if (batchStart + BATCH_SIZE < users.length) {
+        console.log(`[Newsletter] Batch ${Math.floor(batchStart / BATCH_SIZE) + 1} complete, pausing...`);
+        await sleep(INTER_BATCH_DELAY_MS);
       }
     }
   } catch (err) {
