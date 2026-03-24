@@ -3319,6 +3319,85 @@ app.get("/api/projects/:projectId/ab-tests", async (c) => {
 });
 
 /**
+ * POST /api/projects/:projectId/ab-tests/:testId/archive
+ * Archives (soft-deletes) a concluded or running test.
+ */
+app.post("/api/projects/:projectId/ab-tests/:testId/archive", async (c) => {
+  const testId = c.req.param("testId");
+  try {
+    await c.env.DB.prepare(
+      `UPDATE AB_Tests SET status = 'Archived', updated_at = datetime('now') WHERE id = ?1`
+    ).bind(testId).run();
+    return c.json({ success: true, test_id: testId });
+  } catch (err: any) {
+    return c.json({ success: false, error: err?.message || "Archive failed" }, 500);
+  }
+});
+
+/**
+ * POST /api/projects/:projectId/media/generate
+ * Generates an image via Gemini, stores in R2, deducts credits.
+ */
+app.post("/api/projects/:projectId/media/generate", async (c) => {
+  const projectId = c.req.param("projectId");
+  try {
+    const { prompt, alt_text } = await c.req.json<{ prompt: string; alt_text?: string }>();
+    if (!prompt || prompt.trim().length < 5) {
+      return c.json({ success: false, error: "Prompt must be at least 5 characters" }, 400);
+    }
+
+    // Check credits
+    const creditsRaw = await c.env.CONFIG_KV.get(`project:${projectId}:credits`);
+    const credits = creditsRaw ? JSON.parse(creditsRaw) : { available_credits: 0 };
+    const MEDIA_COST = 10;
+    if ((credits.available_credits || 0) < MEDIA_COST) {
+      return c.json({ success: false, error: `Insufficient credits. Need ${MEDIA_COST}, have ${credits.available_credits || 0}.` }, 402);
+    }
+
+    // Generate and store in R2
+    const { generateAndStoreImage } = await import("./utils/media");
+    const result = await generateAndStoreImage(
+      prompt.trim(),
+      alt_text || prompt.trim().slice(0, 80),
+      projectId,
+      c.env,
+    );
+
+    // Deduct credits
+    credits.available_credits = (credits.available_credits || 0) - MEDIA_COST;
+    await c.env.CONFIG_KV.put(`project:${projectId}:credits`, JSON.stringify(credits));
+
+    // Append to credit ledger
+    const ledgerRaw = await c.env.CONFIG_KV.get(`project:${projectId}:credit_ledger`);
+    const ledger = ledgerRaw ? JSON.parse(ledgerRaw) : [];
+    ledger.push({
+      type: "debit",
+      amount: MEDIA_COST,
+      description: `Media generation: ${prompt.slice(0, 50)}`,
+      created_at: new Date().toISOString(),
+    });
+    await c.env.CONFIG_KV.put(`project:${projectId}:credit_ledger`, JSON.stringify(ledger.slice(-200)));
+
+    return c.json({
+      success: true,
+      image: {
+        url: result.publicUrl,
+        r2_key: result.r2Key,
+        alt_text: result.altText,
+        width: result.width,
+        height: result.height,
+      },
+      credits_remaining: credits.available_credits,
+      credits_used: MEDIA_COST,
+    });
+  } catch (err: any) {
+    console.error("[Media Generate] Error:", err?.message || err);
+    return c.json({ success: false, error: err?.message || "Media generation failed" }, 500);
+  }
+});
+
+
+/**
  * POST /api/projects/:projectId/ab-tests
  *
  * Creates a new A/B test. Requires asset_id, variant_a_html, variant_b_html.

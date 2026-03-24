@@ -42,6 +42,7 @@ export type PlatformType =
   | "easywp"
   | "weebly"
   | "godaddy"
+  | "contentful"
   | "custom";
 
 export interface CMSCredentials {
@@ -602,6 +603,122 @@ const WALLED_GARDENS: Set<string> = new Set([
   "wix", "squarespace", "weebly", "godaddy",
 ]);
 
+// ─────────────────────────────────────────────────────────────────
+// Contentful Adapter (Content Management API)
+// ─────────────────────────────────────────────────────────────────
+
+export class ContentfulAdapter implements ICMSAdapter {
+  readonly platformName = "Contentful";
+  readonly supportsDirectPublish = true;
+
+  private spaceId: string;
+  private envId: string;
+  private accessToken: string;
+  private contentTypeId: string;
+
+  constructor(credentials: CMSCredentials) {
+    this.spaceId = credentials.space_id || "";
+    this.envId = credentials.environment_id || "master";
+    this.accessToken = credentials.management_token || credentials.access_token || "";
+    this.contentTypeId = credentials.content_type_id || "blogPost";
+  }
+
+  private get baseUrl(): string {
+    return `https://api.contentful.com/spaces/${this.spaceId}/environments/${this.envId}`;
+  }
+
+  private get headers(): Record<string, string> {
+    return {
+      Authorization: `Bearer ${this.accessToken}`,
+      "Content-Type": "application/vnd.contentful.management.v1+json",
+    };
+  }
+
+  async publishArticle(input: PublishArticleInput): Promise<PublishArticleResult> {
+    if (!this.spaceId || !this.accessToken) {
+      return { success: false, error: "Contentful credentials not configured (space_id + management_token required)" };
+    }
+
+    try {
+      // Step 1: Create entry
+      const createRes = await fetch(`${this.baseUrl}/entries`, {
+        method: "POST",
+        headers: {
+          ...this.headers,
+          "X-Contentful-Content-Type": this.contentTypeId,
+        },
+        body: JSON.stringify({
+          fields: {
+            title: { "en-US": input.title },
+            slug: { "en-US": input.slug || input.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") },
+            body: { "en-US": input.htmlContent },
+            description: { "en-US": input.metaDescription || "" },
+          },
+        }),
+      });
+
+      if (!createRes.ok) {
+        const err = await createRes.text();
+        return { success: false, error: `Contentful create failed (${createRes.status}): ${err.slice(0, 200)}` };
+      }
+
+      const entry = await createRes.json() as { sys: { id: string; version: number } };
+      const entryId = entry.sys.id;
+
+      // Step 2: Publish if status is "publish"
+      if (input.status === "publish") {
+        const pubRes = await fetch(`${this.baseUrl}/entries/${entryId}/published`, {
+          method: "PUT",
+          headers: {
+            ...this.headers,
+            "X-Contentful-Version": String(entry.sys.version),
+          },
+        });
+
+        if (!pubRes.ok) {
+          return {
+            success: true,
+            externalId: entryId,
+            url: `https://app.contentful.com/spaces/${this.spaceId}/entries/${entryId}`,
+            // Created but publish failed
+          };
+        }
+      }
+
+      return {
+        success: true,
+        externalId: entryId,
+        url: `https://app.contentful.com/spaces/${this.spaceId}/entries/${entryId}`,
+      };
+    } catch (err: any) {
+      return { success: false, error: err.message };
+    }
+  }
+
+  async updateProduct(_input: UpdateProductInput): Promise<UpdateProductResult> {
+    return { success: false, error: "Contentful does not support product management. Use Shopify or WooCommerce." };
+  }
+
+  async fetchSitemap(): Promise<SitemapResult> {
+    // Contentful doesn't serve a sitemap directly. Return entries as URLs.
+    try {
+      const res = await fetch(`${this.baseUrl}/entries?content_type=${this.contentTypeId}&limit=100`, {
+        headers: { Authorization: `Bearer ${this.accessToken}` },
+      });
+      if (!res.ok) {
+        return { success: false, urls: [], error: `Contentful entries fetch failed: ${res.status}` };
+      }
+      const data = await res.json() as { items: Array<{ sys: { id: string } }> };
+      const urls = (data.items || []).map(
+        (item) => `https://app.contentful.com/spaces/${this.spaceId}/entries/${item.sys.id}`
+      );
+      return { success: true, urls };
+    } catch (err: any) {
+      return { success: false, urls: [], error: err.message };
+    }
+  }
+}
+
 /**
  * Create the correct CMS adapter for a given platform.
  * Credentials are loaded from KV by credentials_vault_id before calling.
@@ -637,6 +754,9 @@ export function createCMSAdapter(
 
     case "ghost":
       return new GhostAdapter(credentials);
+
+    case "contentful":
+      return new ContentfulAdapter(credentials);
 
     case "custom":
     default:

@@ -1,16 +1,33 @@
-import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/context/AuthContext";
+import { useToast } from "@/hooks/use-toast";
 import { LockedFeature } from "@/components/locked-feature";
 import {
   getAbTests,
+  createAbTest,
+  archiveAbTest,
   queryKeys,
   type AbTest,
   type AbTestsResponse,
 } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { useProjectId } from "@/hooks/use-project-id";
 import {
   FlaskConical,
@@ -20,6 +37,8 @@ import {
   MousePointerClick,
   TrendingUp,
   AlertCircle,
+  Plus,
+  Archive,
 } from "lucide-react";
 
 /** Format a rate (0–1) as a percentage string */
@@ -234,10 +253,47 @@ function AbTestSkeleton() {
 export default function AbTests() {
   const PROJECT_ID = useProjectId();
   const { user } = useAuth();
+  const { toast } = useToast();
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [newTestName, setNewTestName] = useState("");
+  const [newSelector, setNewSelector] = useState("");
+  const [newVariantA, setNewVariantA] = useState("");
+  const [newVariantB, setNewVariantB] = useState("");
+  const [newMinViews, setNewMinViews] = useState("1000");
 
   // Phase 32: Tier gate — A/B testing requires autopilot+
   const userTier = user?.plan_tier || user?.plan || "free";
   const hasAccess = ["autopilot", "enterprise"].includes(userTier);
+
+  const createMutation = useMutation({
+    mutationFn: () => createAbTest(PROJECT_ID, {
+      test_name: newTestName,
+      target_selector: newSelector,
+      variant_a_html: newVariantA,
+      variant_b_html: newVariantB,
+      min_views: parseInt(newMinViews) || 1000,
+    }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.abTests(PROJECT_ID) });
+      setShowCreateDialog(false);
+      setNewTestName(""); setNewSelector(""); setNewVariantA(""); setNewVariantB("");
+      toast({ title: "Test created", description: "A/B test is now running at the edge." });
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to create A/B test.", variant: "destructive" });
+    },
+  });
+
+  const archiveMutation = useMutation({
+    mutationFn: (testId: string) => archiveAbTest(PROJECT_ID, testId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.abTests(PROJECT_ID) });
+      toast({ title: "Test archived" });
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to archive test.", variant: "destructive" });
+    },
+  });
 
   const { data, isLoading, isError } = useQuery<AbTestsResponse>({
     queryKey: queryKeys.abTests(PROJECT_ID),
@@ -264,15 +320,21 @@ export default function AbTests() {
   return (
     <div className="flex flex-col gap-6 p-4 pb-8 animate-fade-in overflow-y-auto h-full">
       {/* Page header */}
-      <div className="space-y-1">
-        <h1 className="text-lg font-semibold tracking-tight" data-testid="text-ab-title">
-          A/B Split Tests
-        </h1>
-        <p className="text-xs text-muted-foreground max-w-xl">
-          Edge-native traffic routing with HTMLRewriter. Tests auto-conclude
-          when the Z-test reaches 95% confidence and the minimum sample size is
-          met.
-        </p>
+      <div className="flex items-start justify-between">
+        <div className="space-y-1">
+          <h1 className="text-lg font-semibold tracking-tight" data-testid="text-ab-title">
+            A/B Split Tests
+          </h1>
+          <p className="text-xs text-muted-foreground max-w-xl">
+            Edge-native traffic routing with HTMLRewriter. Tests auto-conclude
+            when the Z-test reaches 95% confidence and the minimum sample size is
+            met.
+          </p>
+        </div>
+        <Button size="sm" onClick={() => setShowCreateDialog(true)} data-testid="button-create-test">
+          <Plus className="h-3.5 w-3.5 mr-1.5" />
+          New Test
+        </Button>
       </div>
 
       {/* Summary KPIs */}
@@ -410,6 +472,56 @@ export default function AbTests() {
           </CardContent>
         </Card>
       )}
+
+      {/* Create Test Dialog */}
+      <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="text-sm font-semibold">Create A/B Split Test</DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Define two HTML variants. Traffic will be split 50/50 at the edge using HTMLRewriter.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="test-name" className="text-xs">Test Name</Label>
+              <Input id="test-name" placeholder="Homepage CTA color test" value={newTestName}
+                onChange={(e) => setNewTestName(e.target.value)} data-testid="input-test-name" />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="selector" className="text-xs">CSS Selector</Label>
+              <Input id="selector" placeholder=".hero-cta, #main-button" value={newSelector}
+                onChange={(e) => setNewSelector(e.target.value)} data-testid="input-selector" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label className="text-xs">Variant A (Control)</Label>
+                <Textarea placeholder="<button class='cta'>Buy Now</button>" rows={3}
+                  value={newVariantA} onChange={(e) => setNewVariantA(e.target.value)} data-testid="input-variant-a" />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs">Variant B (Challenger)</Label>
+                <Textarea placeholder="<button class='cta cta-alt'>Get Started</button>" rows={3}
+                  value={newVariantB} onChange={(e) => setNewVariantB(e.target.value)} data-testid="input-variant-b" />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="min-views" className="text-xs">Minimum Views Before Conclusion</Label>
+              <Input id="min-views" type="number" value={newMinViews}
+                onChange={(e) => setNewMinViews(e.target.value)} data-testid="input-min-views" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setShowCreateDialog(false)}>Cancel</Button>
+            <Button size="sm"
+              disabled={!newTestName || !newSelector || !newVariantA || !newVariantB || createMutation.isPending}
+              onClick={() => createMutation.mutate()}
+              data-testid="button-confirm-create-test">
+              {createMutation.isPending ? "Creating..." : "Launch Test"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

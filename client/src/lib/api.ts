@@ -1337,6 +1337,22 @@ export async function getAbTests(
   return res.json();
 }
 
+export async function createAbTest(
+  projectId: string,
+  data: { test_name: string; target_selector: string; variant_a_html: string; variant_b_html: string; min_views?: number }
+): Promise<{ success: boolean; test_id: string }> {
+  const res = await apiRequest("POST", `/api/projects/${projectId}/ab-tests`, data);
+  return res.json();
+}
+
+export async function archiveAbTest(
+  projectId: string,
+  testId: string
+): Promise<{ success: boolean }> {
+  const res = await apiRequest("POST", `/api/projects/${projectId}/ab-tests/${testId}/archive`);
+  return res.json();
+}
+
 // ────────────────────────────────────────────
 // Phase 36: Admin User Override types + wrappers
 // ────────────────────────────────────────────
