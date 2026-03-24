@@ -47,14 +47,20 @@ export interface DeepAuditResult {
 
 interface CrawlStartResponse {
   success: boolean;
-  id: string; // job ID for polling
+  result: string; // job ID (REST API returns { success: true, result: "uuid" })
+  id?: string;    // Fallback for legacy response shape
 }
 
 interface CrawlPollResponse {
-  success: boolean;
-  status: "pending" | "complete" | "error";
-  result?: CrawlPageResult[];
+  id?: string;
+  status: "running" | "completed" | "complete" | "errored" | "error"
+    | "cancelled_due_to_timeout" | "cancelled_due_to_limits" | "cancelled";
+  data?: CrawlPageResult[];   // REST API returns data[] for completed jobs
+  result?: CrawlPageResult[]; // Legacy response shape
   error?: string;
+  total?: number;
+  finished?: number;
+  browserSecondsUsed?: number;
 }
 
 interface CrawlPageResult {
@@ -113,21 +119,37 @@ export async function runDeepAudit(
 ): Promise<DeepAuditResult> {
   const auditedUrl = normalizeUrl(url);
 
-  // ── Step 1: Start crawl via /crawl endpoint ──
-  const crawlResponse = await env.BROWSER.fetch("https://browser-rendering.cloudflare.com/crawl", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      url: auditedUrl,
-      maxPages: 5, // Crawl up to 5 pages for a thorough audit
-      formats: ["json"],
-      jsonOptions: {
-        prompt: AUDIT_EXTRACTION_PROMPT,
+  // ── Step 1: Start crawl via Cloudflare Browser Rendering REST API ──
+  // The /crawl endpoint is a REST API at api.cloudflare.com, NOT the
+  // Worker BROWSER binding (which is for Puppeteer/Playwright).
+  const accountId = env.CF_ACCOUNT_ID;
+  const apiToken = env.CF_API_TOKEN;
+
+  if (!accountId || !apiToken) {
+    throw new Error("CF_ACCOUNT_ID and CF_API_TOKEN are required for site audits. Set them via wrangler secret.");
+  }
+
+  const crawlResponse = await fetch(
+    `https://api.cloudflare.com/client/v4/accounts/${accountId}/browser-rendering/crawl`,
+    {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${apiToken}`,
+        "Content-Type": "application/json",
       },
-      waitForSelector: "body",
-      timeout: 30000,
-    }),
-  });
+      body: JSON.stringify({
+        url: auditedUrl,
+        limit: 5,
+        depth: 2,
+        formats: ["json"],
+        render: true,
+        rejectResourceTypes: ["image", "media", "font", "stylesheet"],
+        jsonOptions: {
+          prompt: AUDIT_EXTRACTION_PROMPT,
+        },
+      }),
+    },
+  );
 
   if (!crawlResponse.ok) {
     const errText = await crawlResponse.text();
@@ -135,13 +157,14 @@ export async function runDeepAudit(
   }
 
   const crawlStart = (await crawlResponse.json()) as CrawlStartResponse;
+  const jobId = crawlStart.result || crawlStart.id;
 
-  if (!crawlStart.success || !crawlStart.id) {
+  if (!jobId) {
     throw new Error("/crawl did not return a job ID");
   }
 
   // ── Step 2: Poll for results ──
-  const crawlResults = await pollCrawlJob(crawlStart.id, env);
+  const crawlResults = await pollCrawlJob(jobId, env);
 
   // ── Step 3: Analyze extracted data → findings ──
   const findings: AuditFinding[] = [];
@@ -176,30 +199,46 @@ export async function runDeepAudit(
 async function pollCrawlJob(
   jobId: string,
   env: Env,
-  maxAttempts = 20,
-  intervalMs = 3000
+  maxAttempts = 30,
+  intervalMs = 5000
 ): Promise<CrawlPageResult[]> {
+  const accountId = env.CF_ACCOUNT_ID;
+  const apiToken = env.CF_API_TOKEN;
+
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    const res = await env.BROWSER.fetch(
-      `https://browser-rendering.cloudflare.com/crawl/${jobId}`,
-      { method: "GET" }
+    const res = await fetch(
+      `https://api.cloudflare.com/client/v4/accounts/${accountId}/browser-rendering/crawl/${jobId}`,
+      {
+        method: "GET",
+        headers: { "Authorization": `Bearer ${apiToken}` },
+      },
     );
 
     if (!res.ok) {
       throw new Error(`/crawl poll failed (${res.status}): ${await res.text()}`);
     }
 
-    const poll = (await res.json()) as CrawlPollResponse;
+    const body = (await res.json()) as { success: boolean; result: CrawlPollResponse };
+    const poll = body.result || (body as any);
 
-    if (poll.status === "complete" && poll.result) {
+    if (poll.status === "completed" && poll.data) {
+      return poll.data;
+    }
+
+    // Also handle the older response shape
+    if ((poll.status === "complete" || poll.status === "completed") && poll.result) {
       return poll.result;
     }
 
-    if (poll.status === "error") {
+    if (poll.status === "errored" || poll.status === "error") {
       throw new Error(`/crawl job failed: ${poll.error ?? "Unknown error"}`);
     }
 
-    // Still pending — wait and retry
+    if (poll.status === "cancelled_due_to_timeout" || poll.status === "cancelled_due_to_limits") {
+      throw new Error(`/crawl job cancelled: ${poll.status}`);
+    }
+
+    // Still running — wait and retry
     await new Promise((resolve) => setTimeout(resolve, intervalMs));
   }
 

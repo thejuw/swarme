@@ -4788,7 +4788,8 @@ app.post("/api/admin/footer", async (c) => {
 
 /**
  * POST /api/admin/communications/newsletter
- * Queues a newsletter (stub — logs intent, counts recipients).
+ * Sends a newsletter to all active users via Resend API.
+ * Rate-limited: sends sequentially with 600ms delays.
  */
 app.post("/api/admin/communications/newsletter", async (c) => {
   try {
@@ -4797,15 +4798,19 @@ app.post("/api/admin/communications/newsletter", async (c) => {
       return c.json({ success: false, error: "Subject and body are required" }, 400);
     }
 
-    // Count active users
-    let recipientCount = 0;
-    try {
-      const row = await c.env.DB.prepare(
-        `SELECT COUNT(*) as cnt FROM Users WHERE status = 'active'`
-      ).first<{ cnt: number }>();
-      recipientCount = row?.cnt || 0;
-    } catch {
-      recipientCount = 1;
+    const apiKey = c.env.RESEND_API_KEY;
+    if (!apiKey) {
+      return c.json({ success: false, error: "RESEND_API_KEY not configured. Set it via: wrangler secret put RESEND_API_KEY" }, 503);
+    }
+
+    // Get active users with email notifications enabled
+    const usersResult = await c.env.DB.prepare(
+      `SELECT id, email FROM Users WHERE status = 'active' AND notify_email = 1 LIMIT 500`
+    ).all<{ id: string; email: string }>();
+    const recipients = usersResult.results || [];
+
+    if (recipients.length === 0) {
+      return c.json({ success: true, recipient_count: 0, sent: 0, status: "no_recipients" });
     }
 
     // Log the newsletter dispatch
@@ -4813,10 +4818,44 @@ app.post("/api/admin/communications/newsletter", async (c) => {
     try {
       await c.env.DB.prepare(
         `INSERT INTO Admin_Audit_Log (admin_id, action, target, metadata, created_at) VALUES (?1, 'send_newsletter', 'newsletter', ?2, ?3)`
-      ).bind(adminId, JSON.stringify({ subject, recipient_count: recipientCount }), new Date().toISOString()).run();
+      ).bind(adminId, JSON.stringify({ subject, recipient_count: recipients.length }), new Date().toISOString()).run();
     } catch {}
 
-    return c.json({ success: true, recipient_count: recipientCount, status: "queued" });
+    // Send emails via Resend (async, rate-limited)
+    let sent = 0;
+    let errors = 0;
+    const sendPromise = (async () => {
+      for (const user of recipients) {
+        try {
+          const res = await fetch("https://api.resend.com/emails", {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${apiKey}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              from: "Swarme <newsletter@swarme.io>",
+              to: [user.email],
+              subject,
+              html: html_body,
+            }),
+          });
+          if (res.ok) { sent++; } else { errors++; }
+          // Rate limit: 600ms between sends (Resend free tier: 2 req/s)
+          await new Promise((r) => setTimeout(r, 600));
+        } catch {
+          errors++;
+        }
+      }
+    })();
+    c.executionCtx.waitUntil(sendPromise);
+
+    return c.json({
+      success: true,
+      recipient_count: recipients.length,
+      status: "sending",
+      message: `Newsletter queued for ${recipients.length} recipients. Delivery in progress.`,
+    });
   } catch (err) {
     return c.json({ success: false, error: "Failed to send newsletter" }, 500);
   }
