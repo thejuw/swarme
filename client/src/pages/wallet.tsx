@@ -494,6 +494,7 @@ export default function SwarmeCredits() {
   const { data, isLoading } = useQuery({
     queryKey: queryKeys.credits(PROJECT_ID),
     queryFn: () => getCreditData(PROJECT_ID),
+    enabled: !!PROJECT_ID,
     refetchInterval: 10000,
   });
 

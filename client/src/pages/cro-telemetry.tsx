@@ -362,7 +362,7 @@ export default function CROTelemetry() {
     queryKey: queryKeys.telemetrySummary(PROJECT_ID),
     queryFn: () => getTelemetrySummary(PROJECT_ID),
     staleTime: 30_000,
-    enabled: hasAccess,
+    enabled: hasAccess && !!PROJECT_ID,
   });
 
   if (!hasAccess) {

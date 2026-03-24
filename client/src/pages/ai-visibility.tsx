@@ -42,7 +42,8 @@ export default function AiVisibility() {
   const { data, isLoading } = useQuery({
     queryKey: queryKeys.visibility(PROJECT_ID),
     queryFn: () => getVisibility(PROJECT_ID),
-    refetchInterval: 30_000,
+    enabled: !!PROJECT_ID,
+    refetchInterval: PROJECT_ID ? 30_000 : false,
   });
 
   const keywords = data?.keywords || [];

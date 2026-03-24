@@ -64,6 +64,52 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 
+/**
+ * Lightweight markdown-to-HTML formatter for AI Manager messages.
+ * Handles: bold, italic, headers, lists, code blocks, line breaks.
+ * No external dependency needed.
+ */
+function formatManagerMessage(content: string): string {
+  let html = content
+    // Escape HTML entities first
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    // Code blocks (triple backtick)
+    .replace(/```([\s\S]*?)```/g, '<pre class="bg-background/50 rounded p-2 my-2 overflow-x-auto text-xs"><code>$1</code></pre>')
+    // Inline code
+    .replace(/`([^`]+)`/g, "<code>$1</code>")
+    // Headers (### then ## then #)
+    .replace(/^### (.+)$/gm, '<h4 class="font-semibold text-xs mt-3 mb-1">$1</h4>')
+    .replace(/^## (.+)$/gm, '<h3 class="font-semibold text-sm mt-3 mb-1">$1</h3>')
+    .replace(/^# (.+)$/gm, '<h3 class="font-semibold text-sm mt-3 mb-1">$1</h3>')
+    // Bold + italic
+    .replace(/\*\*\*(.+?)\*\*\*/g, "<strong><em>$1</em></strong>")
+    // Bold
+    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+    // Italic
+    .replace(/\*(.+?)\*/g, "<em>$1</em>")
+    // Numbered lists
+    .replace(/^(\d+)\.\s+(.+)$/gm, '<li class="ml-4 list-decimal">$2</li>')
+    // Bullet lists (- or *)
+    .replace(/^[\-\*]\s+(.+)$/gm, '<li class="ml-4 list-disc">$1</li>')
+    // Wrap consecutive <li> in <ul>/<ol>
+    .replace(/((?:<li class="ml-4 list-disc">.*<\/li>\n?)+)/g, '<ul class="my-1">$1</ul>')
+    .replace(/((?:<li class="ml-4 list-decimal">.*<\/li>\n?)+)/g, '<ol class="my-1">$1</ol>')
+    // Horizontal rule
+    .replace(/^---+$/gm, '<hr class="my-2 border-border/50" />')
+    // Line breaks (double newline = paragraph, single = <br>)
+    .replace(/\n\n/g, "</p><p class=\"my-1.5\">")
+    .replace(/\n/g, "<br />");
+
+  // Wrap in paragraph if not already wrapped
+  if (!html.startsWith("<")) {
+    html = `<p class="my-1.5">${html}</p>`;
+  }
+
+  return html;
+}
+
 const WELCOME_MESSAGE: ManagerChatMessage = {
   role: "assistant",
   content:
@@ -184,13 +230,19 @@ function ChatPanel({
               )}
             </div>
             <div
-              className={`max-w-[85%] rounded-lg px-3 py-2 text-sm leading-relaxed whitespace-pre-wrap ${
+              className={`max-w-[85%] rounded-lg px-3 py-2 text-sm leading-relaxed ${
                 msg.role === "user"
-                  ? "bg-primary text-primary-foreground"
+                  ? "bg-primary text-primary-foreground whitespace-pre-wrap"
                   : "bg-muted"
               }`}
             >
-              {msg.content}
+              {msg.role === "assistant" ? (
+                <div className="prose prose-sm dark:prose-invert prose-p:my-1 prose-li:my-0.5 prose-headings:my-2 prose-headings:text-sm max-w-none [&_ul]:list-disc [&_ul]:pl-4 [&_ol]:list-decimal [&_ol]:pl-4 [&_code]:bg-background/50 [&_code]:px-1 [&_code]:rounded [&_code]:text-xs [&_strong]:font-semibold"
+                  dangerouslySetInnerHTML={{ __html: formatManagerMessage(msg.content) }}
+                />
+              ) : (
+                msg.content
+              )}
             </div>
           </div>
         ))}
@@ -473,14 +525,16 @@ function RoadmapPanel() {
   const { data, isLoading } = useQuery({
     queryKey: queryKeys.managerRoadmap(PROJECT_ID),
     queryFn: () => getManagerRoadmap(PROJECT_ID),
-    refetchInterval: 5000, // Poll for new items from AI
+    enabled: !!PROJECT_ID,
+    refetchInterval: PROJECT_ID ? 5000 : false,
   });
 
   // Phase 50: UGC campaign suggestions query
   const { data: ugcData } = useQuery({
     queryKey: queryKeys.ugcCampaigns(PROJECT_ID),
     queryFn: () => getUGCCampaigns(PROJECT_ID),
-    refetchInterval: 10000,
+    enabled: !!PROJECT_ID,
+    refetchInterval: PROJECT_ID ? 10000 : false,
   });
 
   const deployMutation = useMutation({
@@ -509,6 +563,10 @@ function RoadmapPanel() {
       queryClient.invalidateQueries({
         queryKey: queryKeys.managerRoadmap(PROJECT_ID),
       });
+      toast({ title: "Marked complete", description: "Roadmap item moved to completed." });
+    },
+    onError: () => {
+      toast({ title: "Update failed", description: "Could not mark item as complete.", variant: "destructive" });
     },
   });
 
@@ -729,7 +787,8 @@ function TelemetryWidget() {
   const { data, isLoading } = useQuery({
     queryKey: ["manager", "telemetry-status", PROJECT_ID],
     queryFn: () => getTelemetryStatus(PROJECT_ID),
-    refetchInterval: 60000,
+    enabled: !!PROJECT_ID,
+    refetchInterval: PROJECT_ID ? 60000 : false,
   });
 
   const [explainKey, setExplainKey] = useState<string | null>(null);
@@ -847,6 +906,7 @@ function ProprietaryReportsPanel() {
   const { data, isLoading } = useQuery({
     queryKey: ["manager", "reports", PROJECT_ID],
     queryFn: () => getProprietaryReports(PROJECT_ID),
+    enabled: !!PROJECT_ID,
   });
 
   const publishMutation = useMutation({

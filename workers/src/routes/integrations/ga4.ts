@@ -78,6 +78,13 @@ ga4Router.get("/auth", async (c) => {
   });
 
   const authUrl = `${GOOGLE_AUTH_URL}?${params.toString()}`;
+
+  // If the request has Accept: application/json, return the URL as JSON
+  // (used by the frontend SPA). Otherwise redirect (used by direct browser nav).
+  const accept = c.req.header("accept") || "";
+  if (accept.includes("application/json")) {
+    return c.json({ success: true, auth_url: authUrl });
+  }
   return c.redirect(authUrl, 302);
 });
 

@@ -119,12 +119,25 @@ function BillingCard({ workspace }: { workspace: Workspace }) {
   const portalMutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("POST", "/api/billing/portal");
-      return res.json() as Promise<{ success: boolean; portal_url: string }>;
+      return res.json() as Promise<{ success: boolean; portal_url: string; error?: string }>;
     },
     onSuccess: (data) => {
       if (data.portal_url) {
         window.open(data.portal_url, "_blank");
+      } else {
+        toast({
+          title: "Billing not available",
+          description: data.error || "No active billing account found. Subscribe to a plan first.",
+          variant: "destructive",
+        });
       }
+    },
+    onError: () => {
+      toast({
+        title: "Billing unavailable",
+        description: "Could not open billing portal. Please contact support if you have an active subscription.",
+        variant: "destructive",
+      });
     },
   });
 

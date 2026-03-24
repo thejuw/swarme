@@ -157,6 +157,7 @@ function ThreadView({
   const { data, isLoading } = useQuery({
     queryKey: queryKeys.commsThread(PROJECT_ID, threadId),
     queryFn: () => getCommsThread(PROJECT_ID, threadId),
+  enabled: !!PROJECT_ID,
   });
 
   const replyMutation = useMutation({
@@ -311,7 +312,8 @@ export default function CommsPage() {
   const { data, isLoading } = useQuery({
     queryKey: queryKeys.commsThreads(PROJECT_ID),
     queryFn: () => getCommsThreads(PROJECT_ID),
-    refetchInterval: 15_000,
+    enabled: !!PROJECT_ID,
+    refetchInterval: PROJECT_ID ? 15_000 : false,
   });
 
   const threads = data?.threads || [];

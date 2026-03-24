@@ -23,9 +23,17 @@ export function Ga4ConnectCard() {
   const propertyId = data?.property_id ?? null;
 
   const handleConnect = async () => {
-    const res = await apiRequest("GET", "/api/ga4/auth");
-    if (res.redirected) {
-      window.location.href = res.url;
+    try {
+      // Request the Google OAuth URL from the backend as JSON.
+      // The backend builds the consent URL with the user's ID in the state param.
+      const res = await apiRequest("GET", "/api/ga4/auth");
+      const data = await res.json() as { success: boolean; auth_url?: string };
+      if (data.success && data.auth_url) {
+        // Navigate the full page to Google's consent screen
+        window.location.href = data.auth_url;
+      }
+    } catch {
+      // Fallback: if JSON parsing fails, the endpoint may have redirected
     }
   };
 

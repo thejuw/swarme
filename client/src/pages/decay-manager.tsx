@@ -348,6 +348,7 @@ export default function DecayManager() {
   const { data, isLoading, error } = useQuery({
     queryKey: queryKeys.decayCandidates(PROJECT_ID),
     queryFn: () => getDecayCandidates(PROJECT_ID),
+  enabled: !!PROJECT_ID,
   });
 
   const approveMutation = useMutation({

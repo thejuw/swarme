@@ -307,6 +307,7 @@ export default function ROIDashboard() {
   } = useQuery<ROIAnalyticsResponse>({
     queryKey: queryKeys.roiAnalytics(PROJECT_ID),
     queryFn: () => getROIAnalytics(PROJECT_ID),
+    enabled: !!PROJECT_ID,
     staleTime: 60_000,
   });
 

@@ -379,6 +379,7 @@ export default function OffDomain() {
   const { data, isLoading } = useQuery({
     queryKey: queryKeys.offDomain(PROJECT_ID),
     queryFn: () => getOffDomainData(PROJECT_ID),
+    enabled: !!PROJECT_ID,
     refetchInterval: 30000,
   });
 

@@ -274,7 +274,7 @@ export default function SocialQueue() {
   const { data, isLoading, error } = useQuery({
     queryKey: queryKeys.socialDrafts(PROJECT_ID),
     queryFn: () => getSocialDrafts(PROJECT_ID),
-    enabled: hasAccess,
+    enabled: hasAccess && !!PROJECT_ID,
   });
 
   const mutation = useMutation({

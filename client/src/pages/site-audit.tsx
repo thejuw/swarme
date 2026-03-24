@@ -448,6 +448,7 @@ export default function SiteAuditPage() {
   const auditQuery = useQuery({
     queryKey: queryKeys.auditLatest(PROJECT_ID),
     queryFn: () => getLatestAudit(PROJECT_ID),
+    enabled: !!PROJECT_ID,
     refetchInterval: (query) => {
       // Poll every 5s while audit is running
       const data = query.state.data;

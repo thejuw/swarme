@@ -65,7 +65,8 @@ export default function DigitalPR() {
   const { data, isLoading } = useQuery({
     queryKey: queryKeys.outreachCampaigns(PROJECT_ID),
     queryFn: () => getOutreachCampaigns(PROJECT_ID),
-    refetchInterval: 30_000,
+    enabled: !!PROJECT_ID,
+    refetchInterval: PROJECT_ID ? 30_000 : false,
   });
 
   const campaigns: OutreachCampaign[] = data?.campaigns || [];

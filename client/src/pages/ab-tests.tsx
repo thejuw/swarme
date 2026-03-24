@@ -244,7 +244,7 @@ export default function AbTests() {
     queryFn: () => getAbTests(PROJECT_ID),
     staleTime: 15_000,
     refetchInterval: 30_000,
-    enabled: hasAccess,
+    enabled: hasAccess && !!PROJECT_ID,
   });
 
   if (!hasAccess) {

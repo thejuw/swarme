@@ -45,7 +45,10 @@ export async function apiRequest(
   url: string,
   data?: unknown | undefined,
 ): Promise<Response> {
-  const headers = authHeaders(data ? { "Content-Type": "application/json" } : {});
+  const headers = authHeaders({
+    "Accept": "application/json",
+    ...(data ? { "Content-Type": "application/json" } : {}),
+  });
   const res = await fetch(`${API_BASE}${url}`, {
     method,
     headers,

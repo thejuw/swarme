@@ -74,6 +74,7 @@ export default function AgentActivity() {
   const { data, isLoading } = useQuery({
     queryKey: queryKeys.tasks(PROJECT_ID),
     queryFn: () => getTasks(PROJECT_ID, { limit: 100 }),
+    enabled: !!PROJECT_ID,
     refetchInterval: 8000,
   });
 

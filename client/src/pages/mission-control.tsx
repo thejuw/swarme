@@ -377,6 +377,7 @@ function ActionTimeline() {
   const { data, isLoading } = useQuery({
     queryKey: queryKeys.actionHistory(PROJECT_ID),
     queryFn: () => getActionHistory(PROJECT_ID),
+    enabled: !!PROJECT_ID,
   });
 
   const rollbackMutation = useMutation({
@@ -612,6 +613,7 @@ function OutreachPanel() {
   const { data, isLoading } = useQuery({
     queryKey: queryKeys.outreachCampaigns(PROJECT_ID),
     queryFn: () => getOutreachCampaigns(PROJECT_ID),
+    enabled: !!PROJECT_ID,
   });
 
   const updateMut = useMutation({
@@ -919,6 +921,7 @@ function LinkGraphPanel() {
   const { data, isLoading } = useQuery<InternalLinksResponse>({
     queryKey: [...queryKeys.internalLinks(PROJECT_ID), statusFilter],
     queryFn: () => getInternalLinks(PROJECT_ID, statusFilter ?? undefined),
+    enabled: !!PROJECT_ID,
   });
 
   const removeMutation = useMutation({
@@ -1249,7 +1252,8 @@ function GeoAnalyticsPanel() {
   const { data, isLoading } = useQuery({
     queryKey: queryKeys.geoAnalytics(PROJECT_ID),
     queryFn: () => getGeoAnalytics(PROJECT_ID),
-    refetchInterval: 30000,
+    enabled: !!PROJECT_ID,
+    refetchInterval: PROJECT_ID ? 30000 : false,
   });
 
   if (isLoading) {
@@ -1475,7 +1479,8 @@ export default function MissionControl() {
   const { data, isLoading } = useQuery({
     queryKey: queryKeys.missionControl(PROJECT_ID),
     queryFn: () => getMissionControl(PROJECT_ID),
-    refetchInterval: 15000,
+    enabled: !!PROJECT_ID,
+    refetchInterval: PROJECT_ID ? 15000 : false,
   });
 
   if (isLoading) {
