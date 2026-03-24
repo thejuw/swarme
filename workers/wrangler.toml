@@ -264,6 +264,7 @@ crons = [
   "0 * * * *",     # Hourly  — Swarm visibility check + task orchestration
   "0 6 * * *",     # Daily at 06:00 UTC — Full AI visibility audit
   "*/15 * * * *",  # Every 15 min — Trend velocity polling
+  "*/5 * * * *",   # Every 5 min — Phase 66: Pulse engine (dependency health)
   "0 0 * * 7",     # Weekly (Sunday 00:00 UTC) — Content decay scan
   "0 14 * * *",    # Daily at 14:00 UTC — Phase 27: Retention engine
   "0 0 * * *",     # Daily at 00:00 UTC — Phase 61: Memory compressor

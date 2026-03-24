@@ -69,6 +69,8 @@ import type { CircuitService } from "./utils/circuitBreaker";
 import { getAllThrottleStatuses, THROTTLED_SERVICES } from "./utils/throttle";
 import type { ThrottledService } from "./utils/throttle";
 import { getFailsafeStatuses, unblockTask } from "./utils/executionCap";
+import { handlePulseCheck, getPulseSnapshot } from "./cron/pulseCheck";
+import { getSuspendedTasks, getSuspensionCounts, resumeTasks } from "./utils/taskSuspension";
 
 // Re-export Durable Object classes so Cloudflare can find them
 export { AgentWorkflowManager } from "./durable_object";
@@ -513,6 +515,58 @@ app.get("/api/admin/hive-mind/rules", async (c) => {
   try {
     const rules = await fetchGlobalRules(c.env);
     return c.json({ success: true, rules });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Unknown";
+    return c.json({ success: false, error: msg }, 500);
+  }
+});
+
+// ─────────────────────────────────────────────────────────────
+// Phase 66: Pulse Engine — System Health API
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * GET /api/admin/pulse
+ * Returns the latest pulse snapshot (service health states).
+ * Read by SystemStatus.tsx in the admin dashboard header.
+ */
+app.get("/api/admin/pulse", async (c) => {
+  try {
+    const snapshot = await getPulseSnapshot(c.env);
+    const suspensionCounts = await getSuspensionCounts(c.env);
+    return c.json({
+      success: true,
+      snapshot,
+      suspendedTasks: suspensionCounts,
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Unknown";
+    return c.json({ success: false, error: msg }, 500);
+  }
+});
+
+/**
+ * GET /api/admin/pulse/suspended
+ * Returns all currently suspended tasks (for admin review).
+ */
+app.get("/api/admin/pulse/suspended", async (c) => {
+  try {
+    const tasks = await getSuspendedTasks(c.env);
+    return c.json({ success: true, tasks });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Unknown";
+    return c.json({ success: false, error: msg }, 500);
+  }
+});
+
+/**
+ * POST /api/admin/pulse/trigger
+ * Manually trigger a pulse check (admin override).
+ */
+app.post("/api/admin/pulse/trigger", async (c) => {
+  try {
+    const result = await handlePulseCheck(c.env);
+    return c.json({ success: true, result });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Unknown";
     return c.json({ success: false, error: msg }, 500);
@@ -6196,6 +6250,39 @@ async function handleScheduled(
         }
       })();
       ctx.waitUntil(evaluatorPromise);
+    }
+
+    // ── Phase 66: Pulse Engine (every 5 min) ─────────────────
+    // Probes upstream dependencies (Perplexity, Gemini, Resend,
+    // Stripe) and updates circuit breaker state + KV snapshot.
+    if (cronPattern === "*/5 * * * *") {
+      console.log("[Swarme Cron] Starting pulse check...");
+      const pulsePromise = (async () => {
+        try {
+          const result = await handlePulseCheck(env);
+          console.log(
+            `[Swarme Cron] Pulse check complete — ${result.healthy} healthy, ` +
+            `${result.degraded} degraded, ${result.down} down` +
+            (result.circuitBreakerActions.length > 0
+              ? ` | ${result.circuitBreakerActions.join(", ")}`
+              : "")
+          );
+
+          // Only log to D1 if there were circuit breaker actions
+          if (result.circuitBreakerActions.length > 0) {
+            await env.DB.prepare(
+              `INSERT INTO Agent_Tasks (project_id, agent_type, action, status, task_description, result_payload)
+               VALUES ('system', 'pulse_engine', 'Dependency Health Check', 'Completed', ?1, ?2)`
+            ).bind(
+              `${result.healthy} healthy, ${result.degraded} degraded, ${result.down} down | Actions: ${result.circuitBreakerActions.join(", ")}`,
+              JSON.stringify(result)
+            ).run();
+          }
+        } catch (err) {
+          console.error("[Swarme Cron] Pulse check failed:", err);
+        }
+      })();
+      ctx.waitUntil(pulsePromise);
     }
 
     const elapsed = Date.now() - startTime;

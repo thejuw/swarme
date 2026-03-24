@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { SystemStatus } from "@/components/admin/system-status";
 import type { LucideIcon } from "lucide-react";
 
 interface AdminNavItem {
@@ -115,6 +116,7 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
               {user.email}
             </Badge>
           </div>
+          <SystemStatus />
         </header>
         <main className="flex-1 overflow-auto p-6">
           {children}
