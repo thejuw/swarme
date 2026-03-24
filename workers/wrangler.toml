@@ -263,6 +263,12 @@ binding = "AI"
 binding = "ANALYTICS"
 dataset = "swarme_analytics"
 
+# Phase 68: ChatOps Orchestrator Workflow
+[[env.production.workflows]]
+binding = "CHATOPS_WORKFLOW"
+name = "chatops-orchestrator"
+class_name = "ChatOpsOrchestrator"
+
 # Production crons — full autonomous schedule
 [env.production.triggers]
 crons = [

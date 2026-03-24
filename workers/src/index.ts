@@ -75,10 +75,15 @@ import { dataBrokerMiddleware } from "./middleware/dataBroker";
 import { handleLakehouseExport } from "./cron/lakehouseExport";
 import { catalogRouter } from "./routes/catalog";
 import { registerBuyer, revokeBuyer, listBuyers } from "./utils/buyerAccess";
+import { moltworkerRouter } from "./interface/moltworker";
+import { ChatOpsOrchestrator } from "./workflows/orchestrator";
 
 // Re-export Durable Object classes so Cloudflare can find them
 export { AgentWorkflowManager } from "./durable_object";
 export { WorkflowCheckpointDO } from "./durable_objects/workflowCheckpoint";
+
+// Re-export Workflow class so Cloudflare can find it
+export { ChatOpsOrchestrator } from "./workflows/orchestrator";
 
 // ─────────────────────────────────────────────────────────────
 // Task 2.1: Environment Bindings & Type Definitions
@@ -167,6 +172,9 @@ export interface Env {
   ANALYTICS: AnalyticsEngineDataset;
   CF_ACCOUNT_ID: string;
   CF_API_TOKEN: string;
+
+  // ── Phase 68: ChatOps Workflows Binding ──
+  CHATOPS_WORKFLOW: Workflow;
 }
 
 /**
@@ -222,6 +230,9 @@ app.route("/api/auth", authRouter);
 // ── Webhooks (public — Stripe verifies its own signature, catalog verifies per-platform) ──
 app.route("/api/webhooks", webhookRouter);
 app.route("/api/webhooks/catalog", catalogWebhookRouter);
+
+// ── Phase 68: ChatOps Webhooks (public — each platform verifies its own signature) ──
+app.route("/api/chatops", moltworkerRouter);
 
 // ── Phase 53: /llms.txt Dynamic Edge Router (public — for AI crawlers) ──
 app.route("/llms.txt", llmsTxtRouter);
@@ -318,6 +329,101 @@ app.post("/api/admin/lakehouse/buyers/:buyerId/revoke", async (c) => {
     return c.json({ success: true });
   } catch (err) {
     return c.json({ success: false, error: "Failed to revoke buyer" }, 500);
+  }
+});
+
+// ── Phase 68: ChatOps Admin Endpoints (superadmin-protected) ──
+
+app.get("/api/admin/chatops/channels", async (c) => {
+  try {
+    const result = await c.env.DB.prepare(
+      `SELECT * FROM ChatOps_Channels ORDER BY channel_type ASC`
+    ).all();
+    return c.json({ success: true, channels: result.results || [] });
+  } catch (err) {
+    return c.json({ success: false, error: "Failed to list channels" }, 500);
+  }
+});
+
+app.patch("/api/admin/chatops/channels/:channelType", async (c) => {
+  const channelType = c.req.param("channelType");
+  try {
+    const body = await c.req.json<{ enabled?: boolean }>();
+    const enabled = body.enabled ? 1 : 0;
+
+    await c.env.DB.prepare(
+      `UPDATE ChatOps_Channels SET enabled = ?1, updated_at = ?2 WHERE channel_type = ?3`
+    ).bind(enabled, new Date().toISOString(), channelType).run();
+
+    // Sync to KV for edge-speed reads by moltworker
+    await c.env.CONFIG_KV.put(
+      `chatops:channel:${channelType}:enabled`,
+      enabled ? "true" : "false",
+    );
+
+    return c.json({ success: true, channel_type: channelType, enabled: !!enabled });
+  } catch (err) {
+    return c.json({ success: false, error: "Failed to update channel" }, 500);
+  }
+});
+
+app.get("/api/admin/chatops/commands", async (c) => {
+  try {
+    const result = await c.env.DB.prepare(
+      `SELECT id, intent, status, source_channel, user_name, original_text, parser_method, created_at
+       FROM ChatOps_Commands ORDER BY created_at DESC LIMIT 50`
+    ).all();
+    return c.json({ success: true, commands: result.results || [] });
+  } catch (err) {
+    return c.json({ success: false, error: "Failed to list commands" }, 500);
+  }
+});
+
+app.get("/api/admin/chatops/sessions", async (c) => {
+  try {
+    const result = await c.env.DB.prepare(
+      `SELECT * FROM ChatOps_Sessions ORDER BY last_active_at DESC LIMIT 20`
+    ).all();
+    return c.json({ success: true, sessions: result.results || [] });
+  } catch (err) {
+    return c.json({ success: false, error: "Failed to list sessions" }, 500);
+  }
+});
+
+app.get("/api/admin/chatops/stats", async (c) => {
+  try {
+    const totalCmds = await c.env.DB.prepare(
+      `SELECT COUNT(*) as cnt FROM ChatOps_Commands`
+    ).first<{ cnt: number }>();
+
+    const todayCmds = await c.env.DB.prepare(
+      `SELECT COUNT(*) as cnt FROM ChatOps_Commands WHERE created_at > datetime('now', '-1 day')`
+    ).first<{ cnt: number }>();
+
+    const activeChannels = await c.env.DB.prepare(
+      `SELECT COUNT(*) as cnt FROM ChatOps_Channels WHERE enabled = 1`
+    ).first<{ cnt: number }>();
+
+    const activeSessions = await c.env.DB.prepare(
+      `SELECT COUNT(*) as cnt FROM ChatOps_Sessions WHERE last_active_at > datetime('now', '-1 hour')`
+    ).first<{ cnt: number }>();
+
+    const topIntent = await c.env.DB.prepare(
+      `SELECT intent, COUNT(*) as cnt FROM ChatOps_Commands GROUP BY intent ORDER BY cnt DESC LIMIT 1`
+    ).first<{ intent: string; cnt: number }>();
+
+    return c.json({
+      success: true,
+      stats: {
+        total_commands: totalCmds?.cnt || 0,
+        commands_today: todayCmds?.cnt || 0,
+        active_channels: activeChannels?.cnt || 0,
+        active_sessions: activeSessions?.cnt || 0,
+        top_intent: topIntent?.intent || "none",
+      },
+    });
+  } catch (err) {
+    return c.json({ success: false, error: "Failed to load stats" }, 500);
   }
 });
 

@@ -1,10 +1,11 @@
 /**
  * AdminSettings — Phase 31.3a + Phase 31.5
  *
- * Left sidebar tab navigation (9 tabs) + right content area.
+ * Left sidebar tab navigation (10 tabs) + right content area.
  * Tabs: Brand & CMS, Communications, Feature Flags,
  *        Security & Operations, Audit Log, Analytics & Logs,
- *        Support Center, Financial Ledger, Data Lakehouse.
+ *        Support Center, Financial Ledger, Data Lakehouse,
+ *        ChatOps.
  */
 
 import { useState } from "react";
@@ -18,6 +19,7 @@ import {
   Flag,
   ScrollText,
   Database,
+  Zap,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -32,6 +34,7 @@ import { AnalyticsLogsTab } from "./settings/analytics-logs-tab";
 import { SupportTab } from "./settings/support-tab";
 import { FinancialTab } from "./settings/financial-tab";
 import { DataLakehouseTab } from "./settings/data-lakehouse-tab";
+import { ChatOpsTab } from "./settings/chatops-tab";
 
 interface SettingsTab {
   id: string;
@@ -52,6 +55,7 @@ const TABS: SettingsTab[] = [
   { id: "support", label: "Support Center", icon: LifeBuoy, component: SupportTab },
   { id: "financial", label: "Financial Ledger", icon: Wallet, component: FinancialTab },
   { id: "data-lakehouse", label: "Data Lakehouse", icon: Database, component: DataLakehouseTab, separator: "Data" },
+  { id: "chatops", label: "ChatOps", icon: Zap, component: ChatOpsTab },
 ];
 
 export default function AdminSettings() {
