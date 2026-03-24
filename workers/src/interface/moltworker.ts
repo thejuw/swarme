@@ -363,9 +363,58 @@ async function processMessage(env: Env, msg: NormalizedMessage): Promise<void> {
     command.user_id = msg.user_id;
     command.user_name = msg.user_name;
 
-    // Step 3: Hand off to Cloudflare Workflows
-    // Moltworker fires an authenticated internal API request to the
-    // Workflows engine. It NEVER directly mutates D1 or dispatches Workers.
+    // Step 3: Route to the appropriate execution backend.
+    // Simple commands (status, config, help) → Cloudflare Workflows (fast, stateless).
+    // Complex tasks (audit, research, content) → Agent SDK Durable Objects (stateful, long-running).
+    const AGENT_ROUTED_INTENTS = ["run_audit", "manage_content", "query_analytics"];
+    const isAgentTask = AGENT_ROUTED_INTENTS.includes(command.intent);
+
+    if (isAgentTask && env.AUDIT_AGENT) {
+      // Route to specialized Agents SDK Durable Object
+      try {
+        const agentName = `agent-${command.user_id}-${command.intent}`;
+        let agentBinding: DurableObjectNamespace;
+        switch (command.intent) {
+          case "run_audit":
+            agentBinding = env.AUDIT_AGENT;
+            break;
+          case "manage_content":
+            agentBinding = env.CONTENT_AGENT;
+            break;
+          case "query_analytics":
+            agentBinding = env.RESEARCH_AGENT;
+            break;
+          default:
+            agentBinding = env.AUDIT_AGENT;
+        }
+        const id = agentBinding.idFromName(agentName);
+        const stub = agentBinding.get(id);
+        const agentRes = await stub.fetch(new Request("https://agent/task", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(command),
+        }));
+        const result = await agentRes.json() as Record<string, any>;
+        console.log(`[Moltworker] Agent task dispatched: ${command.intent} → ${agentName}`);
+
+        // Deliver the result back immediately if the agent responded
+        if (result.summary) {
+          const formatted = formatResponse(msg.source_channel, result.summary, "success");
+          await deliverResponse(env, {
+            channel: msg.source_channel,
+            channel_id: msg.channel_id,
+            thread_id: msg.thread_id,
+            content: formatted,
+          });
+        }
+        return;
+      } catch (agentErr) {
+        console.warn("[Moltworker] Agent dispatch failed, falling back to Workflow:", agentErr);
+        // Fall through to Workflow dispatch
+      }
+    }
+
+    // Default: Hand off to Cloudflare Workflows (simple commands)
     const workflowId = `chatops-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`;
 
     try {

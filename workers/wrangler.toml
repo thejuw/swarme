@@ -263,6 +263,31 @@ binding = "AI"
 binding = "ANALYTICS"
 dataset = "swarme_analytics"
 
+# Phase 3 Audit: Agent SDK Durable Objects
+[[env.production.durable_objects.bindings]]
+name = "AUDIT_AGENT"
+class_name = "AuditAgent"
+
+[[env.production.durable_objects.bindings]]
+name = "RESEARCH_AGENT"
+class_name = "ResearchAgent"
+
+[[env.production.durable_objects.bindings]]
+name = "CONTENT_AGENT"
+class_name = "ContentAgent"
+
+[[env.production.durable_objects.bindings]]
+name = "CRO_AGENT"
+class_name = "CROAgent"
+
+[[env.production.durable_objects.bindings]]
+name = "MCP_AGENT"
+class_name = "SwarmeMcpAgent"
+
+[[env.production.migrations]]
+tag = "v3"
+new_sqlite_classes = ["AuditAgent", "ResearchAgent", "ContentAgent", "CROAgent", "SwarmeMcpAgent"]
+
 # Phase 68: ChatOps Orchestrator Workflow
 [[env.production.workflows]]
 binding = "CHATOPS_WORKFLOW"

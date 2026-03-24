@@ -86,6 +86,10 @@ export { WorkflowCheckpointDO } from "./durable_objects/workflowCheckpoint";
 // Re-export Workflow class so Cloudflare can find it
 export { ChatOpsOrchestrator } from "./workflows/orchestrator";
 
+// Re-export Agent SDK classes so Cloudflare can find them
+export { AuditAgent, ResearchAgent, ContentAgent, CROAgent } from "./agents/swarmeAgents";
+export { SwarmeMcpAgent } from "./mcp/swarmeMcp";
+
 // ─────────────────────────────────────────────────────────────
 // Task 2.1: Environment Bindings & Type Definitions
 // ─────────────────────────────────────────────────────────────
@@ -176,6 +180,13 @@ export interface Env {
 
   // ── Phase 68: ChatOps Workflows Binding ──
   CHATOPS_WORKFLOW: Workflow;
+
+  // ── Phase 3 Audit: Agent SDK Durable Object Bindings ──
+  AUDIT_AGENT: DurableObjectNamespace;
+  RESEARCH_AGENT: DurableObjectNamespace;
+  CONTENT_AGENT: DurableObjectNamespace;
+  CRO_AGENT: DurableObjectNamespace;
+  MCP_AGENT: DurableObjectNamespace;
 }
 
 /**
@@ -330,6 +341,61 @@ app.post("/api/admin/lakehouse/buyers/:buyerId/revoke", async (c) => {
     return c.json({ success: true });
   } catch (err) {
     return c.json({ success: false, error: "Failed to revoke buyer" }, 500);
+  }
+});
+
+// ── Phase 3 Audit: Unified Approval System Endpoints ──
+
+app.get("/api/projects/:projectId/approvals", async (c) => {
+  const projectId = c.req.param("projectId");
+  const status = c.req.query("status") || "pending";
+  try {
+    const result = await c.env.DB.prepare(
+      `SELECT * FROM Agent_Approvals WHERE project_id = ?1 AND status = ?2 ORDER BY created_at DESC LIMIT 50`
+    ).bind(projectId, status).all();
+    return c.json({ success: true, approvals: result.results || [] });
+  } catch (err) {
+    return c.json({ success: false, error: "Failed to list approvals" }, 500);
+  }
+});
+
+app.post("/api/projects/:projectId/approvals/:approvalId/approve", async (c) => {
+  const { approvalId } = c.req.param();
+  try {
+    const body = await c.req.json<{ note?: string }>().catch(() => ({}));
+    const jwtPayload = c.get("jwtPayload") as { sub?: string } | undefined;
+    await c.env.DB.prepare(
+      `UPDATE Agent_Approvals SET status = 'approved', reviewed_by = ?1, review_note = ?2, reviewed_at = datetime('now') WHERE id = ?3`
+    ).bind(jwtPayload?.sub || "system", body.note || "", approvalId).run();
+    return c.json({ success: true, approval_id: approvalId, status: "approved" });
+  } catch (err) {
+    return c.json({ success: false, error: "Failed to approve" }, 500);
+  }
+});
+
+app.post("/api/projects/:projectId/approvals/:approvalId/reject", async (c) => {
+  const { approvalId } = c.req.param();
+  try {
+    const body = await c.req.json<{ note?: string }>().catch(() => ({}));
+    const jwtPayload = c.get("jwtPayload") as { sub?: string } | undefined;
+    await c.env.DB.prepare(
+      `UPDATE Agent_Approvals SET status = 'rejected', reviewed_by = ?1, review_note = ?2, reviewed_at = datetime('now') WHERE id = ?3`
+    ).bind(jwtPayload?.sub || "system", body.note || "", approvalId).run();
+    return c.json({ success: true, approval_id: approvalId, status: "rejected" });
+  } catch (err) {
+    return c.json({ success: false, error: "Failed to reject" }, 500);
+  }
+});
+
+app.get("/api/projects/:projectId/approvals/count", async (c) => {
+  const projectId = c.req.param("projectId");
+  try {
+    const pending = await c.env.DB.prepare(
+      `SELECT COUNT(*) as cnt FROM Agent_Approvals WHERE project_id = ?1 AND status = 'pending'`
+    ).bind(projectId).first<{ cnt: number }>();
+    return c.json({ success: true, pending: pending?.cnt || 0 });
+  } catch (err) {
+    return c.json({ success: false, error: "Failed to count" }, 500);
   }
 });
 
