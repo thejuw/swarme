@@ -39,21 +39,35 @@ export async function initAnalytics(apiKey?: string): Promise<void> {
   if (!key || key.length < 10) return;
 
   try {
-    // Dynamic import to keep bundle small when PostHog isn't configured
-    const ph = await import("posthog-js");
-    ph.default.init(key, {
-      api_host: POSTHOG_HOST,
-      autocapture: false,      // We track events explicitly
-      capture_pageview: false,  // SPA — we handle routing ourselves
-      persistence: "memory",    // Respect privacy — no cookies/localStorage
-      disable_session_recording: true,
-      loaded: (instance) => {
-        posthog = instance as unknown as PostHogInstance;
+    // Use PostHog's lightweight HTTP API instead of the JS SDK.
+    // This avoids the posthog-js dependency while still sending events.
+    posthog = {
+      _key: key,
+      capture(event: string, properties?: Record<string, any>) {
+        fetch(`${POSTHOG_HOST}/capture/`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            api_key: this._key,
+            event,
+            properties: { ...properties, $lib: "swarme-web" },
+            distinct_id: this._distinctId || "anonymous",
+            timestamp: new Date().toISOString(),
+          }),
+        }).catch(() => {});
       },
-    });
-    posthog = ph.default as unknown as PostHogInstance;
+      identify(distinctId: string, properties?: Record<string, any>) {
+        this._distinctId = distinctId;
+        this.capture("$identify", { $set: properties });
+      },
+      reset() {
+        this._distinctId = undefined;
+      },
+      opt_out_capturing() {},
+      _distinctId: undefined as string | undefined,
+    } as PostHogInstance & { _key: string; _distinctId?: string };
   } catch {
-    // PostHog not installed or failed to load — silent no-op
+    // Initialization failed — silent no-op
   }
 }
 
