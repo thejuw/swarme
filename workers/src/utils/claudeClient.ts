@@ -47,7 +47,19 @@ export interface ClaudeChatResult {
 
 // ── Constants ────────────────────────────────────────────────
 
-const ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages";
+// GUARDRAIL #3: ALL LLM calls must route through Cloudflare AI Gateway.
+// Never call api.anthropic.com directly — AI Gateway provides centralized
+// cost visibility, rate limiting, and logging.
+// Format: https://gateway.ai.cloudflare.com/v1/{account_id}/{gateway_id}/anthropic/v1/messages
+function getAnthropicUrl(env: Env): string {
+  const accountId = env.CF_ACCOUNT_ID;
+  // Use AI Gateway if account ID is configured, otherwise fallback
+  if (accountId) {
+    return `https://gateway.ai.cloudflare.com/v1/${accountId}/swarme-gateway/anthropic/v1/messages`;
+  }
+  // Fallback only in development where gateway isn't configured
+  return "https://api.anthropic.com/v1/messages";
+}
 const ANTHROPIC_VERSION = "2023-06-01";
 const DEFAULT_MODEL = "claude-sonnet-4-20250514";
 const MAX_TOKENS = 2000;
@@ -110,7 +122,8 @@ export async function claudeChat(
 
   try {
     const result = await breaker.call<ClaudeChatResult | null>(async () => {
-      const response = await fetch(ANTHROPIC_API_URL, {
+      const apiUrl = getAnthropicUrl(env);
+      const response = await fetch(apiUrl, {
         method: "POST",
         headers: {
           "x-api-key": apiKey,

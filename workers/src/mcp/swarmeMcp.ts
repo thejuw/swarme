@@ -168,7 +168,7 @@ export class SwarmeMcpAgent extends McpAgent<Env, McpState, {}> {
         this.setState({ ...this.state, requestCount: this.state.requestCount + 1 });
         const items = await this.env.DB.prepare(
           `SELECT id, title, priority, status, created_at FROM AI_Roadmap WHERE project_id = ?1
-           ORDER BY CASE priority WHEN 'High' THEN 1 WHEN 'Medium' THEN 2 WHEN 'Low' THEN 3 END`,
+           ORDER BY CASE priority WHEN 'High' THEN 1 WHEN 'Medium' THEN 2 WHEN 'Low' THEN 3 END LIMIT 200`,
         ).bind(project_id).all();
 
         const rows = items.results || [];

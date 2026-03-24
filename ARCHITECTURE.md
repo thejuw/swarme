@@ -336,3 +336,148 @@ main push
 | 0040 | Audit webhooks + archive manifests |
 | 0041 | Global Brain: Unverified_Insights + Verified_Global_Rules |
 | 0042 | Global Governance: Global_Rule_Approvals + source_domain_hash |
+| 0043 | Task suspension columns for Phase 66 circuit breakers |
+| 0044 | Data Lakehouse: Data_Tables, Data_Snapshots, Data_Files |
+| 0045 | ChatOps: ChatOps_Commands, ChatOps_Channels, ChatOps_Sessions |
+| 0046 | Unified Agent Approvals: Agent_Approvals |
+
+---
+
+## Agent Architecture (Phase 3 Audit)
+
+### Agents SDK Integration
+
+Swarme uses the Cloudflare **Agents SDK** (`agents@0.8.x`) to run stateful, long-lived agents as Durable Objects with built-in SQLite state.
+
+```
+workers/src/agents/swarmeAgents.ts
+├── AuditAgent      — Site audits, accessibility, link rot
+├── ResearchAgent   — Competitor analysis, keyword discovery, GSC/GA4 reports
+├── ContentAgent    — Article drafting (ALWAYS requires approval), roadmap
+└── CROAgent        — A/B testing, Hive Mind insights
+```
+
+Each agent extends `Agent<Env>` with:
+- `schedule()` for cron-like recurring work (daily audits, weekly competitor pulse)
+- `logAgentTask()` helper that writes to D1 Agent_Tasks
+- `createApprovalRequest()` for high-stakes actions (content, A/B, accessibility)
+
+**Routing:** The Moltworker interface routes complex tasks to agents:
+- Simple commands (status, config, help) → Cloudflare Workflows (fast)
+- Complex tasks (audit, content, analytics) → Agent SDK DOs (stateful)
+
+### MCP Server
+
+`workers/src/mcp/swarmeMcp.ts` — A `McpAgent` Durable Object exposing 7 tools via the Model Context Protocol:
+
+| Tool | Queries |
+|---|---|
+| `swarme-gsc-report` | D1: GSC_Metrics |
+| `swarme-ga4-report` | D1: GA4_Metrics |
+| `swarme-site-audit` | D1: Audits, Agent_Tasks |
+| `swarme-content-draft` | D1: Agent_Approvals (creates pending approval) |
+| `swarme-roadmap-status` | D1: AI_Roadmap |
+| `swarme-competitor-pulse` | D1: Keywords |
+| `swarme-hive-insight` | KV: HIVE_MIND, CONFIG_KV |
+
+Accessible at `/mcp` for Claude, GPT, or any MCP-compatible client.
+
+### OpenClaw Skills
+
+7 skill definitions in `workers/skills/` with YAML frontmatter:
+- `swarme-gsc-report`, `swarme-ga4-report`, `swarme-site-audit`
+- `swarme-content-draft`, `swarme-roadmap-status`
+- `swarme-competitor-pulse`, `swarme-hive-insight`
+
+### Unified Approval System (Human-in-the-Loop)
+
+`Agent_Approvals` table (migration 0046) provides a single approval inbox across all agent types.
+
+**Endpoints:**
+- `GET /api/projects/:id/approvals` — List by status
+- `POST /api/projects/:id/approvals/:id/approve` — Approve
+- `POST /api/projects/:id/approvals/:id/reject` — Reject
+- `GET /api/projects/:id/approvals/count` — Pending count (inbox badge)
+
+**Actions requiring approval:** content drafting, accessibility DOM fixes, A/B test launches.
+
+---
+
+## ChatOps Interface (Phase 68)
+
+### Omnichannel Gateway
+
+`workers/src/interface/moltworker.ts` — Receives webhooks from 6 channels:
+- **Enterprise:** Slack (HMAC-SHA256), Microsoft Teams
+- **Boutique:** WhatsApp Business API (Meta Cloud API)
+- **Technical:** Telegram (secret token), Discord (Ed25519)
+- **Emergency:** Twilio SMS (HMAC-SHA1)
+
+### Intent Parser
+
+`workers/src/interface/intentParser.ts` — Dual-mode:
+1. Rule-based (fast, 10 regex patterns, 0.85 confidence)
+2. Workers AI fallback (Llama 3.1 8B for ambiguous inputs)
+
+### Execution Engine
+
+`workers/src/workflows/orchestrator.ts` — `WorkflowEntrypoint` with 5 durable steps:
+1. Validate command + check channel authorization
+2. Log intent to D1 audit ledger
+3. Execute action (KV writes, D1 queries, agent dispatch)
+4. Sync edge state to HIVE_MIND
+5. Callback to Moltworker for bidirectional response delivery
+
+---
+
+## Architectural Guardrails
+
+| # | Guardrail | Enforcement |
+|---|---|---|
+| 1 | Infrastructure Freeze | Moltworker pinned to stable commit hash, wrapped in try/catch |
+| 2 | Database Protection | ALL D1 queries have LIMIT guards (200-1000 depending on table) |
+| 3 | Financial Failsafes | Claude calls route through Cloudflare AI Gateway, never direct |
+| 4 | Execution Timeouts | External network calls use AbortController timeouts or Durable Workflows |
+
+---
+
+## OpenClaw Agent Setup Guide
+
+### Prerequisites
+- Cloudflare Workers Paid plan (for Sandbox Containers)
+- Anthropic API key (configured via AI Gateway)
+- OpenClaw installed (via Moltworker deployment)
+
+### Installing Swarme Skills
+
+```bash
+# Clone the skills into your OpenClaw workspace
+cp -r workers/skills/* ~/.openclaw/skills/
+
+# Enable skills in openclaw.json
+{
+  "skills": {
+    "allowBundled": ["swarme-gsc-report", "swarme-ga4-report", "swarme-site-audit",
+                     "swarme-content-draft", "swarme-roadmap-status",
+                     "swarme-competitor-pulse", "swarme-hive-insight"]
+  }
+}
+```
+
+### Connecting to the MCP Server
+
+```bash
+# The MCP server is available at your worker's domain
+# Connect via Claude Desktop or any MCP client:
+# Server URL: https://api.swarme.io/mcp
+# Transport: Streamable HTTP
+```
+
+### Verifying the Setup
+
+```bash
+# List available tools
+curl https://api.swarme.io/mcp -H "Accept: application/json, text/event-stream" \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","method":"tools/list","id":1}'
+```

@@ -252,7 +252,7 @@ export class ContentAgent extends Agent<Env> {
     const items = await this.env.DB.prepare(
       `SELECT id, title, priority, status, created_at
        FROM AI_Roadmap WHERE project_id = ?1
-       ORDER BY CASE priority WHEN 'High' THEN 1 WHEN 'Medium' THEN 2 WHEN 'Low' THEN 3 END`,
+       ORDER BY CASE priority WHEN 'High' THEN 1 WHEN 'Medium' THEN 2 WHEN 'Low' THEN 3 END LIMIT 200`,
     ).bind(projectId).all();
 
     const statusCounts: Record<string, number> = {};
@@ -283,7 +283,7 @@ export class CROAgent extends Agent<Env> {
   async checkRunningTests() {
     const projectId = this.name;
     const running = await this.env.DB.prepare(
-      `SELECT id, test_name FROM AB_Tests WHERE project_id = ?1 AND status = 'Running'`,
+      `SELECT id, test_name FROM AB_Tests WHERE project_id = ?1 AND status = 'Running' LIMIT 50`,
     ).bind(projectId).all();
 
     if ((running.results?.length || 0) > 0) {

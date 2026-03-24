@@ -404,7 +404,7 @@ app.get("/api/projects/:projectId/approvals/count", async (c) => {
 app.get("/api/admin/chatops/channels", async (c) => {
   try {
     const result = await c.env.DB.prepare(
-      `SELECT * FROM ChatOps_Channels ORDER BY channel_type ASC`
+      `SELECT * FROM ChatOps_Channels ORDER BY channel_type ASC LIMIT 50`
     ).all();
     return c.json({ success: true, channels: result.results || [] });
   } catch (err) {
@@ -836,7 +836,7 @@ app.get("/api/public/config", async (c) => {
 app.get("/api/admin/users", async (c) => {
   try {
     const { results } = await c.env.DB.prepare(
-      "SELECT id, email, role, plan, status, created_at FROM Users ORDER BY created_at DESC"
+      "SELECT id, email, role, plan, status, created_at FROM Users ORDER BY created_at DESC LIMIT 200"
     ).all();
     return c.json({ success: true, users: results || [] });
   } catch (err: any) {
@@ -1283,7 +1283,7 @@ app.post("/api/user/generate-api-key", async (c) => {
 app.get("/api/domains", async (c) => {
   const userId = c.get("userId") as string;
   const { results } = await c.env.DB.prepare(
-    "SELECT id, user_id, domain_url, platform_type, credentials_vault_id, label, created_at FROM Domains WHERE user_id = ?1 ORDER BY created_at ASC"
+    "SELECT id, user_id, domain_url, platform_type, credentials_vault_id, label, created_at FROM Domains WHERE user_id = ?1 ORDER BY created_at ASC LIMIT 100"
   )
     .bind(userId)
     .all();
@@ -1540,6 +1540,7 @@ app.get("/api/projects/:projectId/visibility/summary", async (c) => {
       ) latest ON vl.keyword = latest.keyword AND vl.checked_at = latest.max_checked
       WHERE vl.project_id = ?
       ORDER BY vl.cited ASC, vl.keyword ASC
+      LIMIT 500
     `)
       .bind(projectId, projectId)
       .all();
@@ -1650,7 +1651,7 @@ app.put("/api/projects/:projectId/settings", async (c) => {
 app.get("/api/projects", async (c) => {
   try {
     const result = await c.env.DB.prepare(
-      "SELECT * FROM Projects ORDER BY created_at DESC"
+      "SELECT * FROM Projects ORDER BY created_at DESC LIMIT 100"
     ).all();
 
     return c.json({
@@ -1954,7 +1955,7 @@ async function checkAIVisibility(
 }> {
   // ── Step 1: Retrieve target keywords from D1 ──
   const keywordsResult = await env.DB.prepare(
-    "SELECT keyword, priority FROM Project_Keywords WHERE project_id = ? ORDER BY priority ASC"
+    "SELECT keyword, priority FROM Project_Keywords WHERE project_id = ? ORDER BY priority ASC LIMIT 500"
   )
     .bind(projectId)
     .all();
@@ -2671,7 +2672,7 @@ app.post("/api/webhooks/shopify/orders", async (c) => {
     const assets = await c.env.DB.prepare(
       `SELECT id, project_id, slug, published_url, title
        FROM Content_Assets
-       WHERE status = 'Published' AND published_url IS NOT NULL`
+       WHERE status = 'Published' AND published_url IS NOT NULL LIMIT 1000`
     ).all();
 
     let matchedAsset: { id: string; project_id: string; title: string } | null = null;
@@ -4002,7 +4003,7 @@ app.get("/api/projects/:projectId/domain-verification", async (c) => {
   try {
     const rows = await c.env.DB.prepare(
       `SELECT id, domain, status, dns_records, verified_at, created_at
-       FROM Domain_Verifications WHERE project_id = ?1 ORDER BY created_at DESC`
+       FROM Domain_Verifications WHERE project_id = ?1 ORDER BY created_at DESC LIMIT 50`
     ).bind(projectId).all();
 
     const verifications = (rows.results || []).map((r: any) => ({
@@ -5409,7 +5410,7 @@ app.get("/api/projects/:id/off-domain", async (c) => {
     let connections: any[] = [];
     try {
       const r = await c.env.DB.prepare(
-        `SELECT platform, status, connected_at, scopes FROM Off_Domain_Connections WHERE domain_id = ?1`
+        `SELECT platform, status, connected_at, scopes FROM Off_Domain_Connections WHERE domain_id = ?1 LIMIT 50`
       ).bind(domainId).all();
       connections = r.results || [];
     } catch {}
@@ -5417,7 +5418,7 @@ app.get("/api/projects/:id/off-domain", async (c) => {
     let entityPresence: any[] = [];
     try {
       const r = await c.env.DB.prepare(
-        `SELECT platform, score, label FROM Off_Domain_Entity_Presence WHERE domain_id = ?1`
+        `SELECT platform, score, label FROM Off_Domain_Entity_Presence WHERE domain_id = ?1 LIMIT 100`
       ).bind(domainId).all();
       entityPresence = r.results || [];
     } catch {}
