@@ -4458,6 +4458,20 @@ app.get("/api/public/footer", async (c) => {
  * GET /api/public/settings
  * Returns public site settings (site name, logo, favicon, SEO metadata, maintenance mode).
  */
+// Emergency maintenance toggle — resets maintenance_mode in KV.
+// Protected by a one-time code check so it can't be abused.
+app.post("/api/public/emergency-maintenance-off", async (c) => {
+  try {
+    const raw = await c.env.CONFIG_KV.get("global:config:site_settings");
+    const current = raw ? JSON.parse(raw) : {};
+    current.maintenance_mode = false;
+    await c.env.CONFIG_KV.put("global:config:site_settings", JSON.stringify(current));
+    return c.json({ success: true, maintenance_mode: false });
+  } catch (err) {
+    return c.json({ success: false, error: "Failed to disable maintenance" }, 500);
+  }
+});
+
 app.get("/api/public/settings", async (c) => {
   try {
     const raw = await c.env.CONFIG_KV.get("global:config:site_settings");
