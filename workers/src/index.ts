@@ -845,6 +845,71 @@ app.get("/api/admin/users", async (c) => {
 });
 
 /**
+ * POST /api/admin/users
+ * Provision a new user account (superadmin action).
+ * Generates a temporary password, hashes it, creates the user in D1.
+ */
+app.post("/api/admin/users", async (c) => {
+  try {
+    const { email, name, plan_tier } = await c.req.json<{ email: string; name?: string; plan_tier?: string }>();
+
+    if (!email || !email.includes("@")) {
+      return c.json({ success: false, error: "Valid email is required" }, 400);
+    }
+
+    // Check if user already exists
+    const existing = await c.env.DB.prepare(
+      "SELECT id FROM Users WHERE email = ?1 COLLATE NOCASE"
+    ).bind(email.trim().toLowerCase()).first();
+
+    if (existing) {
+      return c.json({ success: false, error: "A user with this email already exists" }, 409);
+    }
+
+    // Generate temporary password
+    const tempPassword = Array.from(crypto.getRandomValues(new Uint8Array(12)))
+      .map((b) => "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%"[b % 66])
+      .join("");
+
+    // Hash it using the same PBKDF2 function the auth system uses
+    const { hashPassword: hashPw } = await import("./auth");
+    const passwordHash = await hashPw(tempPassword);
+
+    // Insert user
+    const userId = `usr_${crypto.randomUUID().slice(0, 12)}`;
+    const tier = plan_tier || "free";
+    const taskLimits: Record<string, number> = { free: 10, starter: 100, autopilot: 500, enterprise: -1 };
+
+    await c.env.DB.prepare(
+      `INSERT INTO Users (id, email, password_hash, role, plan, status, plan_tier, task_limit)
+       VALUES (?1, ?2, ?3, 'user', ?4, 'active', ?4, ?5)`
+    ).bind(userId, email.trim().toLowerCase(), passwordHash, tier, taskLimits[tier] || 10).run();
+
+    // Audit log
+    const adminId = c.get("userId") as string || "system";
+    try {
+      await c.env.DB.prepare(
+        `INSERT INTO Admin_Audit_Log (admin_id, action, target, metadata, created_at)
+         VALUES (?1, 'provision_user', ?2, ?3, ?4)`
+      ).bind(
+        adminId, userId,
+        JSON.stringify({ email: email.trim().toLowerCase(), plan_tier: tier, name: name || "" }),
+        new Date().toISOString(),
+      ).run();
+    } catch {}
+
+    return c.json({
+      success: true,
+      user_id: userId,
+      temporary_password: tempPassword,
+    });
+  } catch (err: any) {
+    console.error("[admin/users] Provision error:", err?.message || err);
+    return c.json({ success: false, error: err?.message || "Failed to create user" }, 500);
+  }
+});
+
+/**
  * POST /api/admin/users/:userId/reset-password
  * Resets a user's password (superadmin action).
  */
